@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "rogr-api"
+version = "0.1.0"
+description = "ROGR Analysis API"
+authors = ["ROGRHQ"]
+
+[tool.poetry.dependencies]
+python = ">=3.10.0,<3.12"
+fastapi = "^0.112.0"
+uvicorn = "0.23.2"
+pydantic = "^2.11.7"
+google-cloud-vision = "^3.4.5"
+google-auth = "^2.23.4"
+requests = "^2.31.0"
+
+[tool.pyright]
+useLibraryCodeForTypes = true
+exclude = [".cache"]
+
+[tool.ruff]
+select = ["E", "W", "F", "I", "B", "C4", "ARG", "SIM"]
+ignore = ["W291", "W292", "W293"]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
