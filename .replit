@@ -1,5 +1,5 @@
 modules = ["python-3.10"]
-run = "run"
+run = "uvicorn main:app --host 0.0.0.0 --port 8000"
 
 [nix]
 channel = "stable-25_05"
@@ -7,3 +7,7 @@ packages = ["libxcrypt"]
 
 [deployment]
 run = ["sh", "-c", "run"]
+
+[[ports]]
+localPort = 8000
+externalPort = 80
