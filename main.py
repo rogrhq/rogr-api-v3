@@ -113,11 +113,11 @@ async def create_analysis(analysis: AnalysisInput):
     
     return fake_capsule
 
-@app.get("/analyses/{id}", response_model=TrustCapsule)
+@app.get("/analyses/{id}")
 def get_analysis(id: str):
     if id not in analyses_db:
         raise HTTPException(status_code=404, detail="Analysis not found")
-    return analyses_db[id]
+    return {"trust_capsule": analyses_db[id]}
 
 @app.post("/analyses/{id}/focus", response_model=TrustCapsule)
 async def focus_analysis(id: str, focus: FocusRequest):
