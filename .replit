@@ -1,0 +1,9 @@
+modules = ["python-3.10"]
+run = "run"
+
+[nix]
+channel = "stable-25_05"
+packages = ["libxcrypt"]
+
+[deployment]
+run = ["sh", "-c", "run"]
