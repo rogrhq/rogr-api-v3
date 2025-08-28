@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from ocr_service import OCRService
 
-app = FastAPI()
+app = FastAPI(title="ROGR API - TEST UPDATE", version="1.0.0")
 
 # Simple CORS headers
 @app.middleware("http")
