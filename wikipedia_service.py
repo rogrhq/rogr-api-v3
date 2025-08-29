@@ -4,72 +4,108 @@ from typing import List, Dict, Optional, Tuple
 from urllib.parse import urlparse, unquote
 from bs4 import BeautifulSoup
 import json
+from evidence_shepherd import EvidenceShepherd, NoOpEvidenceShepherd, EvidenceCandidate
 
 class WikipediaService:
     """Service to search Wikipedia and extract outbound citations for evidence collection"""
     
-    def __init__(self):
+    def __init__(self, evidence_shepherd: Optional[EvidenceShepherd] = None):
         self.base_url = "https://en.wikipedia.org/api/rest_v1"
         self.search_url = "https://en.wikipedia.org/w/api.php"
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'ROGR-FactCheck/1.0 (https://rogr.app; fact-checking service)'
         })
+        
+        # AI Evidence Shepherd - modular and optional
+        self.shepherd = evidence_shepherd or NoOpEvidenceShepherd()
+        print(f"Wikipedia service initialized with shepherd: {type(self.shepherd).__name__}")
     
     def search_evidence_for_claim(self, claim_text: str) -> List[Dict]:
         """
-        Search for evidence related to a claim and return Wikipedia articles + outbound citations
-        Returns list of evidence items with source attribution
+        AI-powered search for evidence related to a claim
+        Returns list of evidence items with AI relevance scoring
         """
         try:
-            # Extract search terms from claim
-            search_terms = self._extract_search_terms(claim_text)
+            # Use AI Shepherd to analyze claim and get search strategy
+            search_strategy = self.shepherd.analyze_claim(claim_text)
+            print(f"AI Strategy for '{claim_text[:50]}...': {search_strategy.claim_type.value}, {len(search_strategy.search_queries)} queries")
             
-            if not search_terms:
-                return []
+            # Collect raw evidence candidates using AI-optimized searches
+            evidence_candidates = []
             
-            # Search Wikipedia for relevant articles
-            wiki_articles = self._search_wikipedia_articles(search_terms)
-            
-            if not wiki_articles:
-                return []
-            
-            # Extract citations from top articles
-            evidence_items = []
-            
-            for article in wiki_articles[:3]:  # Process top 3 articles
-                try:
-                    citations = self._extract_citations_from_article(article['title'])
-                    
-                    # Add Wikipedia article itself (marked as low-weight)
-                    wikipedia_evidence = {
-                        'statement': article.get('extract', 'Wikipedia article content'),
-                        'source_title': article['title'],
-                        'source_domain': 'en.wikipedia.org',
-                        'source_url': f"https://en.wikipedia.org/wiki/{article['title'].replace(' ', '_')}",
-                        'source_type': 'wikipedia',
-                        'weight': 0.3,  # Low weight for Wikipedia
-                        'date_published': None,
-                        'relevance_score': 0.8
-                    }
-                    evidence_items.append(wikipedia_evidence)
-                    
-                    # Add external citations (higher weight)
-                    for citation in citations[:5]:  # Top 5 citations per article
-                        evidence_items.append(citation)
-                        
-                except Exception as e:
-                    print(f"Error extracting citations from {article.get('title', 'unknown')}: {e}")
+            for search_query in search_strategy.search_queries[:3]:  # Use top 3 AI-generated queries
+                wiki_articles = self._search_wikipedia_articles([search_query])
+                
+                if not wiki_articles:
                     continue
+                
+                # Process top articles based on claim type
+                articles_to_process = 2 if search_strategy.claim_type.value in ['statistical', 'policy'] else 3
+                
+                for article in wiki_articles[:articles_to_process]:
+                    try:
+                        # Add Wikipedia article as evidence candidate
+                        wiki_candidate = EvidenceCandidate(
+                            text=article.get('extract', 'Wikipedia article content')[:400],
+                            source_url=f"https://en.wikipedia.org/wiki/{article['title'].replace(' ', '_')}",
+                            source_domain='en.wikipedia.org',
+                            source_title=article['title'],
+                            found_via_query=search_query,
+                            raw_relevance=0.5  # Initial relevance
+                        )
+                        evidence_candidates.append(wiki_candidate)
+                        
+                        # Extract external citations
+                        citations = self._extract_citations_from_article(article['title'])
+                        
+                        for citation_data in citations[:4]:  # Top 4 citations per article
+                            citation_candidate = EvidenceCandidate(
+                                text=citation_data['statement'],
+                                source_url=citation_data['source_url'],
+                                source_domain=citation_data['source_domain'],
+                                source_title=citation_data['source_title'],
+                                found_via_query=search_query,
+                                raw_relevance=citation_data.get('weight', 0.7)
+                            )
+                            evidence_candidates.append(citation_candidate)
+                            
+                    except Exception as e:
+                        print(f"Error processing article {article.get('title', 'unknown')}: {e}")
+                        continue
             
-            # Sort by weight (external sources first) and relevance
-            evidence_items.sort(key=lambda x: (x.get('weight', 0), x.get('relevance_score', 0)), reverse=True)
+            if not evidence_candidates:
+                return []
             
-            return evidence_items[:8]  # Return top 8 evidence items
+            # Use AI Shepherd to score and filter evidence for relevance
+            processed_evidence = self.shepherd.filter_evidence_batch(claim_text, evidence_candidates)
+            
+            # Convert back to the expected format
+            evidence_items = []
+            for processed in processed_evidence:
+                evidence_items.append({
+                    'statement': processed.text,
+                    'source_title': processed.source_title,
+                    'source_domain': processed.source_domain,
+                    'source_url': processed.source_url,
+                    'source_type': 'wikipedia' if 'wikipedia.org' in processed.source_domain else 'external',
+                    'weight': self._calculate_source_weight(processed.source_domain),
+                    'date_published': None,
+                    'relevance_score': processed.ai_relevance_score / 100,  # Convert to 0-1
+                    'ai_stance': processed.ai_stance,
+                    'ai_confidence': processed.ai_confidence,
+                    'ai_reasoning': processed.ai_reasoning,
+                    'highlight_text': processed.highlight_text,
+                    'highlight_context': processed.highlight_context
+                })
+            
+            print(f"AI filtering: {len(evidence_candidates)} candidates → {len(evidence_items)} relevant evidence items")
+            return evidence_items
             
         except Exception as e:
-            print(f"Wikipedia search error for claim '{claim_text}': {e}")
-            return []
+            print(f"AI-powered Wikipedia search error for claim '{claim_text}': {e}")
+            # Fallback to original method
+            return self._fallback_search(claim_text)
     
     def _extract_search_terms(self, claim_text: str) -> List[str]:
         """Extract key search terms from a claim"""
@@ -355,3 +391,48 @@ class WikipediaService:
         
         # Default for other external sources
         return 0.6
+    
+    def _fallback_search(self, claim_text: str) -> List[Dict]:
+        """Fallback to original search method when AI fails"""
+        try:
+            search_terms = self._extract_search_terms(claim_text)
+            if not search_terms:
+                return []
+            
+            wiki_articles = self._search_wikipedia_articles(search_terms)
+            if not wiki_articles:
+                return []
+            
+            evidence_items = []
+            
+            for article in wiki_articles[:3]:
+                try:
+                    citations = self._extract_citations_from_article(article['title'])
+                    
+                    wikipedia_evidence = {
+                        'statement': article.get('extract', 'Wikipedia article content'),
+                        'source_title': article['title'],
+                        'source_domain': 'en.wikipedia.org',
+                        'source_url': f"https://en.wikipedia.org/wiki/{article['title'].replace(' ', '_')}",
+                        'source_type': 'wikipedia',
+                        'weight': 0.3,
+                        'date_published': None,
+                        'relevance_score': 0.6,
+                        'highlight_text': article.get('extract', '')[:100],
+                        'highlight_context': article.get('extract', '')[:300]
+                    }
+                    evidence_items.append(wikipedia_evidence)
+                    
+                    for citation in citations[:5]:
+                        evidence_items.append(citation)
+                        
+                except Exception as e:
+                    print(f"Error in fallback processing {article.get('title', 'unknown')}: {e}")
+                    continue
+            
+            evidence_items.sort(key=lambda x: (x.get('weight', 0), x.get('relevance_score', 0)), reverse=True)
+            return evidence_items[:8]
+            
+        except Exception as e:
+            print(f"Fallback search error: {e}")
+            return []

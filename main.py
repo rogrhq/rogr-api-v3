@@ -8,6 +8,8 @@ from pydantic import BaseModel
 from ocr_service import OCRService
 from claim_extraction_service import ClaimExtractionService
 from wikipedia_service import WikipediaService
+from ai_evidence_shepherd import OpenAIEvidenceShepherd
+from evidence_shepherd import NoOpEvidenceShepherd
 
 # Test comment - verifying git push workflow
 
@@ -83,7 +85,26 @@ analyses_claims_db = {}  # Store extracted claims for focus analysis
 # Initialize services
 ocr_service = OCRService()
 claim_service = ClaimExtractionService()
-wikipedia_service = WikipediaService()
+
+# Initialize AI Evidence Shepherd (modular)
+ai_shepherd = None
+if os.getenv('OPENAI_API_KEY'):
+    try:
+        ai_shepherd = OpenAIEvidenceShepherd()
+        if ai_shepherd.is_enabled():
+            print("✅ AI Evidence Shepherd enabled (OpenAI)")
+        else:
+            ai_shepherd = NoOpEvidenceShepherd()
+            print("⚠️  AI Evidence Shepherd fallback to NoOp (OpenAI not configured)")
+    except Exception as e:
+        print(f"❌ AI Evidence Shepherd failed to initialize: {e}")
+        ai_shepherd = NoOpEvidenceShepherd()
+else:
+    ai_shepherd = NoOpEvidenceShepherd()
+    print("ℹ️  AI Evidence Shepherd using NoOp implementation (no OpenAI key)")
+
+# Initialize Wikipedia service with AI shepherd
+wikipedia_service = WikipediaService(evidence_shepherd=ai_shepherd)
 
 # Claim scoring functions
 def generate_evidence_statements(claim_text: str, trust_score: int) -> tuple[List[EvidenceStatement], List[EvidenceStatement], List[EvidenceStatement]]:
