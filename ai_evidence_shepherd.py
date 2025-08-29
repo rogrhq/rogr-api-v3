@@ -31,7 +31,7 @@ class OpenAIEvidenceShepherd(EvidenceShepherd):
                 'max_tokens': 1000
             }
             
-            response = requests.post(self.base_url, headers=headers, json=payload, timeout=15)
+            response = requests.post(self.base_url, headers=headers, json=payload, timeout=8)
             response.raise_for_status()
             
             result = response.json()

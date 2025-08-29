@@ -56,10 +56,16 @@ class WikipediaService:
                         )
                         evidence_candidates.append(wiki_candidate)
                         
-                        # Extract external citations
-                        citations = self._extract_citations_from_article(article['title'])
+                        # Extract external citations with limits to prevent infinite loops
+                        try:
+                            citations = self._extract_citations_from_article(article['title'])
+                            citation_limit = 3 if search_strategy.claim_type.value == 'statistical' else 2
+                        except Exception as e:
+                            print(f"Citation extraction failed for {article['title']}: {e}")
+                            citations = []
+                            citation_limit = 0
                         
-                        for citation_data in citations[:4]:  # Top 4 citations per article
+                        for citation_data in citations[:citation_limit]:
                             citation_candidate = EvidenceCandidate(
                                 text=citation_data['statement'],
                                 source_url=citation_data['source_url'],
@@ -77,8 +83,40 @@ class WikipediaService:
             if not evidence_candidates:
                 return []
             
-            # Use AI Shepherd to score and filter evidence for relevance
-            processed_evidence = self.shepherd.filter_evidence_batch(claim_text, evidence_candidates)
+            # Use AI Shepherd to score and filter evidence for relevance (with timeout)
+            try:
+                import signal
+                
+                def timeout_handler(signum, frame):
+                    raise TimeoutError("AI processing timeout")
+                
+                signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(30)  # 30 second timeout
+                
+                processed_evidence = self.shepherd.filter_evidence_batch(claim_text, evidence_candidates)
+                
+                signal.alarm(0)  # Cancel timeout
+                
+            except TimeoutError:
+                print(f"AI processing timed out for claim '{claim_text[:50]}...', using fallback")
+                processed_evidence = []
+                # Use top evidence candidates without AI scoring
+                for candidate in evidence_candidates[:5]:
+                    processed_evidence.append(type('ProcessedEvidence', (), {
+                        'text': candidate.text,
+                        'source_title': candidate.source_title,
+                        'source_domain': candidate.source_domain,
+                        'source_url': candidate.source_url,
+                        'ai_relevance_score': 60,  # Default score
+                        'ai_stance': 'neutral',
+                        'ai_confidence': 0.5,
+                        'ai_reasoning': 'Timeout fallback - AI processing took too long',
+                        'highlight_text': candidate.text[:100],
+                        'highlight_context': candidate.text[:300]
+                    })())
+            except Exception as e:
+                print(f"AI processing failed for claim '{claim_text[:50]}...': {e}")
+                processed_evidence = []
             
             # Convert back to the expected format
             evidence_items = []
@@ -215,9 +253,9 @@ class WikipediaService:
     def _extract_citations_from_article(self, title: str) -> List[Dict]:
         """Extract external citations from a Wikipedia article"""
         try:
-            # Get article HTML content
+            # Get article HTML content with timeout
             url = f"https://en.wikipedia.org/wiki/{title.replace(' ', '_')}"
-            response = self.session.get(url, timeout=15)
+            response = self.session.get(url, timeout=8)
             response.raise_for_status()
             
             soup = BeautifulSoup(response.text, 'html.parser')
@@ -242,8 +280,8 @@ class WikipediaService:
                     if href and self._is_valid_external_source(href):
                         external_links.add(href)
             
-            # Process external links and create evidence items
-            for i, link in enumerate(list(external_links)[:10]):  # Max 10 links
+            # Process external links and create evidence items (limited to prevent hanging)
+            for i, link in enumerate(list(external_links)[:5]):  # Reduced to max 5 links
                 try:
                     citation_info = self._analyze_external_source(link)
                     if citation_info:
