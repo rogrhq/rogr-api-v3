@@ -7,6 +7,8 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from ocr_service import OCRService
 
+# Test comment - verifying git push workflow
+
 app = FastAPI()
 
 # Simple CORS headers
