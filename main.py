@@ -6,6 +6,7 @@ import os
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from ocr_service import OCRService
+from claim_extraction_service import ClaimExtractionService
 
 # Test comment - verifying git push workflow
 
@@ -52,9 +53,11 @@ class TrustCapsule(BaseModel):
 # In-memory storage
 analyses_db = {}
 analyses_input_db = {}  # Store original inputs for focus analysis
+analyses_claims_db = {}  # Store extracted claims for focus analysis
 
-# Initialize OCR service
+# Initialize services
 ocr_service = OCRService()
+claim_service = ClaimExtractionService()
 
 @app.get("/health")
 def health_check():
@@ -64,23 +67,44 @@ def health_check():
 async def create_analysis(analysis: AnalysisInput):
     analysis_id = str(uuid.uuid4())
     
-    # Generate fake trust capsule based on input type
-    base_why = [
-        "Multiple credible sources support this claim",
-        "Recent publication date increases reliability", 
-        "Cross-referenced with fact-checking databases"
-    ]
+    # Extract claims and build analysis
+    claims = []
+    all_text = ""
     
-    # Add OCR analysis for images
-    if analysis.type == "image" and analysis.input and ocr_service.is_enabled():
+    # Handle different input types
+    if analysis.type == "url":
+        # Extract URL metadata and content
+        url_data = claim_service.extract_url_metadata_and_text(analysis.input)
+        all_text = claim_service.merge_text_sources(url_data)
+        claims = claim_service.extract_claims(all_text)
+    elif analysis.type == "image" and analysis.input and ocr_service.is_enabled():
+        # Extract OCR text and claims
         try:
             ocr_text = await ocr_service.extract_text_from_image(analysis.input)
             if ocr_text:
-                ocr_insight = ocr_service.format_ocr_insight(ocr_text)
-                base_why.append(ocr_insight)
+                all_text = ocr_text
+                claims = claim_service.extract_claims(ocr_text)
         except Exception as e:
             print(f"OCR processing error: {e}")
-            base_why.append("OCR: Text analysis unavailable")
+    elif analysis.type == "text":
+        # Direct text analysis
+        all_text = analysis.input
+        claims = claim_service.extract_claims(analysis.input)
+    
+    # Build why array starting with claims
+    base_why = []
+    
+    if claims:
+        base_why.append(f"Claims identified: {len(claims)} checkable statement{'s' if len(claims) > 1 else ''}")
+        for i, claim in enumerate(claims[:3], 1):
+            base_why.append(f"Claim {i}: {claim}")
+    else:
+        base_why.append("No specific verifiable claims identified in content")
+    
+    # Add OCR insight if applicable
+    if analysis.type == "image" and all_text and ocr_service.is_enabled():
+        ocr_insight = ocr_service.format_ocr_insight(all_text)
+        base_why.append(ocr_insight)
     
     fake_capsule = TrustCapsule(
         id=analysis_id,
@@ -109,9 +133,10 @@ async def create_analysis(analysis: AnalysisInput):
         mode=analysis.mode
     )
     
-    # Store capsule and original input for focus analysis
+    # Store capsule, original input, and extracted claims for focus analysis
     analyses_db[analysis_id] = fake_capsule
     analyses_input_db[analysis_id] = analysis.input
+    analyses_claims_db[analysis_id] = claims
     
     return fake_capsule
 
@@ -134,7 +159,7 @@ async def focus_analysis(id: str, focus: FocusRequest):
     # Add layer-specific insights to why array
     focus_insights = []
     
-    # Enhanced OCR analysis for focus scan
+    # Enhanced OCR analysis with claim extraction for focus scan
     if "ocr" in focus.layers and capsule.input_type == "image" and ocr_service.is_enabled():
         original_input = analyses_input_db.get(id)
         if original_input:
@@ -143,6 +168,13 @@ async def focus_analysis(id: str, focus: FocusRequest):
                 if ocr_text:
                     focus_ocr_insight = ocr_service.format_focus_ocr_insight(ocr_text)
                     focus_insights.append(focus_ocr_insight)
+                    
+                    # Extract claims from OCR text for focus analysis
+                    ocr_claims = claim_service.extract_claims(ocr_text)
+                    if ocr_claims:
+                        focus_insights.append(f"Focus OCR Claims: {len(ocr_claims)} statement(s) identified")
+                        for i, claim in enumerate(ocr_claims[:2], 1):
+                            focus_insights.append(f"OCR Claim {i}: {claim[:80]}...")
                 else:
                     focus_insights.append("Focus OCR Analysis: No text detected in image")
             except Exception as e:
@@ -151,7 +183,13 @@ async def focus_analysis(id: str, focus: FocusRequest):
         else:
             focus_insights.append("Focus OCR Analysis: Original image unavailable")
     elif "ocr" in focus.layers:
-        focus_insights.append("OCR analysis revealed embedded text patterns")
+        stored_claims = analyses_claims_db.get(id, [])
+        if stored_claims:
+            focus_insights.append(f"OCR Claims Review: {len(stored_claims)} claim(s) from analysis")
+            for i, claim in enumerate(stored_claims[:2], 1):
+                focus_insights.append(f"Claim {i}: {claim[:80]}...")
+        else:
+            focus_insights.append("OCR analysis revealed embedded text patterns")
         
     if "speech" in focus.layers:
         focus_insights.append("Audio analysis detected synthetic speech markers")
