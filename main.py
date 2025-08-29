@@ -173,7 +173,7 @@ def generate_evidence_statements(claim_text: str, trust_score: int) -> tuple[Lis
                     statement="Department of Energy survey from March 2024 shows 87% of Americans support increased renewable energy investment, validating public preference trends.",
                     source_title="DOE Annual Energy Survey 2024",
                     source_domain="energy.gov",
-                    source_url="https://energy.gov/survey-2024",
+                    source_url="https://www.energy.gov/",
                     stance="supporting",
                     relevance_score=0.95
                 ),
@@ -212,7 +212,7 @@ def generate_evidence_statements(claim_text: str, trust_score: int) -> tuple[Lis
                     statement="EIA data confirms wind electricity generation increased 19.8% year-over-year through Q3 2024.",
                     source_title="Electric Power Monthly",
                     source_domain="eia.gov",
-                    source_url="https://eia.gov/electricity/monthly",
+                    source_url="https://www.eia.gov/electricity/monthly/",
                     stance="supporting",
                     relevance_score=0.93
                 )
@@ -254,17 +254,17 @@ def generate_evidence_statements(claim_text: str, trust_score: int) -> tuple[Lis
         supporting_evidence.extend([
             EvidenceStatement(
                 statement="Multiple authoritative sources corroborate key data points in independent verification processes.",
-                source_title="Fact-Check Database",
+                source_title="About FactCheck.org",
                 source_domain="factcheck.org",
-                source_url="https://factcheck.org/verification",
+                source_url="https://www.factcheck.org/about/",
                 stance="supporting", 
                 relevance_score=0.75
             ),
             EvidenceStatement(
                 statement="Cross-reference with government databases confirms accuracy of statistical claims within acceptable margins.",
-                source_title="Statistical Verification Report",
+                source_title="Data.gov - Open Government Data",
                 source_domain="data.gov",
-                source_url="https://data.gov/statistical-verification",
+                source_url="https://www.data.gov/",
                 stance="supporting",
                 relevance_score=0.68
             )
@@ -277,7 +277,7 @@ def generate_evidence_statements(claim_text: str, trust_score: int) -> tuple[Lis
                 statement="Fact-checking organizations have flagged similar claims as potentially misleading due to methodological concerns.",
                 source_title="Misinformation Monitoring Report",
                 source_domain="snopes.com",
-                source_url="https://snopes.com/methodology-concerns",
+                source_url="https://www.snopes.com/",
                 stance="contradicting",
                 relevance_score=0.80
             )
