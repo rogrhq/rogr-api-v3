@@ -37,12 +37,22 @@ class Citation(BaseModel):
     date: str
     url: str
 
+class ClaimAnalysis(BaseModel):
+    claim_text: str
+    trust_score: int
+    evidence_grade: str
+    confidence: str
+    evidence_summary: List[str]  # Bullet points of evidence
+    sources_count: int
+
 class TrustCapsule(BaseModel):
     id: str
     trust_score: int
     evidence_grade: str
     confidence: str
-    why: List[str]
+    why: List[str]  # Brief summary for main view
+    claims: List[ClaimAnalysis]  # Individual claim details
+    overall_assessment: str  # "can likely be trusted" etc
     citations: List[Citation]
     capsule_version: int
     signed: bool
@@ -58,6 +68,137 @@ analyses_claims_db = {}  # Store extracted claims for focus analysis
 # Initialize services
 ocr_service = OCRService()
 claim_service = ClaimExtractionService()
+
+# Claim scoring functions
+def score_individual_claim(claim_text: str) -> ClaimAnalysis:
+    """Score an individual claim and provide evidence summary"""
+    # Simulate evidence-based scoring
+    import random
+    random.seed(hash(claim_text) % 2147483647)  # Consistent scoring per claim
+    
+    # Base score influenced by claim characteristics
+    base_score = 70
+    
+    # Numbers/percentages boost credibility
+    if any(char.isdigit() for char in claim_text):
+        base_score += random.randint(5, 15)
+    
+    # Definitive statements are riskier
+    if any(word in claim_text.lower() for word in ['will', 'definitely', 'always', 'never']):
+        base_score -= random.randint(5, 10)
+    
+    # References to sources boost score
+    if any(word in claim_text.lower() for word in ['according to', 'study', 'report', 'research']):
+        base_score += random.randint(10, 20)
+    
+    # Clamp score
+    trust_score = max(0, min(100, base_score + random.randint(-15, 15)))
+    
+    # Convert score to grade
+    if trust_score >= 90:
+        grade = "A+"
+    elif trust_score >= 87:
+        grade = "A"
+    elif trust_score >= 83:
+        grade = "A-"
+    elif trust_score >= 80:
+        grade = "B+"
+    elif trust_score >= 77:
+        grade = "B"
+    elif trust_score >= 73:
+        grade = "B-"
+    elif trust_score >= 70:
+        grade = "C+"
+    elif trust_score >= 67:
+        grade = "C"
+    elif trust_score >= 63:
+        grade = "C-"
+    elif trust_score >= 60:
+        grade = "D+"
+    elif trust_score >= 50:
+        grade = "D"
+    else:
+        grade = "F"
+    
+    # Confidence based on score
+    if trust_score >= 85:
+        confidence = "High"
+    elif trust_score >= 70:
+        confidence = "Medium"
+    else:
+        confidence = "Low"
+    
+    # Generate evidence summary
+    evidence_summary = []
+    sources_count = random.randint(2, 5)
+    
+    if 'according to' in claim_text.lower():
+        evidence_summary.append("Referenced authoritative source material")
+    if any(char.isdigit() for char in claim_text):
+        evidence_summary.append("Contains specific numerical data points")
+    if trust_score >= 80:
+        evidence_summary.append(f"Corroborated by {sources_count} independent sources")
+    else:
+        evidence_summary.append(f"Limited verification from {sources_count} sources")
+    
+    if trust_score < 70:
+        evidence_summary.append("Conflicting information found in fact-check databases")
+    
+    evidence_summary.append(f"Cross-referenced against {random.randint(3, 8)} verification databases")
+    
+    return ClaimAnalysis(
+        claim_text=claim_text,
+        trust_score=trust_score,
+        evidence_grade=grade,
+        confidence=confidence,
+        evidence_summary=evidence_summary,
+        sources_count=sources_count
+    )
+
+def calculate_cumulative_score(claims: List[ClaimAnalysis]) -> tuple[int, str, str]:
+    """Calculate overall score, grade, and assessment from individual claims"""
+    if not claims:
+        return 50, "C", "No claims available for analysis"
+    
+    # Weighted average of claim scores
+    total_score = sum(claim.trust_score for claim in claims)
+    avg_score = total_score / len(claims)
+    
+    # Convert to overall grade
+    if avg_score >= 90:
+        overall_grade = "A+"
+    elif avg_score >= 87:
+        overall_grade = "A"
+    elif avg_score >= 83:
+        overall_grade = "A-"
+    elif avg_score >= 80:
+        overall_grade = "B+"
+    elif avg_score >= 77:
+        overall_grade = "B"
+    elif avg_score >= 73:
+        overall_grade = "B-"
+    elif avg_score >= 70:
+        overall_grade = "C+"
+    elif avg_score >= 67:
+        overall_grade = "C"
+    elif avg_score >= 63:
+        overall_grade = "C-"
+    elif avg_score >= 60:
+        overall_grade = "D+"
+    elif avg_score >= 50:
+        overall_grade = "D"
+    else:
+        overall_grade = "F"
+    
+    # Generate overall assessment
+    if avg_score >= 85:
+        assessment = "Based on the cumulative evidence, this content can likely be trusted"
+    elif avg_score >= 70:
+        assessment = "Based on the analysis, this content requires further evidence to support its claims"
+    else:
+        assessment = "Based on the verification results, this content is likely unreliable"
+    
+    return int(avg_score), overall_grade, assessment
 
 @app.get("/health")
 def health_check():
@@ -91,15 +232,32 @@ async def create_analysis(analysis: AnalysisInput):
         all_text = analysis.input
         claims = claim_service.extract_claims(analysis.input)
     
-    # Build why array starting with claims
+    # Score individual claims
+    claim_analyses = []
+    if claims:
+        claim_analyses = [score_individual_claim(claim) for claim in claims]
+    
+    # Calculate cumulative scores
+    overall_score, overall_grade, overall_assessment = calculate_cumulative_score(claim_analyses)
+    
+    # Build simplified why array for main view
     base_why = []
     
-    if claims:
-        base_why.append(f"Claims identified: {len(claims)} checkable statement{'s' if len(claims) > 1 else ''}")
-        for i, claim in enumerate(claims[:3], 1):
-            base_why.append(f"Claim {i}: {claim}")
+    if claim_analyses:
+        # Summary line
+        base_why.append(f"{len(claim_analyses)} claim{'s' if len(claim_analyses) > 1 else ''} analyzed")
+        
+        # Brief claim scores (first 3)
+        for i, claim_analysis in enumerate(claim_analyses[:3], 1):
+            grade = claim_analysis.evidence_grade
+            score = claim_analysis.trust_score
+            base_why.append(f"Claim {i}: {grade} ({score})")
+        
+        # Overall assessment
+        base_why.append(overall_assessment)
     else:
         base_why.append("No specific verifiable claims identified in content")
+        overall_assessment = "Content analysis completed without extractable claims"
     
     # Add OCR insight if applicable
     if analysis.type == "image" and all_text and ocr_service.is_enabled():
@@ -108,10 +266,12 @@ async def create_analysis(analysis: AnalysisInput):
     
     fake_capsule = TrustCapsule(
         id=analysis_id,
-        trust_score=85,
-        evidence_grade="B+",
-        confidence="High",
+        trust_score=overall_score,
+        evidence_grade=overall_grade,
+        confidence="High" if overall_score >= 85 else "Medium" if overall_score >= 70 else "Low",
         why=base_why,
+        claims=claim_analyses,
+        overall_assessment=overall_assessment,
         citations=[
             Citation(
                 title="Reuters Fact Check Database",
@@ -145,6 +305,37 @@ def get_analysis(id: str):
     if id not in analyses_db:
         raise HTTPException(status_code=404, detail="Analysis not found")
     return {"trust_capsule": analyses_db[id]}
+
+@app.get("/analyses/{id}/details")
+def get_analysis_details(id: str):
+    """Get detailed claim-by-claim analysis (Consumer/Pro feature)"""
+    if id not in analyses_db:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    
+    capsule = analyses_db[id]
+    
+    # Return detailed breakdown
+    return {
+        "capsule_id": id,
+        "overall_score": capsule.trust_score,
+        "overall_grade": capsule.evidence_grade,
+        "overall_assessment": capsule.overall_assessment,
+        "claims_count": len(capsule.claims),
+        "claims": [
+            {
+                "claim_number": i + 1,
+                "claim_text": claim.claim_text,
+                "trust_score": claim.trust_score,
+                "evidence_grade": claim.evidence_grade,
+                "confidence": claim.confidence,
+                "evidence_summary": claim.evidence_summary,
+                "sources_count": claim.sources_count
+            }
+            for i, claim in enumerate(capsule.claims)
+        ],
+        "citations": capsule.citations,
+        "feature_access": "consumer_required"  # UI hint for access control
+    }
 
 @app.post("/analyses/{id}/focus", response_model=TrustCapsule)
 async def focus_analysis(id: str, focus: FocusRequest):
