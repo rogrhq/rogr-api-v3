@@ -54,9 +54,11 @@ class WikipediaService:
                 for article in wiki_articles[:articles_to_process]:
                     try:
                         # Add Wikipedia article as evidence candidate
+                        # FIXED: Proper URL encoding for Wikipedia titles
+                        encoded_title = urllib.parse.quote(article['title'].replace(' ', '_'), safe='')
                         wiki_candidate = EvidenceCandidate(
                             text=article.get('extract', 'Wikipedia article content')[:400],
-                            source_url=f"https://en.wikipedia.org/wiki/{article['title'].replace(' ', '_')}",
+                            source_url=f"https://en.wikipedia.org/wiki/{encoded_title}",
                             source_domain='en.wikipedia.org',
                             source_title=article['title'],
                             found_via_query=search_query,
@@ -465,7 +467,7 @@ class WikipediaService:
                         'statement': article.get('extract', 'Wikipedia article content'),
                         'source_title': article['title'],
                         'source_domain': 'en.wikipedia.org',
-                        'source_url': f"https://en.wikipedia.org/wiki/{article['title'].replace(' ', '_')}",
+                        'source_url': f"https://en.wikipedia.org/wiki/{urllib.parse.quote(article['title'].replace(' ', '_'), safe='')}",
                         'source_type': 'wikipedia',
                         'weight': 0.3,
                         'date_published': None,
