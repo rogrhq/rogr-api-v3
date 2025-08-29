@@ -470,7 +470,40 @@ def get_analysis_details(id: str):
                 "evidence_grade": claim.evidence_grade,
                 "confidence": claim.confidence,
                 "evidence_summary": claim.evidence_summary,
-                "sources_count": claim.sources_count
+                "sources_count": claim.sources_count,
+                "supporting_evidence": [
+                    {
+                        "statement": ev.statement,
+                        "source_title": ev.source_title,
+                        "source_domain": ev.source_domain,
+                        "source_url": ev.source_url,
+                        "stance": ev.stance,
+                        "relevance_score": ev.relevance_score
+                    }
+                    for ev in claim.supporting_evidence
+                ],
+                "contradicting_evidence": [
+                    {
+                        "statement": ev.statement,
+                        "source_title": ev.source_title,
+                        "source_domain": ev.source_domain,
+                        "source_url": ev.source_url,
+                        "stance": ev.stance,
+                        "relevance_score": ev.relevance_score
+                    }
+                    for ev in claim.contradicting_evidence
+                ],
+                "neutral_evidence": [
+                    {
+                        "statement": ev.statement,
+                        "source_title": ev.source_title,
+                        "source_domain": ev.source_domain,
+                        "source_url": ev.source_url,
+                        "stance": ev.stance,
+                        "relevance_score": ev.relevance_score
+                    }
+                    for ev in claim.neutral_evidence
+                ]
             }
             for i, claim in enumerate(capsule.claims)
         ],
