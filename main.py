@@ -45,6 +45,9 @@ class EvidenceStatement(BaseModel):
     source_url: str
     stance: str  # "supporting", "contradicting", "neutral"
     relevance_score: float  # 0-1, how relevant to the claim
+    highlight_text: Optional[str] = None  # Exact text to highlight on source page
+    highlight_context: Optional[str] = None  # Surrounding context for better matching
+    paragraph_index: Optional[int] = None  # Paragraph number where evidence was found
 
 class ClaimAnalysis(BaseModel):
     claim_text: str
@@ -112,7 +115,10 @@ def generate_evidence_statements(claim_text: str, trust_score: int) -> tuple[Lis
                 source_domain=item['source_domain'],
                 source_url=item['source_url'],
                 stance=stance,
-                relevance_score=item.get('relevance_score', 0.7)
+                relevance_score=item.get('relevance_score', 0.7),
+                highlight_text=item.get('highlight_text'),
+                highlight_context=item.get('highlight_context'),
+                paragraph_index=item.get('paragraph_index')
             )
             
             if stance == "supporting":

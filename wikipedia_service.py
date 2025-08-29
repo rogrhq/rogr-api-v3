@@ -256,7 +256,7 @@ class WikipediaService:
         return any(domain in url for domain in reputable_domains)
     
     def _analyze_external_source(self, url: str) -> Optional[Dict]:
-        """Analyze an external source URL and extract metadata"""
+        """Analyze an external source URL and extract metadata with highlighting information"""
         try:
             # Get basic info from URL
             parsed = urlparse(url)
@@ -280,19 +280,41 @@ class WikipediaService:
                 if desc_tag:
                     description = desc_tag.get('content', '')[:200]
                 
-                # Try to extract some content
+                # Try to extract content with paragraph tracking for highlighting
                 content_text = ""
+                highlight_text = ""
+                highlight_context = ""
+                paragraph_index = None
+                
                 paragraphs = soup.find_all('p')
                 if paragraphs:
-                    content_parts = [p.get_text().strip() for p in paragraphs[:3] if p.get_text().strip()]
+                    content_parts = []
+                    for i, p in enumerate(paragraphs[:5]):
+                        p_text = p.get_text().strip()
+                        if p_text:
+                            content_parts.append(p_text)
+                            # Use first substantial paragraph for highlighting
+                            if not highlight_text and len(p_text) > 50:
+                                highlight_text = p_text[:150] + ("..." if len(p_text) > 150 else "")
+                                highlight_context = p_text[:300]
+                                paragraph_index = i
+                    
                     content_text = " ".join(content_parts)[:300]
                 
                 statement = description if description else content_text if content_text else f"External source from {domain}"
+                
+                # If no highlight text yet, use the statement itself
+                if not highlight_text:
+                    highlight_text = statement[:100] + ("..." if len(statement) > 100 else "")
+                    highlight_context = statement
                 
             except Exception:
                 # Fallback if we can't fetch the page
                 title = f"External source from {domain}"
                 statement = f"Reference from {domain} (content not accessible)"
+                highlight_text = statement
+                highlight_context = statement
+                paragraph_index = None
             
             return {
                 'statement': statement,
@@ -300,7 +322,10 @@ class WikipediaService:
                 'source_domain': domain,
                 'source_url': url,
                 'date_published': None,  # Could enhance with date extraction
-                'relevance_score': 0.7   # Default relevance
+                'relevance_score': 0.7,   # Default relevance
+                'highlight_text': highlight_text,
+                'highlight_context': highlight_context,
+                'paragraph_index': paragraph_index
             }
             
         except Exception as e:
