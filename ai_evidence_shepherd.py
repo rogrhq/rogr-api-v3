@@ -46,6 +46,10 @@ class OpenAIEvidenceShepherd(EvidenceShepherd):
         
         claim_lower = claim_text.lower().strip()
         
+        # NEVER skip URLs - they should always be processed
+        if claim_lower.startswith(('http://', 'https://', 'www.')):
+            return False
+        
         # Skip extremely short inputs
         if len(claim_text.strip()) < 8:
             return True
