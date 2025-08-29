@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from ocr_service import OCRService
 from claim_extraction_service import ClaimExtractionService
+from wikipedia_service import WikipediaService
 
 # Test comment - verifying git push workflow
 
@@ -79,16 +80,55 @@ analyses_claims_db = {}  # Store extracted claims for focus analysis
 # Initialize services
 ocr_service = OCRService()
 claim_service = ClaimExtractionService()
+wikipedia_service = WikipediaService()
 
 # Claim scoring functions
 def generate_evidence_statements(claim_text: str, trust_score: int) -> tuple[List[EvidenceStatement], List[EvidenceStatement], List[EvidenceStatement]]:
-    """Generate realistic evidence statements based on claim content and score"""
+    """Generate evidence statements using Wikipedia and external sources, with fallback to realistic fake data"""
     import random
     random.seed(hash(claim_text) % 2147483647)
     
     supporting_evidence = []
     contradicting_evidence = []
     neutral_evidence = []
+    
+    # Try to get real evidence from Wikipedia first
+    try:
+        wikipedia_evidence = wikipedia_service.search_evidence_for_claim(claim_text)
+        
+        # Convert Wikipedia evidence to EvidenceStatement format
+        for item in wikipedia_evidence[:6]:  # Use up to 6 items
+            stance = "supporting" if trust_score >= 70 else ("contradicting" if trust_score < 50 else "neutral")
+            
+            # Adjust stance based on source quality
+            if item.get('weight', 0.6) > 0.8 and trust_score >= 60:
+                stance = "supporting"
+            elif item.get('weight', 0.6) < 0.5:
+                stance = "contradicting" if trust_score < 70 else "neutral"
+            
+            evidence_stmt = EvidenceStatement(
+                statement=item['statement'][:200],  # Truncate if too long
+                source_title=item['source_title'],
+                source_domain=item['source_domain'],
+                source_url=item['source_url'],
+                stance=stance,
+                relevance_score=item.get('relevance_score', 0.7)
+            )
+            
+            if stance == "supporting":
+                supporting_evidence.append(evidence_stmt)
+            elif stance == "contradicting":
+                contradicting_evidence.append(evidence_stmt)
+            else:
+                neutral_evidence.append(evidence_stmt)
+        
+        # Return real evidence if we found enough
+        if len(supporting_evidence) + len(contradicting_evidence) + len(neutral_evidence) >= 3:
+            return supporting_evidence[:3], contradicting_evidence[:2], neutral_evidence[:2]
+    
+    except Exception as e:
+        print(f"Error getting Wikipedia evidence for claim '{claim_text}': {e}")
+        # Fall back to generated evidence below
     
     # Evidence pools based on claim content
     if "renewable energy" in claim_text.lower():
@@ -570,6 +610,43 @@ async def focus_analysis(id: str, focus: FocusRequest):
     
     analyses_db[id] = capsule
     return capsule
+
+@app.get("/evidence")
+async def get_evidence(q: str):
+    """
+    Get evidence for a claim from Wikipedia and external sources
+    Returns Wikipedia articles + outbound citations (3-5 per claim)
+    """
+    if not q or len(q.strip()) < 10:
+        raise HTTPException(status_code=400, detail="Query parameter 'q' must be at least 10 characters")
+    
+    try:
+        evidence_items = wikipedia_service.search_evidence_for_claim(q.strip())
+        
+        if not evidence_items:
+            return {
+                "query": q,
+                "evidence_count": 0,
+                "evidence_items": [],
+                "message": "No evidence found for this claim"
+            }
+        
+        # Separate Wikipedia and external sources
+        wikipedia_sources = [item for item in evidence_items if item.get('source_type') == 'wikipedia']
+        external_sources = [item for item in evidence_items if item.get('source_type') == 'external']
+        
+        return {
+            "query": q,
+            "evidence_count": len(evidence_items),
+            "wikipedia_sources_count": len(wikipedia_sources),
+            "external_sources_count": len(external_sources),
+            "evidence_items": evidence_items,
+            "summary": f"Found {len(external_sources)} external reputable sources via {len(wikipedia_sources)} Wikipedia articles"
+        }
+        
+    except Exception as e:
+        print(f"Evidence search error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error searching for evidence: {str(e)}")
 
 @app.get("/debug/ocr-test")
 async def debug_ocr_test():
