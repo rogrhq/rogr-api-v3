@@ -10,6 +10,7 @@ from claim_extraction_service import ClaimExtractionService
 from wikipedia_service import WikipediaService
 from ai_evidence_shepherd import OpenAIEvidenceShepherd
 from evidence_shepherd import NoOpEvidenceShepherd
+from progressive_analysis_service import ProgressiveAnalysisService
 
 # Test comment - verifying git push workflow
 
@@ -105,6 +106,13 @@ else:
 
 # Initialize Wikipedia service with AI shepherd
 wikipedia_service = WikipediaService(evidence_shepherd=ai_shepherd)
+
+# Initialize Progressive Analysis Service
+progressive_service = ProgressiveAnalysisService(
+    wikipedia_service=wikipedia_service,
+    claim_service=claim_service,
+    evidence_shepherd=ai_shepherd
+)
 
 # Claim scoring functions
 def generate_evidence_statements(claim_text: str, trust_score: int) -> tuple[List[EvidenceStatement], List[EvidenceStatement], List[EvidenceStatement]]:
@@ -637,6 +645,61 @@ async def focus_analysis(id: str, focus: FocusRequest):
     
     analyses_db[id] = capsule
     return capsule
+
+@app.post("/analyses/progressive", response_model=dict)
+async def start_progressive_analysis(analysis: AnalysisInput):
+    """Start progressive analysis with live updates for large content"""
+    analysis_id = str(uuid.uuid4())
+    
+    try:
+        # Detect content size and set expectations
+        content_size, expectations = progressive_service.detect_content_size(analysis.input)
+        
+        print(f"Progressive analysis started: {analysis_id}, size: {content_size.value}, estimated: {expectations['estimated_time']}")
+        
+        # Start background processing
+        async def progress_callback(aid, status):
+            print(f"Progress {aid}: {status.phase.value} - {status.progress:.1%} - {status.message}")
+        
+        # Run progressive analysis in background
+        asyncio.create_task(
+            progressive_service.start_progressive_analysis(
+                analysis_id, analysis.input, analysis.type, progress_callback
+            )
+        )
+        
+        # Return immediate response with analysis ID and expectations
+        return {
+            "analysis_id": analysis_id,
+            "content_size": content_size.value,
+            "expectations": expectations,
+            "status": "started",
+            "message": "Analysis started. Use /analyses/progressive/{analysis_id}/status to check progress."
+        }
+        
+    except Exception as e:
+        print(f"Progressive analysis startup error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to start analysis: {str(e)}")
+
+@app.get("/analyses/progressive/{analysis_id}/status")
+async def get_progressive_status(analysis_id: str):
+    """Get current status of progressive analysis"""
+    status = progressive_service.get_analysis_status(analysis_id)
+    
+    if not status:
+        raise HTTPException(status_code=404, detail="Analysis not found or completed")
+    
+    return status
+
+@app.post("/analyses/progressive/{analysis_id}/cancel")
+async def cancel_progressive_analysis(analysis_id: str):
+    """Cancel active progressive analysis"""
+    success = progressive_service.cancel_analysis(analysis_id)
+    
+    if success:
+        return {"status": "cancelled", "analysis_id": analysis_id}
+    else:
+        raise HTTPException(status_code=404, detail="Analysis not found or already completed")
 
 @app.get("/evidence")
 async def get_evidence(q: str):
