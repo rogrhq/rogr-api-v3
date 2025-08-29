@@ -41,33 +41,96 @@ class OpenAIEvidenceShepherd(EvidenceShepherd):
             print(f"OpenAI API error: {e}")
             return None
     
+    def is_non_claim(self, claim_text: str) -> bool:
+        """SPEED OPTIMIZATION: Fast detection of non-claims to skip processing"""
+        
+        claim_lower = claim_text.lower().strip()
+        
+        # Skip extremely short inputs
+        if len(claim_text.strip()) < 8:
+            return True
+        
+        # Skip obvious non-factual content
+        non_claim_patterns = [
+            # General topics without specific claims
+            r'^(renewable energy|climate change|artificial intelligence|healthcare|education)$',
+            r'^(technology|science|politics|economics|business)$',
+            
+            # Questions
+            r'^\s*(what|how|why|when|where|who|which|can|could|would|should|is|are|do|does)',
+            
+            # Commands/instructions
+            r'^\s*(tell me|show me|explain|describe|find|search|look|check)',
+            
+            # Single words or very generic phrases
+            r'^\w+$',  # Single word
+            r'^(the|a|an)\s+\w+$',  # Article + single word
+            
+            # Vague statements
+            r'^(this is|that is|it is|there are|there is)\s+(good|bad|important|interesting|useful)',
+        ]
+        
+        for pattern in non_claim_patterns:
+            if re.match(pattern, claim_lower):
+                return True
+        
+        # Check for specific claim indicators that SHOULD be processed
+        factual_indicators = [
+            r'\d+%',  # Percentages
+            r'\d+\s*(million|billion|thousand)',  # Large numbers
+            r'(study|research|survey|poll)\s+(shows?|found|indicates?)',
+            r'(according to|reported by|announced|confirmed)',
+            r'\d{4}',  # Years
+            r'(increased?|decreased?|rose|fell|grew)\s+by',
+            r'(says?|claims?|stated?|announced?)\s+(that)?',
+        ]
+        
+        for indicator in factual_indicators:
+            if re.search(indicator, claim_lower):
+                return False  # Definitely a factual claim
+        
+        # If no clear indicators, check word count and complexity
+        words = claim_text.split()
+        if len(words) < 4:  # Very short statements likely non-claims
+            return True
+        
+        return False  # Default to processing if unsure
+    
     def analyze_claim(self, claim_text: str) -> SearchStrategy:
         """Use AI to analyze claim and create optimal search strategy"""
         
-        system_prompt = """You are an expert fact-checker analyzing claims to determine the best verification strategy.
+        # SPEED OPTIMIZATION: Skip non-claims immediately
+        if self.is_non_claim(claim_text):
+            print(f"SKIPPED non-claim: '{claim_text[:50]}...'")
+            return self._create_minimal_strategy(claim_text)
+        
+        # SPEED OPTIMIZATION: Use specialized prompts based on complexity
+        if len(claim_text) < 50:  # Short claims get fast prompt
+            system_prompt = """Expert fact-checker: Quickly analyze this claim and return search strategy.
 
-Your task: Analyze the claim and return a JSON response with search strategy.
+Claim types: STATISTICAL (numbers/%), POLICY (government), SCIENTIFIC (studies), HISTORICAL (dates), FACTUAL (general facts)
 
-Claim types:
-- STATISTICAL: Contains numbers, percentages, survey data ("85% of Americans...")
-- POLICY: About government actions, laws, announcements ("Biden signed...")  
-- SCIENTIFIC: Research findings, studies ("Studies show...", "Research indicates...")
-- HISTORICAL: Past events, dates ("In 2023...", "Last year...")
-- OPINION: Expert opinions, beliefs ("Experts say...", "Many believe...")
-- FACTUAL: Verifiable facts about companies, people, places ("Apple has...")
+Return JSON:
+{"claim_type": "FACTUAL", "search_queries": ["query1", "query2"], "target_domains": [], "time_relevance_months": 12}"""
+        else:  # Longer claims get detailed prompt
+            system_prompt = """You are an expert fact-checker analyzing claims for optimal verification strategy.
 
-For each claim type, suggest:
-1. Specific search queries (3-5) that would find the MOST RELEVANT evidence
-2. Target domains that would have authoritative sources
-3. How recent the evidence needs to be (months)
+CLAIM TYPES & SEARCH OPTIMIZATION:
+- STATISTICAL: Numbers, percentages → Search official sources, surveys, government data
+- POLICY: Government actions → Search official announcements, news reports, gov sites  
+- SCIENTIFIC: Research findings → Search journals, studies, institutional sources
+- HISTORICAL: Past events → Search news archives, official records, multiple sources
+- FACTUAL: General verifiable facts → Search authoritative sources, primary documentation
 
-Return ONLY valid JSON in this format:
+SPEED REQUIREMENTS: Focus on 2-3 highest-impact search queries that will find the most authoritative evidence quickly.
+
+Return ONLY JSON:
 {
   "claim_type": "STATISTICAL",
-  "search_queries": ["specific query 1", "specific query 2", "specific query 3"],
-  "target_domains": ["domain1.com", "domain2.org"],
+  "search_queries": ["specific high-impact query 1", "specific high-impact query 2"],
+  "target_domains": ["authoritative-domain.gov", "major-source.org"],
   "time_relevance_months": 12,
-  "reasoning": "Brief explanation of strategy"
+  "reasoning": "Brief strategy explanation"
 }"""
 
         messages = [
@@ -180,14 +243,25 @@ Return ONLY valid JSON:
             return self._fallback_evidence_score(claim_text, evidence)
     
     def filter_evidence_batch(self, claim_text: str, evidence_batch: List[EvidenceCandidate]) -> List[ProcessedEvidence]:
-        """Process evidence batch efficiently with AI scoring"""
+        """Process evidence batch efficiently with AI scoring - OPTIMIZED for speed"""
         
         if len(evidence_batch) == 0:
             return []
         
-        # Process each evidence item
+        # Limit evidence to process (quality over quantity)
+        evidence_to_process = evidence_batch[:8]  # Reduced from 10 to 8
+        
+        # Try batch processing first (SPEED OPTIMIZATION)
+        try:
+            batch_results = self._batch_score_evidence(claim_text, evidence_to_process)
+            if batch_results:
+                return batch_results
+        except Exception as e:
+            print(f"Batch processing failed: {e}, falling back to individual scoring")
+        
+        # Fallback to individual processing if batch fails
         processed_evidence = []
-        for evidence in evidence_batch[:10]:  # Limit to avoid API costs
+        for evidence in evidence_to_process:
             processed = self.score_evidence_relevance(claim_text, evidence)
             processed_evidence.append(processed)
         
@@ -204,6 +278,98 @@ Return ONLY valid JSON:
         ]
         
         return high_relevance[:6]  # Top 6 most relevant
+    
+    def _create_minimal_strategy(self, claim_text: str) -> SearchStrategy:
+        """Create minimal strategy for non-claims to return quickly"""
+        return SearchStrategy(
+            claim_type=ClaimType.FACTUAL,
+            search_queries=[claim_text],  # Single basic query
+            target_domains=[],
+            time_relevance_months=12,
+            authority_weight=0.3,  # Lower weight for non-claims
+            confidence_threshold=0.3  # Lower threshold for non-claims
+        )
+    
+    def _batch_score_evidence(self, claim_text: str, evidence_batch: List[EvidenceCandidate]) -> List[ProcessedEvidence]:
+        """SPEED OPTIMIZATION: Score all evidence in single API call"""
+        
+        if not evidence_batch:
+            return []
+        
+        # SPEED OPTIMIZATION: Streamlined batch prompt for faster processing
+        system_prompt = """Expert fact-checker: Score evidence relevance for a claim. FAST batch processing required.
+
+SCORING (0-100):
+90+: DIRECT proof/disproof with specific data
+80-89: STRONG support/contradiction with related data  
+70-79: GOOD relevant context
+60-69: WEAK relevance
+<60: IRRELEVANT
+
+STANCE: "supporting"/"contradicting"/"neutral"
+
+Return ONLY JSON array:
+[{"evidence_index": 0, "relevance_score": 85, "stance": "supporting", "confidence": 0.9, "reasoning": "brief", "key_excerpt": "key quote"}]"""
+
+        # Build evidence list for batch processing
+        evidence_texts = []
+        for i, evidence in enumerate(evidence_batch):
+            evidence_texts.append(f"EVIDENCE {i}: {evidence.text[:500]}\nSOURCE: {evidence.source_title} ({evidence.source_domain})")
+        
+        batch_content = f"CLAIM: {claim_text}\n\n" + "\n\n".join(evidence_texts)
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": batch_content}
+        ]
+        
+        # Single API call for all evidence
+        response = self._call_openai(messages, temperature=0.1)
+        if not response:
+            return []  # Will trigger fallback to individual processing
+        
+        try:
+            batch_scores = json.loads(response)
+            
+            processed_evidence = []
+            for score_data in batch_scores:
+                evidence_index = score_data.get('evidence_index', 0)
+                
+                if evidence_index >= len(evidence_batch):
+                    continue
+                    
+                evidence = evidence_batch[evidence_index]
+                
+                processed = ProcessedEvidence(
+                    text=evidence.text,
+                    source_url=evidence.source_url,
+                    source_domain=evidence.source_domain,
+                    source_title=evidence.source_title,
+                    ai_relevance_score=float(score_data.get('relevance_score', 50)),
+                    ai_stance=score_data.get('stance', 'neutral'),
+                    ai_confidence=float(score_data.get('confidence', 0.5)),
+                    ai_reasoning=score_data.get('reasoning', 'Batch processing'),
+                    highlight_text=score_data.get('key_excerpt', evidence.text[:100]),
+                    highlight_context=evidence.text[:300]
+                )
+                processed_evidence.append(processed)
+            
+            # Sort and filter as before
+            processed_evidence.sort(
+                key=lambda x: (x.ai_relevance_score * x.ai_confidence), 
+                reverse=True
+            )
+            
+            high_relevance = [
+                ev for ev in processed_evidence 
+                if ev.ai_relevance_score >= 70 and ev.ai_confidence >= 0.6
+            ]
+            
+            return high_relevance[:6]
+            
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            print(f"Error parsing batch AI response: {e}")
+            return []  # Will trigger fallback
     
     def is_enabled(self) -> bool:
         """Check if OpenAI API is properly configured"""

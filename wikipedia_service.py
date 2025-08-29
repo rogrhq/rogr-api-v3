@@ -34,14 +34,22 @@ class WikipediaService:
             # Collect raw evidence candidates using AI-optimized searches
             evidence_candidates = []
             
-            for search_query in search_strategy.search_queries[:3]:  # Use top 3 AI-generated queries
+            # SPEED OPTIMIZATION: Limit search queries for faster processing
+            max_queries = 2 if len(claim_text) > 100 else 3  # Longer claims = fewer queries
+            
+            for search_query in search_strategy.search_queries[:max_queries]:
                 wiki_articles = self._search_wikipedia_articles([search_query])
                 
                 if not wiki_articles:
                     continue
                 
-                # Process top articles based on claim type
-                articles_to_process = 2 if search_strategy.claim_type.value in ['statistical', 'policy'] else 3
+                # SPEED OPTIMIZATION: Reduced processing limits for standard articles
+                if search_strategy.claim_type.value in ['statistical', 'policy']:
+                    articles_to_process = 2  # High-priority claims
+                elif search_strategy.claim_type.value in ['scientific']:
+                    articles_to_process = 3  # Need more sources for science
+                else:
+                    articles_to_process = 2  # Standard claims - optimized for speed
                 
                 for article in wiki_articles[:articles_to_process]:
                     try:
@@ -56,10 +64,16 @@ class WikipediaService:
                         )
                         evidence_candidates.append(wiki_candidate)
                         
-                        # Extract external citations with limits to prevent infinite loops
+                        # SPEED OPTIMIZATION: Reduced citation extraction for standard articles
                         try:
                             citations = self._extract_citations_from_article(article['title'])
-                            citation_limit = 3 if search_strategy.claim_type.value == 'statistical' else 2
+                            # Optimize citation limits based on claim importance and processing speed
+                            if search_strategy.claim_type.value in ['statistical', 'policy']:
+                                citation_limit = 2  # Reduced from 3 to 2 for speed
+                            elif search_strategy.claim_type.value in ['scientific']:
+                                citation_limit = 2  # Scientific claims need quality sources
+                            else:
+                                citation_limit = 1  # Standard claims - fast processing
                         except Exception as e:
                             print(f"Citation extraction failed for {article['title']}: {e}")
                             citations = []
@@ -91,7 +105,7 @@ class WikipediaService:
                     raise TimeoutError("AI processing timeout")
                 
                 signal.signal(signal.SIGALRM, timeout_handler)
-                signal.alarm(30)  # 30 second timeout
+                signal.alarm(20)  # SPEED OPTIMIZATION: Reduced from 30 to 20 seconds
                 
                 processed_evidence = self.shepherd.filter_evidence_batch(claim_text, evidence_candidates)
                 
