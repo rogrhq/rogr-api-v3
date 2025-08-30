@@ -9,6 +9,7 @@ from ocr_service import OCRService
 from claim_extraction_service import ClaimExtractionService
 from wikipedia_service import WikipediaService
 from ai_evidence_shepherd import OpenAIEvidenceShepherd
+from claude_evidence_shepherd import ClaudeEvidenceShepherd
 from evidence_shepherd import NoOpEvidenceShepherd
 from progressive_analysis_service import ProgressiveAnalysisService
 
@@ -87,9 +88,23 @@ analyses_claims_db = {}  # Store extracted claims for focus analysis
 ocr_service = OCRService()
 claim_service = ClaimExtractionService()
 
-# Initialize AI Evidence Shepherd (modular)
+# Initialize AI Evidence Shepherd (modular) - Prioritize Claude for better performance
 ai_shepherd = None
-if os.getenv('OPENAI_API_KEY'):
+
+# Try Claude first (better context handling, no token truncation issues)
+if os.getenv('ANTHROPIC_API_KEY'):
+    try:
+        ai_shepherd = ClaudeEvidenceShepherd()
+        if ai_shepherd.is_enabled():
+            print("✅ AI Evidence Shepherd enabled (Claude)")
+        else:
+            ai_shepherd = None
+    except Exception as e:
+        print(f"❌ Claude Evidence Shepherd failed to initialize: {e}")
+        ai_shepherd = None
+
+# Fallback to OpenAI if Claude not available
+if ai_shepherd is None and os.getenv('OPENAI_API_KEY'):
     try:
         ai_shepherd = OpenAIEvidenceShepherd()
         if ai_shepherd.is_enabled():
@@ -98,11 +113,13 @@ if os.getenv('OPENAI_API_KEY'):
             ai_shepherd = NoOpEvidenceShepherd()
             print("⚠️  AI Evidence Shepherd fallback to NoOp (OpenAI not configured)")
     except Exception as e:
-        print(f"❌ AI Evidence Shepherd failed to initialize: {e}")
+        print(f"❌ OpenAI Evidence Shepherd failed to initialize: {e}")
         ai_shepherd = NoOpEvidenceShepherd()
-else:
+
+# Final fallback to NoOp
+if ai_shepherd is None:
     ai_shepherd = NoOpEvidenceShepherd()
-    print("ℹ️  AI Evidence Shepherd using NoOp implementation (no OpenAI key)")
+    print("ℹ️  AI Evidence Shepherd using NoOp implementation (no API keys available)")
 
 # Initialize Wikipedia service with AI shepherd
 wikipedia_service = WikipediaService(evidence_shepherd=ai_shepherd)
