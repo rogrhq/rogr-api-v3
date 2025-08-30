@@ -432,9 +432,14 @@ async def create_analysis(analysis: AnalysisInput):
     # Handle different input types
     if analysis.type == "url":
         # Extract URL metadata and content
+        print(f"DEBUG: Extracting content from URL: {analysis.input}")
         url_data = claim_service.extract_url_metadata_and_text(analysis.input)
+        print(f"DEBUG: URL data keys: {list(url_data.keys()) if url_data else 'None'}")
         all_text = claim_service.merge_text_sources(url_data)
+        print(f"DEBUG: Merged text length: {len(all_text) if all_text else 0}")
+        print(f"DEBUG: First 200 chars: {all_text[:200] if all_text else 'None'}")
         claims = claim_service.extract_claims(all_text)
+        print(f"DEBUG: Claims extracted: {len(claims)} - {claims}")
     elif analysis.type == "image" and analysis.input and ocr_service.is_enabled():
         # Extract OCR text and claims
         try:
