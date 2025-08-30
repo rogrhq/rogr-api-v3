@@ -420,6 +420,8 @@ Return ONLY JSON array:
                         source_url=content_data['url'],
                         source_domain=content_data['domain'],
                         source_title=content_data['title'],
+                        found_via_query=query,  # Add required parameter
+                        raw_relevance=0.8  # Add required parameter
                     )
                     evidence_candidates.append(evidence_candidate)
                 else:
@@ -429,6 +431,8 @@ Return ONLY JSON array:
                         source_url=search_result.url,
                         source_domain=search_result.source_domain,
                         source_title=search_result.title,
+                        found_via_query=query,  # Add required parameter
+                        raw_relevance=0.7  # Add required parameter
                     )
                     evidence_candidates.append(evidence_candidate)
             
