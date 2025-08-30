@@ -81,13 +81,17 @@ class WebContentExtractor:
     
     def _extract_title(self, soup: BeautifulSoup) -> str:
         """Extract page title"""
-        # Try multiple title sources
-        title_sources = [
-            soup.find('title'),
-            soup.find('meta', property='og:title'),
-            soup.find('meta', name='twitter:title'),
-            soup.find('h1')
-        ]
+        try:
+            # Try multiple title sources with explicit attrs parameter
+            title_sources = [
+                soup.find('title'),
+                soup.find('meta', attrs={'property': 'og:title'}),
+                soup.find('meta', attrs={'name': 'twitter:title'}),
+                soup.find('h1')
+            ]
+        except Exception as e:
+            print(f"Title extraction error: {e}")
+            title_sources = [soup.find('title')] if soup.find('title') else []
         
         for source in title_sources:
             if source:
@@ -144,11 +148,15 @@ class WebContentExtractor:
     
     def _extract_description(self, soup: BeautifulSoup) -> str:
         """Extract page description/summary"""
-        description_sources = [
-            soup.find('meta', name='description'),
-            soup.find('meta', property='og:description'),
-            soup.find('meta', name='twitter:description')
-        ]
+        try:
+            description_sources = [
+                soup.find('meta', attrs={'name': 'description'}),
+                soup.find('meta', attrs={'property': 'og:description'}),
+                soup.find('meta', attrs={'name': 'twitter:description'})
+            ]
+        except Exception as e:
+            print(f"Description extraction error: {e}")
+            description_sources = []
         
         for source in description_sources:
             if source:
@@ -160,13 +168,20 @@ class WebContentExtractor:
     
     def _extract_author(self, soup: BeautifulSoup) -> str:
         """Extract article author"""
-        author_sources = [
-            soup.find('meta', name='author'),
-            soup.find('meta', property='article:author'),
-            soup.find('span', class_='author'),
-            soup.find('div', class_='author'),
-            soup.find('[rel="author"]')
-        ]
+        try:
+            author_sources = [
+                soup.find('meta', attrs={'name': 'author'}),
+                soup.find('meta', attrs={'property': 'article:author'}),
+                soup.find('span', attrs={'class': 'author'}),
+                soup.find('div', attrs={'class': 'author'}),
+                soup.select('[rel="author"]')
+            ]
+            # Flatten the select result
+            if author_sources[-1]:
+                author_sources[-1] = author_sources[-1][0] if author_sources[-1] else None
+        except Exception as e:
+            print(f"Author extraction error: {e}")
+            author_sources = []
         
         for source in author_sources:
             if source:
@@ -182,13 +197,17 @@ class WebContentExtractor:
     
     def _extract_publish_date(self, soup: BeautifulSoup) -> str:
         """Extract article publish date"""
-        date_sources = [
-            soup.find('meta', property='article:published_time'),
-            soup.find('meta', name='date'),
-            soup.find('time'),
-            soup.find('span', class_='date'),
-            soup.find('div', class_='date')
-        ]
+        try:
+            date_sources = [
+                soup.find('meta', attrs={'property': 'article:published_time'}),
+                soup.find('meta', attrs={'name': 'date'}),
+                soup.find('time'),
+                soup.find('span', attrs={'class': 'date'}),
+                soup.find('div', attrs={'class': 'date'})
+            ]
+        except Exception as e:
+            print(f"Date extraction error: {e}")
+            date_sources = []
         
         for source in date_sources:
             if source:
