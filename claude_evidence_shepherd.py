@@ -13,7 +13,7 @@ class ClaudeEvidenceShepherd(EvidenceShepherd):
     def __init__(self):
         self.api_key = os.getenv('ANTHROPIC_API_KEY')
         self.base_url = "https://api.anthropic.com/v1/messages"
-        self.model = "claude-3-sonnet-20240229"
+        self.model = "claude-3-haiku-20240307"  # Use faster Haiku model for speed
         
         # Initialize web search and content extraction services
         self.web_search = WebSearchService()
@@ -226,10 +226,10 @@ Return ONLY JSON:
             reverse=True
         )
         
-        # Return top evidence items with relaxed threshold
+        # Return top evidence items with ULTRA-RELAXED threshold for Claude
         high_relevance = [
             ev for ev in processed_evidence 
-            if ev.ai_relevance_score >= 60 and ev.ai_confidence >= 0.5
+            if ev.ai_relevance_score >= 50 and ev.ai_confidence >= 0.3  # Much lower for Claude
         ]
         
         print(f"CLAUDE FILTER DEBUG: {len(processed_evidence)} processed → {len(high_relevance)} passed threshold")
@@ -319,7 +319,7 @@ Return JSON array with ALL evidence scored:
             
             high_relevance = [
                 ev for ev in processed_evidence 
-                if ev.ai_relevance_score >= 60 and ev.ai_confidence >= 0.5
+                if ev.ai_relevance_score >= 50 and ev.ai_confidence >= 0.3  # Match individual processing
             ]
             
             return high_relevance[:4]
