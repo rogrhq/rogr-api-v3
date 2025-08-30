@@ -4,6 +4,8 @@ import re
 from typing import List, Dict, Optional
 import requests
 from evidence_shepherd import EvidenceShepherd, SearchStrategy, EvidenceCandidate, ProcessedEvidence, ClaimType
+from web_search_service import WebSearchService
+from web_content_extractor import WebContentExtractor
 
 class OpenAIEvidenceShepherd(EvidenceShepherd):
     """OpenAI-powered evidence shepherd for smart fact-checking"""
@@ -12,6 +14,12 @@ class OpenAIEvidenceShepherd(EvidenceShepherd):
         self.api_key = os.getenv('OPENAI_API_KEY')
         self.base_url = "https://api.openai.com/v1/chat/completions"
         self.model = "gpt-3.5-turbo"
+        
+        # Initialize web search and content extraction services
+        self.web_search = WebSearchService()
+        self.content_extractor = WebContentExtractor()
+        
+        print(f"AI Evidence Shepherd initialized with real web search: {self.web_search.is_enabled()}")
         
     def _call_openai(self, messages: List[Dict], temperature: float = 0.3) -> Optional[str]:
         """Make API call to OpenAI"""
@@ -374,6 +382,66 @@ Return ONLY JSON array:
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             print(f"Error parsing batch AI response: {e}")
             return []  # Will trigger fallback
+    
+    def search_real_evidence(self, claim_text: str) -> List[EvidenceCandidate]:
+        """REAL WEB SEARCH: Find actual evidence from all available sources"""
+        
+        if not self.is_enabled():
+            print("AI Evidence Shepherd disabled - no OpenAI API key")
+            return []
+        
+        try:
+            # Step 1: AI analyzes claim and creates search strategy
+            search_strategy = self.analyze_claim(claim_text)
+            print(f"AI Search Strategy: {search_strategy.claim_type.value} with {len(search_strategy.search_queries)} queries")
+            
+            # Step 2: Execute real web searches using AI-generated queries
+            all_search_results = []
+            
+            for query in search_strategy.search_queries[:3]:  # Limit to 3 queries for speed
+                print(f"Searching web for: '{query}'")
+                search_results = self.web_search.search_web(query, max_results=8)
+                all_search_results.extend(search_results)
+                print(f"Found {len(search_results)} results for '{query}'")
+            
+            # Step 3: Extract content from discovered URLs
+            evidence_candidates = []
+            
+            for search_result in all_search_results[:15]:  # Process top 15 results
+                print(f"Extracting content from: {search_result.source_domain}")
+                
+                # Extract full content from the web page
+                content_data = self.content_extractor.extract_content(search_result.url)
+                
+                if content_data['success'] and content_data['word_count'] > 50:
+                    # Create evidence candidate with real content
+                    evidence_candidate = EvidenceCandidate(
+                        text=content_data['content'][:1000],  # Limit for processing
+                        source_url=content_data['url'],
+                        source_domain=content_data['domain'],
+                        source_title=content_data['title'],
+                    )
+                    evidence_candidates.append(evidence_candidate)
+                else:
+                    # Fallback to search snippet if content extraction failed
+                    evidence_candidate = EvidenceCandidate(
+                        text=search_result.snippet,
+                        source_url=search_result.url,
+                        source_domain=search_result.source_domain,
+                        source_title=search_result.title,
+                    )
+                    evidence_candidates.append(evidence_candidate)
+            
+            print(f"Real web search found {len(evidence_candidates)} evidence candidates from {len(all_search_results)} total results")
+            
+            # Step 4: AI evaluates all discovered evidence for relevance and stance
+            processed_evidence = self.filter_evidence_batch(claim_text, evidence_candidates)
+            
+            return processed_evidence
+        
+        except Exception as e:
+            print(f"Real web search failed: {e}")
+            return []
     
     def is_enabled(self) -> bool:
         """Check if OpenAI API is properly configured"""
