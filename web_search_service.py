@@ -76,7 +76,7 @@ class WebSearchService:
             'num': min(max_results, 10)  # Google API limit
         }
         
-        response = requests.get(url, params=params, timeout=10)
+        response = requests.get(url, params=params, timeout=6)  # Reduced timeout for speed
         response.raise_for_status()
         
         data = response.json()
@@ -107,7 +107,7 @@ class WebSearchService:
             'textFormat': 'Raw'
         }
         
-        response = requests.get(url, headers=headers, params=params, timeout=10)
+        response = requests.get(url, headers=headers, params=params, timeout=6)  # Reduced timeout for speed
         response.raise_for_status()
         
         data = response.json()
@@ -134,7 +134,7 @@ class WebSearchService:
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
             
-            response = self.session.get(search_url, headers=headers, timeout=10)
+            response = self.session.get(search_url, headers=headers, timeout=6)  # Reduced timeout for speed
             response.raise_for_status()
             
             # Parse HTML results (basic implementation)

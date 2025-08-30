@@ -36,10 +36,10 @@ class OpenAIEvidenceShepherd(EvidenceShepherd):
                 'model': self.model,
                 'messages': messages,
                 'temperature': temperature,
-                'max_tokens': 1000
+                'max_tokens': 500  # Reduced from 1000 for faster responses
             }
             
-            response = requests.post(self.base_url, headers=headers, json=payload, timeout=8)
+            response = requests.post(self.base_url, headers=headers, json=payload, timeout=6)  # Reduced from 8 to 6
             response.raise_for_status()
             
             result = response.json()
@@ -261,7 +261,7 @@ Return ONLY valid JSON:
             return []
         
         # Limit evidence to process (quality over quantity)
-        evidence_to_process = evidence_batch[:8]  # Reduced from 10 to 8
+        evidence_to_process = evidence_batch[:6]  # Reduced from 8 to 6 for speed
         
         # Try batch processing first (SPEED OPTIMIZATION)
         try:
@@ -308,25 +308,22 @@ Return ONLY valid JSON:
         if not evidence_batch:
             return []
         
-        # SPEED OPTIMIZATION: Streamlined batch prompt for faster processing
-        system_prompt = """Expert fact-checker: Score evidence relevance for a claim. FAST batch processing required.
+        # ULTRA-FAST batch prompt for maximum speed
+        system_prompt = """Score evidence for claim. FAST processing.
 
-SCORING (0-100):
-90+: DIRECT proof/disproof with specific data
-80-89: STRONG support/contradiction with related data  
-70-79: GOOD relevant context
+90+: DIRECT proof/disproof
+80-89: STRONG support/contradiction
+70-79: GOOD relevance
 60-69: WEAK relevance
 <60: IRRELEVANT
 
-STANCE: "supporting"/"contradicting"/"neutral"
+Return JSON only:
+[{"evidence_index": 0, "relevance_score": 85, "stance": "supporting", "confidence": 0.9, "key_excerpt": "key quote"}]"""
 
-Return ONLY JSON array:
-[{"evidence_index": 0, "relevance_score": 85, "stance": "supporting", "confidence": 0.9, "reasoning": "brief", "key_excerpt": "key quote"}]"""
-
-        # Build evidence list for batch processing
+        # Build evidence list for batch processing (OPTIMIZED for speed)
         evidence_texts = []
         for i, evidence in enumerate(evidence_batch):
-            evidence_texts.append(f"EVIDENCE {i}: {evidence.text[:500]}\nSOURCE: {evidence.source_title} ({evidence.source_domain})")
+            evidence_texts.append(f"EVIDENCE {i}: {evidence.text[:300]}\nSOURCE: {evidence.source_domain}")  # Reduced text length
         
         batch_content = f"CLAIM: {claim_text}\n\n" + "\n\n".join(evidence_texts)
         
@@ -398,43 +395,53 @@ Return ONLY JSON array:
             # Step 2: Execute real web searches using AI-generated queries
             all_search_results = []
             
-            for query in search_strategy.search_queries[:3]:  # Limit to 3 queries for speed
+            for query in search_strategy.search_queries[:2]:  # Reduced to 2 queries for speed
                 print(f"Searching web for: '{query}'")
-                search_results = self.web_search.search_web(query, max_results=8)
+                search_results = self.web_search.search_web(query, max_results=6)  # Reduced to 6 per query
                 all_search_results.extend(search_results)
                 print(f"Found {len(search_results)} results for '{query}'")
             
-            # Step 3: Extract content from discovered URLs
+            # Step 3: PARALLEL content extraction from discovered URLs (SPEED OPTIMIZATION)
+            top_results = all_search_results[:8]  # Reduced from 15 to 8 for speed
+            urls_to_extract = [result.url for result in top_results]
+            
+            print(f"PARALLEL EXTRACTION: Processing {len(urls_to_extract)} URLs simultaneously")
+            
+            # Extract content from all URLs in parallel
+            extraction_results = self.content_extractor.extract_content_batch(urls_to_extract)
+            
+            # Build evidence candidates from parallel extraction results
             evidence_candidates = []
             
-            for search_result in all_search_results[:15]:  # Process top 15 results
-                print(f"Extracting content from: {search_result.source_domain}")
-                
-                # Extract full content from the web page
-                content_data = self.content_extractor.extract_content(search_result.url)
-                
-                if content_data['success'] and content_data['word_count'] > 50:
-                    # Create evidence candidate with real content
-                    evidence_candidate = EvidenceCandidate(
-                        text=content_data['content'][:1000],  # Limit for processing
-                        source_url=content_data['url'],
-                        source_domain=content_data['domain'],
-                        source_title=content_data['title'],
-                        found_via_query=query,  # Add required parameter
-                        raw_relevance=0.8  # Add required parameter
-                    )
-                    evidence_candidates.append(evidence_candidate)
-                else:
-                    # Fallback to search snippet if content extraction failed
-                    evidence_candidate = EvidenceCandidate(
-                        text=search_result.snippet,
-                        source_url=search_result.url,
-                        source_domain=search_result.source_domain,
-                        source_title=search_result.title,
-                        found_via_query=query,  # Add required parameter
-                        raw_relevance=0.7  # Add required parameter
-                    )
-                    evidence_candidates.append(evidence_candidate)
+            for i, search_result in enumerate(top_results):
+                if i < len(extraction_results):
+                    content_data = extraction_results[i]
+                    
+                    # Get the query that found this result (use first query as fallback)
+                    found_query = search_strategy.search_queries[0] if search_strategy.search_queries else "unknown"
+                    
+                    if content_data['success'] and content_data['word_count'] > 50:
+                        # Create evidence candidate with real content
+                        evidence_candidate = EvidenceCandidate(
+                            text=content_data['content'][:800],  # Reduced from 1000 to 800 for speed
+                            source_url=content_data['url'],
+                            source_domain=content_data['domain'],
+                            source_title=content_data['title'],
+                            found_via_query=found_query,
+                            raw_relevance=0.8
+                        )
+                        evidence_candidates.append(evidence_candidate)
+                    else:
+                        # Fallback to search snippet if content extraction failed
+                        evidence_candidate = EvidenceCandidate(
+                            text=search_result.snippet,
+                            source_url=search_result.url,
+                            source_domain=search_result.source_domain,
+                            source_title=search_result.title,
+                            found_via_query=found_query,
+                            raw_relevance=0.6  # Lower relevance for snippet-only
+                        )
+                        evidence_candidates.append(evidence_candidate)
             
             print(f"Real web search found {len(evidence_candidates)} evidence candidates from {len(all_search_results)} total results")
             

@@ -1,8 +1,10 @@
 import requests
 from bs4 import BeautifulSoup
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 import re
 from urllib.parse import urljoin, urlparse
+import concurrent.futures
+import threading
 
 class WebContentExtractor:
     """Extract and clean content from web pages for evidence analysis"""
@@ -12,8 +14,9 @@ class WebContentExtractor:
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (compatible; ROGR-FactCheck/1.0; Evidence analysis service)'
         })
-        # Common timeout for web requests
-        self.timeout = 10
+        # Optimized timeouts for speed
+        self.timeout = 5  # Reduced from 10 to 5 seconds
+        self.max_workers = 6  # Parallel processing limit
         
     def extract_content(self, url: str) -> Dict[str, str]:
         """Extract title, content, and metadata from a web page"""
@@ -211,3 +214,103 @@ class WebContentExtractor:
             return domain
         except:
             return "unknown"
+    
+    def extract_content_batch(self, urls: List[str]) -> List[Dict[str, str]]:
+        """SPEED OPTIMIZATION: Extract content from multiple URLs in parallel"""
+        
+        if not urls:
+            return []
+        
+        print(f"Extracting content from {len(urls)} URLs in parallel (max_workers={self.max_workers})")
+        
+        results = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            # Submit all URL extractions
+            future_to_url = {
+                executor.submit(self._extract_single_with_timeout, url): url 
+                for url in urls
+            }
+            
+            # Collect results as they complete
+            for future in concurrent.futures.as_completed(future_to_url, timeout=15):  # 15 second total limit
+                url = future_to_url[future]
+                try:
+                    result = future.result(timeout=2)  # Individual result timeout
+                    results.append(result)
+                    if result['success']:
+                        print(f"✅ Extracted: {result['domain']} ({result['word_count']} words)")
+                    else:
+                        print(f"❌ Failed: {result['domain']} - {result.get('error', 'Unknown error')}")
+                except concurrent.futures.TimeoutError:
+                    print(f"⏱️ Timeout: {self._extract_domain(url)}")
+                    results.append({
+                        'title': '',
+                        'content': '',
+                        'description': '',
+                        'author': '',
+                        'publish_date': '',
+                        'url': url,
+                        'domain': self._extract_domain(url),
+                        'word_count': 0,
+                        'success': False,
+                        'error': 'Extraction timeout'
+                    })
+                except Exception as e:
+                    print(f"💥 Exception: {self._extract_domain(url)} - {str(e)}")
+                    results.append({
+                        'title': '',
+                        'content': '',
+                        'description': '',
+                        'author': '',
+                        'publish_date': '',
+                        'url': url,
+                        'domain': self._extract_domain(url),
+                        'word_count': 0,
+                        'success': False,
+                        'error': str(e)
+                    })
+        
+        successful_extractions = sum(1 for r in results if r['success'])
+        print(f"Parallel extraction complete: {successful_extractions}/{len(urls)} successful")
+        
+        return results
+    
+    def _extract_single_with_timeout(self, url: str) -> Dict[str, str]:
+        """Extract content with optimized timeout handling"""
+        try:
+            # Use shorter timeout for individual requests
+            response = self.session.get(url, timeout=self.timeout)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Quick extraction for speed
+            title = self._extract_title(soup)
+            content = self._extract_main_content(soup)
+            
+            # Skip metadata extraction for speed optimization
+            return {
+                'title': title,
+                'content': content,
+                'description': '',  # Skip for speed
+                'author': '',       # Skip for speed
+                'publish_date': '', # Skip for speed
+                'url': url,
+                'domain': self._extract_domain(url),
+                'word_count': len(content.split()) if content else 0,
+                'success': True
+            }
+            
+        except Exception as e:
+            return {
+                'title': '',
+                'content': '',
+                'description': '',
+                'author': '',
+                'publish_date': '',
+                'url': url,
+                'domain': self._extract_domain(url),
+                'word_count': 0,
+                'success': False,
+                'error': str(e)
+            }
