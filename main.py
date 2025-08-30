@@ -126,7 +126,14 @@ def generate_evidence_statements(claim_text: str, trust_score: int) -> tuple[Lis
     
     # Try to get real evidence from Wikipedia first
     try:
+        print(f"DEBUG: Searching Wikipedia evidence for claim: '{claim_text}'")
         wikipedia_evidence = wikipedia_service.search_evidence_for_claim(claim_text)
+        print(f"DEBUG: Wikipedia returned {len(wikipedia_evidence)} evidence items")
+        if wikipedia_evidence:
+            for i, item in enumerate(wikipedia_evidence[:3]):
+                print(f"DEBUG: Evidence {i}: {item.get('source_url', 'NO URL')} from {item.get('source_domain', 'NO DOMAIN')}")
+        else:
+            print("DEBUG: No Wikipedia evidence found")
         
         # Convert Wikipedia evidence to EvidenceStatement format
         for item in wikipedia_evidence[:6]:  # Use up to 6 items
@@ -163,7 +170,8 @@ def generate_evidence_statements(claim_text: str, trust_score: int) -> tuple[Lis
             return supporting_evidence[:3], contradicting_evidence[:2], neutral_evidence[:2]
     
     except Exception as e:
-        print(f"Error getting Wikipedia evidence for claim '{claim_text}': {e}")
+        print(f"ERROR: Wikipedia evidence failed for '{claim_text}': {e}")
+        print("DEBUG: Falling back to fake evidence")
         # Fall back to generated evidence below
     
     # Evidence pools based on claim content
