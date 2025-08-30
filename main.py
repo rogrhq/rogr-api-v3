@@ -752,6 +752,67 @@ async def get_evidence(q: str):
         print(f"Evidence search error: {e}")
         raise HTTPException(status_code=500, detail=f"Error searching for evidence: {str(e)}")
 
+@app.get("/debug/evidence-comparison")
+async def debug_evidence_comparison():
+    """Compare Wikipedia-guided vs Pure AI Evidence Shepherd approaches"""
+    
+    test_claim = "Wealthy enclaves sewage reveals higher than average cocaine levels"
+    
+    results = {
+        "test_claim": test_claim,
+        "approach_a_wikipedia_guided": {},
+        "approach_b_pure_ai": {}
+    }
+    
+    # APPROACH A: Wikipedia-Guided (Current)
+    try:
+        print(f"=== APPROACH A: Wikipedia-Guided ===")
+        wiki_evidence = wikipedia_service.search_evidence_for_claim(test_claim)
+        results["approach_a_wikipedia_guided"] = {
+            "evidence_count": len(wiki_evidence),
+            "sources": []
+        }
+        
+        for i, item in enumerate(wiki_evidence[:5]):
+            source_info = {
+                "index": i,
+                "source_url": item.get('source_url', 'NO URL'),
+                "source_domain": item.get('source_domain', 'NO DOMAIN'),
+                "source_title": item.get('source_title', 'NO TITLE'),
+                "statement": item.get('statement', 'NO STATEMENT')[:100] + "..." if item.get('statement') else "NO STATEMENT"
+            }
+            results["approach_a_wikipedia_guided"]["sources"].append(source_info)
+            print(f"Wiki Evidence {i}: {source_info['source_domain']} - {source_info['source_url']}")
+            
+    except Exception as e:
+        results["approach_a_wikipedia_guided"]["error"] = str(e)
+        print(f"Wikipedia approach error: {e}")
+    
+    # APPROACH B: Pure AI Evidence Shepherd
+    try:
+        print(f"=== APPROACH B: Pure AI Evidence Shepherd ===")
+        if hasattr(ai_evidence_shepherd, 'analyze_claim'):
+            # Test AI's independent search strategy
+            search_strategy = ai_evidence_shepherd.analyze_claim(test_claim)
+            results["approach_b_pure_ai"] = {
+                "claim_type": search_strategy.claim_type.value if search_strategy.claim_type else "unknown",
+                "search_queries": search_strategy.search_queries,
+                "target_domains": search_strategy.target_domains,
+                "authority_weight": search_strategy.authority_weight,
+                "confidence_threshold": search_strategy.confidence_threshold,
+                "ai_enabled": ai_evidence_shepherd.is_enabled()
+            }
+            print(f"AI Strategy: {search_strategy.claim_type.value}")
+            print(f"AI Queries: {search_strategy.search_queries}")
+            print(f"AI Target Domains: {search_strategy.target_domains}")
+        else:
+            results["approach_b_pure_ai"]["error"] = "AI Evidence Shepherd analyze_claim not available"
+    except Exception as e:
+        results["approach_b_pure_ai"]["error"] = str(e)
+        print(f"AI approach error: {e}")
+    
+    return results
+
 @app.get("/debug/ocr-test")
 async def debug_ocr_test():
     """Debug endpoint to test Google Cloud Vision OCR service"""
