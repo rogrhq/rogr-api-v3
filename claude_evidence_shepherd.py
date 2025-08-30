@@ -285,7 +285,18 @@ Return JSON array with ALL evidence scored:
         print(f"CLAUDE BATCH: Attempting to parse JSON response: {response[:200]}...")
         
         try:
-            batch_scores = json.loads(response)
+            # Extract JSON from Claude's response (may have explanatory text)
+            json_start = response.find('[')
+            json_end = response.rfind(']') + 1
+            
+            if json_start >= 0 and json_end > json_start:
+                json_text = response[json_start:json_end]
+                print(f"CLAUDE BATCH: Extracted JSON: {json_text[:100]}...")
+                batch_scores = json.loads(json_text)
+            else:
+                print("CLAUDE BATCH: No valid JSON array found in response")
+                return []
+                
             print(f"CLAUDE BATCH: Successfully parsed {len(batch_scores)} evidence scores")
             
             processed_evidence = []
@@ -410,8 +421,8 @@ Return ONLY JSON:
                 all_search_results.extend(search_results)
                 print(f"Found {len(search_results)} results for '{query}'")
             
-            # Step 3: PARALLEL content extraction from discovered URLs
-            top_results = all_search_results[:8]  # Same as OpenAI for comparison
+            # Step 3: PARALLEL content extraction from discovered URLs (OPTIMIZED)
+            top_results = all_search_results[:6]  # Reduced from 8 to 6 for speed
             urls_to_extract = [result.url for result in top_results]
             
             print(f"CLAUDE PARALLEL EXTRACTION: Processing {len(urls_to_extract)} URLs simultaneously")
