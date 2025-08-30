@@ -791,22 +791,22 @@ async def debug_evidence_comparison():
     # APPROACH B: Pure AI Evidence Shepherd
     try:
         print(f"=== APPROACH B: Pure AI Evidence Shepherd ===")
-        if hasattr(ai_evidence_shepherd, 'analyze_claim'):
+        if hasattr(ai_shepherd, 'analyze_claim'):
             # Test AI's independent search strategy
-            search_strategy = ai_evidence_shepherd.analyze_claim(test_claim)
+            search_strategy = ai_shepherd.analyze_claim(test_claim)
             results["approach_b_pure_ai"] = {
                 "claim_type": search_strategy.claim_type.value if search_strategy.claim_type else "unknown",
                 "search_queries": search_strategy.search_queries,
                 "target_domains": search_strategy.target_domains,
                 "authority_weight": search_strategy.authority_weight,
                 "confidence_threshold": search_strategy.confidence_threshold,
-                "ai_enabled": ai_evidence_shepherd.is_enabled()
+                "ai_enabled": ai_shepherd.is_enabled()
             }
             print(f"AI Strategy: {search_strategy.claim_type.value}")
             print(f"AI Queries: {search_strategy.search_queries}")
             print(f"AI Target Domains: {search_strategy.target_domains}")
         else:
-            results["approach_b_pure_ai"]["error"] = "AI Evidence Shepherd analyze_claim not available"
+            results["approach_b_pure_ai"]["error"] = f"AI Evidence Shepherd analyze_claim not available. Type: {type(ai_shepherd)}"
     except Exception as e:
         results["approach_b_pure_ai"]["error"] = str(e)
         print(f"AI approach error: {e}")
