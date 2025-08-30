@@ -216,7 +216,7 @@ Return ONLY JSON:
         print("FALLBACK: Using individual Claude processing")
         processed_evidence = []
         for i, evidence in enumerate(evidence_to_process):
-            processed = self.score_evidence_relevance_claude(claim_text, evidence)
+            processed = self.score_evidence_relevance(claim_text, evidence)
             processed_evidence.append(processed)
             print(f"Claude Individual {i+1}: score={processed.ai_relevance_score}, confidence={processed.ai_confidence}")
         
@@ -327,6 +327,10 @@ Return JSON array with ALL evidence scored:
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             print(f"Error parsing Claude batch AI response: {e}")
             return []
+    
+    def score_evidence_relevance(self, claim_text: str, evidence: EvidenceCandidate) -> ProcessedEvidence:
+        """Required abstract method implementation"""
+        return self.score_evidence_relevance_claude(claim_text, evidence)
     
     def score_evidence_relevance_claude(self, claim_text: str, evidence: EvidenceCandidate) -> ProcessedEvidence:
         """Use Claude to score individual evidence relevance"""
