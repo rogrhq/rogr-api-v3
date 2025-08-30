@@ -36,7 +36,7 @@ class OpenAIEvidenceShepherd(EvidenceShepherd):
                 'model': self.model,
                 'messages': messages,
                 'temperature': temperature,
-                'max_tokens': 500  # Reduced from 1000 for faster responses
+                'max_tokens': 800  # Increased to ensure all evidence scores returned
             }
             
             response = requests.post(self.base_url, headers=headers, json=payload, timeout=6)  # Reduced from 8 to 6
@@ -326,12 +326,15 @@ Return ONLY valid JSON:
 Return JSON only:
 [{"evidence_index": 0, "relevance_score": 85, "stance": "supporting", "confidence": 0.9, "key_excerpt": "key quote"}]"""
 
-        # Build evidence list for batch processing (OPTIMIZED for speed)
+        # Build evidence list for batch processing (ULTRA-COMPRESSED for speed)
         evidence_texts = []
         for i, evidence in enumerate(evidence_batch):
-            evidence_texts.append(f"EVIDENCE {i}: {evidence.text[:300]}\nSOURCE: {evidence.source_domain}")  # Reduced text length
+            evidence_texts.append(f"EVIDENCE {i}: {evidence.text[:150]}")  # Reduced from 300 to 150 chars
         
-        batch_content = f"CLAIM: {claim_text}\n\n" + "\n\n".join(evidence_texts)
+        batch_content = f"CLAIM: {claim_text[:100]}\n\n" + "\n".join(evidence_texts)  # Removed extra newlines
+        
+        print(f"BATCH: Sending {len(evidence_batch)} evidence items to OpenAI")
+        print(f"BATCH: Total content length: {len(batch_content)} chars")
         
         messages = [
             {"role": "system", "content": system_prompt},
