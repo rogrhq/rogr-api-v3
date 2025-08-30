@@ -272,10 +272,12 @@ Return ONLY valid JSON:
             print(f"Batch processing failed: {e}, falling back to individual scoring")
         
         # Fallback to individual processing if batch fails
+        print("FALLBACK: Using individual processing instead of batch")
         processed_evidence = []
-        for evidence in evidence_to_process:
+        for i, evidence in enumerate(evidence_to_process):
             processed = self.score_evidence_relevance(claim_text, evidence)
             processed_evidence.append(processed)
+            print(f"Individual {i+1}: score={processed.ai_relevance_score}, confidence={processed.ai_confidence}")
         
         # Sort by AI relevance score and confidence
         processed_evidence.sort(
@@ -339,10 +341,15 @@ Return JSON only:
         # Single API call for all evidence
         response = self._call_openai(messages, temperature=0.1)
         if not response:
+            print("BATCH: OpenAI API call failed")
             return []  # Will trigger fallback to individual processing
         
+        print(f"BATCH: OpenAI response received, length: {len(response)}")
+        
         try:
+            print(f"BATCH: Attempting to parse JSON response: {response[:200]}...")
             batch_scores = json.loads(response)
+            print(f"BATCH: Successfully parsed {len(batch_scores)} evidence scores")
             
             processed_evidence = []
             for score_data in batch_scores:
