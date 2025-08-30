@@ -261,7 +261,7 @@ Return ONLY valid JSON:
             return []
         
         # Limit evidence to process (quality over quantity)
-        evidence_to_process = evidence_batch[:6]  # Reduced from 8 to 6 for speed
+        evidence_to_process = evidence_batch[:4]  # Reduced from 6 to 4 for speed
         
         # Try batch processing first (SPEED OPTIMIZATION)
         try:
@@ -283,13 +283,17 @@ Return ONLY valid JSON:
             reverse=True
         )
         
-        # Return top evidence items that meet threshold
+        # Return top evidence items with RELAXED threshold for speed
         high_relevance = [
             ev for ev in processed_evidence 
-            if ev.ai_relevance_score >= 70 and ev.ai_confidence >= 0.6
+            if ev.ai_relevance_score >= 60 and ev.ai_confidence >= 0.5  # Lowered thresholds
         ]
         
-        return high_relevance[:6]  # Top 6 most relevant
+        print(f"AI FILTER DEBUG: {len(processed_evidence)} processed → {len(high_relevance)} passed threshold")
+        for i, ev in enumerate(processed_evidence[:3]):  # Show first 3 for debugging
+            print(f"  Evidence {i+1}: score={ev.ai_relevance_score}, confidence={ev.ai_confidence}")
+        
+        return high_relevance[:4]  # Top 4 most relevant (reduced for speed)
     
     def _create_minimal_strategy(self, claim_text: str) -> SearchStrategy:
         """Create minimal strategy for non-claims to return quickly"""
@@ -371,7 +375,7 @@ Return JSON only:
             
             high_relevance = [
                 ev for ev in processed_evidence 
-                if ev.ai_relevance_score >= 70 and ev.ai_confidence >= 0.6
+                if ev.ai_relevance_score >= 60 and ev.ai_confidence >= 0.5  # Lowered thresholds
             ]
             
             return high_relevance[:6]
