@@ -127,41 +127,63 @@ class WebSearchService:
     def _search_duckduckgo(self, query: str, max_results: int) -> List[SearchResult]:
         """Search using DuckDuckGo (fallback, no API key required)"""
         
-        # DuckDuckGo Instant Answer API
-        url = "https://api.duckduckgo.com/"
-        params = {
-            'q': query,
-            'format': 'json',
-            'no_html': '1',
-            'skip_disambig': '1'
-        }
-        
+        # DuckDuckGo HTML search (since their API is limited)
         try:
-            response = self.session.get(url, params=params, timeout=10)
+            search_url = f"https://duckduckgo.com/html/?q={quote(query)}"
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            
+            response = self.session.get(search_url, headers=headers, timeout=10)
             response.raise_for_status()
             
-            data = response.json()
+            # Parse HTML results (basic implementation)
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
             results = []
             
-            # DuckDuckGo returns limited structured data
-            # This is a simplified implementation - real implementation would need web scraping
-            abstract_source = data.get('AbstractSource')
-            abstract_url = data.get('AbstractURL')
+            # Find search result links
+            result_links = soup.find_all('a', class_='result__a')
             
-            if abstract_url and abstract_source:
-                result = SearchResult(
-                    title=f"DuckDuckGo: {abstract_source}",
-                    url=abstract_url,
-                    snippet=data.get('Abstract', '')[:200],
-                    source_domain=self._extract_domain(abstract_url)
-                )
-                results.append(result)
+            for link in result_links[:max_results]:
+                try:
+                    title = link.get_text().strip()
+                    url = link.get('href')
+                    
+                    if url and title:
+                        # Get snippet from result snippet div
+                        snippet_div = link.find_next('a', class_='result__snippet')
+                        snippet = snippet_div.get_text().strip() if snippet_div else ""
+                        
+                        result = SearchResult(
+                            title=title,
+                            url=url,
+                            snippet=snippet[:200],
+                            source_domain=self._extract_domain(url)
+                        )
+                        results.append(result)
+                        
+                except Exception as e:
+                    print(f"Error parsing DuckDuckGo result: {e}")
+                    continue
             
-            return results[:max_results]
+            print(f"DuckDuckGo HTML search parsed {len(results)} results for '{query}'")
+            return results
             
         except Exception as e:
             print(f"DuckDuckGo search error: {e}")
-            return []
+            # Fallback: create a basic search result that points to DuckDuckGo search
+            try:
+                fallback_result = SearchResult(
+                    title=f"Search results for: {query}",
+                    url=f"https://duckduckgo.com/?q={quote(query)}",
+                    snippet=f"DuckDuckGo search results for '{query}' - click to view in browser",
+                    source_domain="duckduckgo.com"
+                )
+                return [fallback_result]
+            except:
+                return []
     
     def _extract_domain(self, url: str) -> str:
         """Extract domain from URL"""
