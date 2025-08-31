@@ -82,6 +82,24 @@ class MultiAIEvidenceShepherd(EvidenceShepherd):
         
         print(f"Multi-AI Evidence Shepherd initialized with {len(self.ai_shepherds)} AI models: {self.ai_names}")
     
+    def search_real_evidence(self, claim_text: str) -> List[ProcessedEvidence]:
+        """Multi-AI real evidence search - synchronous wrapper for async method"""
+        import asyncio
+        try:
+            # Create event loop if none exists
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        # Get search strategy from first available AI
+        search_strategy = self.get_search_strategy(claim_text)
+        
+        # Run async evidence finding
+        return loop.run_until_complete(
+            self.find_evidence_for_claim(claim_text, search_strategy, {})
+        )
+    
     def get_search_strategy(self, claim_text: str) -> SearchStrategy:
         """Get search strategy - use first available AI shepherd"""
         # ClaudeEvidenceShepherd uses analyze_claim() to return SearchStrategy
@@ -91,7 +109,7 @@ class MultiAIEvidenceShepherd(EvidenceShepherd):
             # Fallback to minimal strategy
             return SearchStrategy.SCIENTIFIC
     
-    async def find_evidence_for_claim(self, claim_text: str, search_strategy: SearchStrategy, context: Dict = None) -> ProcessedEvidence:
+    async def find_evidence_for_claim(self, claim_text: str, search_strategy: SearchStrategy, context: Dict = None) -> List[ProcessedEvidence]:
         """Find evidence using multi-AI consensus approach adapted for ClaudeEvidenceShepherd interface"""
         
         print(f"Starting multi-AI consensus analysis for claim: {claim_text[:50]}...")
@@ -123,14 +141,8 @@ class MultiAIEvidenceShepherd(EvidenceShepherd):
                 continue
         
         if not ai_evidence_lists:
-            print("No AI shepherds returned evidence - returning empty result")
-            return ProcessedEvidence(
-                claim_text=claim_text,
-                evidence_pieces=[],
-                confidence_score=0.0,
-                search_queries_used=[],
-                total_sources_found=0
-            )
+            print("No AI shepherds returned evidence - returning empty list")
+            return []
         
         # Convert evidence lists to the format expected by consensus analysis
         ai_results_converted = []
@@ -165,7 +177,7 @@ class MultiAIEvidenceShepherd(EvidenceShepherd):
                 unique_evidence[evidence.source_url] = evidence
             else:
                 # Keep the one with higher relevance score
-                if evidence.relevance_score > unique_evidence[evidence.source_url].relevance_score:
+                if evidence.ai_relevance_score > unique_evidence[evidence.source_url].ai_relevance_score:
                     unique_evidence[evidence.source_url] = evidence
         
         final_evidence_pieces = list(unique_evidence.values())
@@ -175,21 +187,22 @@ class MultiAIEvidenceShepherd(EvidenceShepherd):
         
         print(f"Multi-AI consensus complete - Final score: {final_confidence_score:.1f}, Evidence pieces: {len(final_evidence_pieces)}")
         
-        return ProcessedEvidence(
-            claim_text=claim_text,
-            evidence_pieces=final_evidence_pieces,
-            confidence_score=final_confidence_score,
-            search_queries_used=list(set(all_search_queries)),
-            total_sources_found=total_sources,
-            # Store consensus metadata for advanced features
-            consensus_metadata={
-                'ai_consensus': consensus_result.consensus_score,
-                'disagreement_level': consensus_result.disagreement_level,
-                'individual_scores': consensus_result.individual_scores,
-                'uncertainty_indicators': consensus_result.uncertainty_indicators,
-                'evidence_quality_summary': consensus_result.evidence_quality_summary
-            }
-        )
+        # Return the evidence pieces with quality-weighted confidence score stored in metadata
+        # Store consensus metadata in the first evidence piece for access by scoring logic
+        if final_evidence_pieces:
+            # Add consensus metadata to first evidence piece for scoring logic access
+            first_evidence = final_evidence_pieces[0]
+            if hasattr(first_evidence, '__dict__'):
+                first_evidence.consensus_quality_score = final_confidence_score
+                first_evidence.consensus_metadata = {
+                    'ai_consensus': consensus_result.consensus_score,
+                    'disagreement_level': consensus_result.disagreement_level,
+                    'individual_scores': consensus_result.individual_scores,
+                    'uncertainty_indicators': consensus_result.uncertainty_indicators,
+                    'evidence_quality_summary': consensus_result.evidence_quality_summary
+                }
+        
+        return final_evidence_pieces
     
     async def _analyze_consensus(self, claim_text: str, ai_results: List[Tuple[str, ProcessedEvidence]]) -> AIConsensusResult:
         """Analyze consensus between multiple AI assessments"""

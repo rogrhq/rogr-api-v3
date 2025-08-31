@@ -147,6 +147,12 @@ def generate_evidence_statements(claim_text: str, trust_score: int) -> tuple[Lis
         print(f"DEBUG: Real web search found {len(real_evidence)} evidence items")
         
         if real_evidence:
+            # Check for Multi-AI consensus quality score (MDEQ system)
+            consensus_quality_score = None
+            if real_evidence and hasattr(real_evidence[0], 'consensus_quality_score'):
+                consensus_quality_score = real_evidence[0].consensus_quality_score
+                print(f"DEBUG: Found MDEQ consensus quality score: {consensus_quality_score:.1f}")
+            
             # Convert real evidence to EvidenceStatement format
             for evidence in real_evidence:
                 evidence_stmt = EvidenceStatement(
@@ -169,6 +175,9 @@ def generate_evidence_statements(claim_text: str, trust_score: int) -> tuple[Lis
                     neutral_evidence.append(evidence_stmt)
             
             print(f"USING REAL WEB EVIDENCE: {len(supporting_evidence)} supporting, {len(contradicting_evidence)} contradicting, {len(neutral_evidence)} neutral")
+            if consensus_quality_score is not None:
+                print(f"DEBUG: Returning MDEQ consensus quality score: {consensus_quality_score:.1f}")
+                return supporting_evidence[:3], contradicting_evidence[:2], neutral_evidence[:2], consensus_quality_score
             return supporting_evidence[:3], contradicting_evidence[:2], neutral_evidence[:2]
         else:
             print("DEBUG: No real web evidence found, falling back to simulated evidence")
@@ -232,20 +241,20 @@ async def score_claim_with_evidence_shepherd(claim_text: str, claim_context: dic
     # Process claim through Evidence Shepherd
     try:
         # Use Evidence Shepherd to find and analyze evidence
-        processed_evidence = await evidence_shepherd.find_evidence_for_claim(
+        evidence_pieces = await evidence_shepherd.find_evidence_for_claim(
             claim_text, 
             search_strategy=evidence_shepherd.get_search_strategy(claim_text),
             context=claim_context or {}
         )
         
-        print(f"DEBUG: Evidence Shepherd found {len(processed_evidence.evidence_pieces)} pieces of evidence")
+        print(f"DEBUG: Evidence Shepherd found {len(evidence_pieces)} pieces of evidence")
         
         # Convert Evidence Shepherd results to ClaimAnalysis format
         supporting_evidence = []
         contradicting_evidence = []
         neutral_evidence = []
         
-        for evidence in processed_evidence.evidence_pieces:
+        for evidence in evidence_pieces:
             evidence_statement = EvidenceStatement(
                 statement=evidence.key_excerpt,
                 source_title=evidence.source_title,
@@ -262,45 +271,69 @@ async def score_claim_with_evidence_shepherd(claim_text: str, claim_context: dic
             else:
                 neutral_evidence.append(evidence_statement)
         
-        # Advanced trust score calculation with uncertainty quantification
-        base_trust_score = processed_evidence.confidence_score
-        sources_count = len(processed_evidence.evidence_pieces)
+        # Check for Multi-AI consensus quality score (MDEQ system)
+        consensus_quality_score = None
+        consensus_metadata = {}
         
-        # Extract advanced consensus metadata if available (from Multi-AI system)
-        consensus_metadata = getattr(processed_evidence, 'consensus_metadata', {})
+        if evidence_pieces and hasattr(evidence_pieces[0], 'consensus_quality_score'):
+            consensus_quality_score = evidence_pieces[0].consensus_quality_score
+            consensus_metadata = getattr(evidence_pieces[0], 'consensus_metadata', {})
+            print(f"DEBUG: Found MDEQ consensus quality score: {consensus_quality_score:.1f}")
+        
+        # Advanced trust score calculation with uncertainty quantification
+        sources_count = len(evidence_pieces)
+        
+        # Use consensus quality score if available (MDEQ), otherwise fallback
+        if consensus_quality_score is not None:
+            base_trust_score = consensus_quality_score
+            print(f"DEBUG: Using MDEQ consensus score as base: {base_trust_score:.1f}")
+        else:
+            # Fallback scoring for non-MDEQ systems
+            base_trust_score = 50.0  # Neutral starting point
+            print(f"DEBUG: Using fallback base score: {base_trust_score:.1f}")
         
         # Apply uncertainty adjustments
         trust_score = base_trust_score
         confidence_band = "Medium"
         uncertainty_notes = []
         
-        # EMERGENCY FIX: Apply immediate score caps for contradicting evidence
-        # If we have contradicting evidence and no supporting evidence, cap the score
-        if contradicting_evidence and not supporting_evidence:
-            # Count high-quality contradicting sources (medical, academic domains)
-            high_quality_contradicting = 0
-            for evidence in contradicting_evidence:
-                domain = evidence.source_domain.lower()
-                if any(quality_domain in domain for quality_domain in [
-                    'nih.gov', 'cdc.gov', 'who.int', 'nature.com', 'pmc.ncbi.nlm.nih.gov',
-                    'pubmed', 'nejm.org', 'bmj.com', 'thelancet.com', '.edu', 'harvard.edu',
-                    'stanford.edu', 'mit.edu', 'oxford.ac.uk', 'cambridge.org'
-                ]):
-                    high_quality_contradicting += 1
-            
-            # If we have high-quality contradicting evidence, cap the score low
-            if high_quality_contradicting > 0:
-                trust_score = min(trust_score, 30.0)  # Cap at 30
+        # MDEQ PRIORITY: If we have consensus quality score, use it and skip emergency caps
+        if consensus_quality_score is not None:
+            print(f"DEBUG: MDEQ system active - using quality-based score {trust_score:.1f}, skipping emergency caps")
+            if consensus_metadata.get('uncertainty_indicators'):
+                uncertainty_notes.extend(consensus_metadata['uncertainty_indicators'])
+            if trust_score < 40:
                 confidence_band = "Low"
-                uncertainty_notes.append(f"High-quality contradicting evidence from {high_quality_contradicting} authoritative source(s)")
-                print(f"DEBUG: EMERGENCY CAP APPLIED - High-quality contradicting evidence found, score capped at {trust_score}")
-            
-            # Even for lower quality contradicting evidence, cap higher
-            elif len(contradicting_evidence) >= 1:
-                trust_score = min(trust_score, 45.0)  # Cap at 45 for any contradicting evidence
-                confidence_band = "Low"
-                uncertainty_notes.append("Contradicting evidence found without supporting evidence")
-                print(f"DEBUG: CONTRADICTING EVIDENCE CAP - Score capped at {trust_score}")
+            elif trust_score > 70:
+                confidence_band = "High"
+        else:
+            # EMERGENCY FIX: Apply immediate score caps for contradicting evidence (non-MDEQ systems only)
+            # If we have contradicting evidence and no supporting evidence, cap the score
+            if contradicting_evidence and not supporting_evidence:
+                # Count high-quality contradicting sources (medical, academic domains)
+                high_quality_contradicting = 0
+                for evidence in contradicting_evidence:
+                    domain = evidence.source_domain.lower()
+                    if any(quality_domain in domain for quality_domain in [
+                        'nih.gov', 'cdc.gov', 'who.int', 'nature.com', 'pmc.ncbi.nlm.nih.gov',
+                        'pubmed', 'nejm.org', 'bmj.com', 'thelancet.com', '.edu', 'harvard.edu',
+                        'stanford.edu', 'mit.edu', 'oxford.ac.uk', 'cambridge.org'
+                    ]):
+                        high_quality_contradicting += 1
+                
+                # If we have high-quality contradicting evidence, cap the score low
+                if high_quality_contradicting > 0:
+                    trust_score = min(trust_score, 30.0)  # Cap at 30
+                    confidence_band = "Low"
+                    uncertainty_notes.append(f"High-quality contradicting evidence from {high_quality_contradicting} authoritative source(s)")
+                    print(f"DEBUG: EMERGENCY CAP APPLIED - High-quality contradicting evidence found, score capped at {trust_score}")
+                
+                # Even for lower quality contradicting evidence, cap higher
+                elif len(contradicting_evidence) >= 1:
+                    trust_score = min(trust_score, 45.0)  # Cap at 45 for any contradicting evidence
+                    confidence_band = "Low"
+                    uncertainty_notes.append("Contradicting evidence found without supporting evidence")
+                    print(f"DEBUG: CONTRADICTING EVIDENCE CAP - Score capped at {trust_score}")
         
         if consensus_metadata:
             ai_consensus = consensus_metadata.get('ai_consensus', 100)
