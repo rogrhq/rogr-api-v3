@@ -261,8 +261,14 @@ STANCE relative to the claim "{claim_text}":
 
 CONFIDENCE: How certain are you (0.0-1.0)?
 
-Return JSON array with ALL evidence scored:
-[{{"evidence_index": 0, "relevance_score": 85, "stance": "supporting", "confidence": 0.9, "key_excerpt": "key quote"}}]"""
+Return ONLY valid JSON array with ALL evidence scored:
+[{{"evidence_index": 0, "relevance_score": 85, "stance": "supporting", "confidence": 0.9, "key_excerpt": "short key quote"}}]
+
+CRITICAL JSON FORMATTING:
+- key_excerpt must be under 100 characters
+- Escape all quotes in excerpts with \"
+- No line breaks in key_excerpt
+- Return only the JSON array, no explanatory text"""
 
         # Build evidence list - Claude can handle more content
         evidence_texts = []
@@ -365,14 +371,16 @@ STANCE relative to the claim "{claim_text}":
 - "contradicting": Evidence that disproves/refutes the claim is FALSE
 - "neutral": Evidence that neither supports nor contradicts the claim
 
-Return ONLY JSON:
+Return ONLY valid JSON:
 {
   "relevance_score": 85,
-  "stance": "supporting",
+  "stance": "supporting", 
   "confidence": 0.9,
   "reasoning": "Brief explanation",
-  "key_excerpt": "Most important quote from evidence"
-}"""
+  "key_excerpt": "Short quote under 100 chars"
+}
+
+CRITICAL: key_excerpt must be under 100 characters with escaped quotes (\")"""
 
         messages = [
             {"role": "system", "content": system_prompt},
