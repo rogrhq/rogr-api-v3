@@ -32,6 +32,12 @@ class ClaimExtractionService:
             key_claims = self._extract_key_sentences(text)
             claims.extend(key_claims[:3-len(claims)])
         
+        # Fallback: For very short text that looks like a single claim, include it
+        if len(claims) == 0 and len(text.strip()) < 100 and len(text.split()) >= 3:
+            clean_text = self._clean_sentence(text.strip())
+            if clean_text and not clean_text.lower().startswith(('how', 'what', 'why', 'when', 'where')):
+                claims.append(clean_text)
+        
         # Clean up and deduplicate
         final_claims = self._clean_and_deduplicate(claims)
         
@@ -143,6 +149,8 @@ class ClaimExtractionService:
             r'\bhave\b',
             r'\bhas\b',
             r'\bwere\b',
+            r'\bcontain\b',  # Added for "COVID vaccines contain microchips"
+            r'\bcause\b',    # Added for "vaccines cause autism" 
             r'\baccording to\b',
             r'\bstudies? (?:show|found|indicate)',
             r'\breports? that\b',

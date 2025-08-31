@@ -6,7 +6,7 @@ import os
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from ocr_service import OCRService
-from claim_extraction_service import ClaimExtractionService
+from claim_miner import ClaimMiner, ClaimMiningResult, MinedClaim
 from wikipedia_service import WikipediaService
 from ai_evidence_shepherd import OpenAIEvidenceShepherd
 from claude_evidence_shepherd import ClaudeEvidenceShepherd
@@ -86,7 +86,7 @@ analyses_claims_db = {}  # Store extracted claims for focus analysis
 
 # Initialize services
 ocr_service = OCRService()
-claim_service = ClaimExtractionService()
+claim_miner = ClaimMiner()
 
 # Initialize AI Evidence Shepherd (modular) - Prioritize Claude for better performance
 ai_shepherd = None
@@ -341,34 +341,52 @@ def health_check():
 async def create_analysis(analysis: AnalysisInput):
     analysis_id = str(uuid.uuid4())
     
-    # Extract claims and build analysis
-    claims = []
+    # Mine claims using new AI-powered ClaimMiner
     all_text = ""
+    mining_result = None
     
-    # Handle different input types
+    # Handle different input types with context awareness
     if analysis.type == "url":
         # Extract URL metadata and content
         print(f"DEBUG: Extracting content from URL: {analysis.input}")
-        url_data = claim_service.extract_url_metadata_and_text(analysis.input)
+        url_data = claim_miner.extract_url_metadata_and_text(analysis.input)
         print(f"DEBUG: URL data keys: {list(url_data.keys()) if url_data else 'None'}")
-        all_text = claim_service.merge_text_sources(url_data)
+        all_text = claim_miner.merge_text_sources(url_data)
         print(f"DEBUG: Merged text length: {len(all_text) if all_text else 0}")
         print(f"DEBUG: First 200 chars: {all_text[:200] if all_text else 'None'}")
-        claims = claim_service.extract_claims(all_text)
-        print(f"DEBUG: Claims extracted: {len(claims)} - {claims}")
+        
+        # Context-aware claim mining for articles
+        source_context = {
+            "title": url_data.get("title", ""),
+            "domain": url_data.get("domain", ""),
+            "description": url_data.get("description", "")
+        }
+        mining_result = claim_miner.mine_claims(all_text, context_type="article_url", source_context=source_context)
+        print(f"DEBUG: ClaimMiner found {len(mining_result.primary_claims)} primary + {len(mining_result.secondary_claims)} secondary claims")
+        
     elif analysis.type == "image" and analysis.input and ocr_service.is_enabled():
-        # Extract OCR text and claims
+        # Extract OCR text and mine claims
         try:
             ocr_text = await ocr_service.extract_text_from_image(analysis.input)
             if ocr_text:
                 all_text = ocr_text
-                claims = claim_service.extract_claims(ocr_text)
+                mining_result = claim_miner.mine_claims(ocr_text, context_type="image_ocr")
         except Exception as e:
             print(f"OCR processing error: {e}")
+            
     elif analysis.type == "text":
-        # Direct text analysis
+        # Direct text analysis with user intent context
         all_text = analysis.input
-        claims = claim_service.extract_claims(analysis.input)
+        mining_result = claim_miner.mine_claims(analysis.input, context_type="text")
+        print(f"DEBUG: ClaimMiner found {len(mining_result.primary_claims) if mining_result else 0} primary claims for text input")
+    
+    # Extract primary claims for processing (Smart Auto mode)
+    claims = []
+    if mining_result and mining_result.primary_claims:
+        claims = [claim.text for claim in mining_result.primary_claims]
+    elif mining_result:
+        # Fallback to secondary if no primary claims
+        claims = [claim.text for claim in mining_result.secondary_claims[:3]]
     
     # Score individual claims
     claim_analyses = []
@@ -532,7 +550,8 @@ async def focus_analysis(id: str, focus: FocusRequest):
                     focus_insights.append(focus_ocr_insight)
                     
                     # Extract claims from OCR text for focus analysis
-                    ocr_claims = claim_service.extract_claims(ocr_text)
+                    ocr_mining = claim_miner.mine_claims(ocr_text, context_type="image_ocr")
+                    ocr_claims = [claim.text for claim in (ocr_mining.primary_claims + ocr_mining.secondary_claims)[:5]]
                     if ocr_claims:
                         focus_insights.append(f"Focus OCR Claims: {len(ocr_claims)} statement(s) identified")
                         for i, claim in enumerate(ocr_claims[:2], 1):
