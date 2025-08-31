@@ -618,13 +618,17 @@ async def create_analysis(analysis: AnalysisInput):
         mining_result = claim_miner.mine_claims(analysis.input, context_type="text")
         print(f"DEBUG: ClaimMiner found {len(mining_result.primary_claims) if mining_result else 0} primary claims for text input")
     
-    # Extract primary claims for processing (Smart Auto mode)
-    claims = []
-    if mining_result and mining_result.primary_claims:
-        claims = [claim.text for claim in mining_result.primary_claims]
-    elif mining_result:
-        # Fallback to secondary if no primary claims
-        claims = [claim.text for claim in mining_result.secondary_claims[:3]]
+    # BYPASS ClaimMiner - Send raw text directly to MDEQ for now
+    # ClaimMiner has logic issues with simple claims like "The Earth is flat"
+    # Use raw input text as the claim to process
+    claims = [all_text.strip()] if all_text and all_text.strip() else [analysis.input.strip()]
+    print(f"DEBUG: BYPASSING ClaimMiner - Processing raw text as claim: '{claims[0][:100] if claims else 'None'}'")
+    
+    # Original ClaimMiner logic (disabled for MDEQ isolation):
+    # if mining_result and mining_result.primary_claims:
+    #     claims = [claim.text for claim in mining_result.primary_claims]
+    # elif mining_result:
+    #     claims = [claim.text for claim in mining_result.secondary_claims[:3]]
     
     # Score individual claims - toggle between Evidence Shepherd integration and old scoring
     use_evidence_shepherd = os.getenv('USE_EVIDENCE_SHEPHERD', 'true').lower() == 'true'
