@@ -135,14 +135,14 @@ class MultiAIEvidenceShepherd(EvidenceShepherd):
         # Convert evidence lists to the format expected by consensus analysis
         ai_results_converted = []
         for ai_name, evidence_list in ai_evidence_lists:
-            # Create a mock ProcessedEvidence result for consensus analysis
-            mock_result = ProcessedEvidence(
-                claim_text=claim_text,
-                evidence_pieces=evidence_list,
-                confidence_score=50.0,  # Will be recalculated by consensus
-                search_queries_used=[f"{ai_name}_search"],
-                total_sources_found=len(evidence_list)
-            )
+            # Create a mock result container for consensus analysis
+            # Note: ProcessedEvidence class doesn't accept claim_text parameter
+            mock_result = type('MockResult', (), {
+                'evidence_pieces': evidence_list,
+                'confidence_score': 50.0,  # Will be recalculated by consensus
+                'search_queries_used': [f"{ai_name}_search"],
+                'total_sources_found': len(evidence_list)
+            })()
             ai_results_converted.append((ai_name, mock_result))
         
         # Perform consensus analysis with quality assessment
