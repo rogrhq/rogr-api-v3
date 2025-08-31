@@ -508,10 +508,41 @@ async def create_analysis(analysis: AnalysisInput):
         # Fallback to secondary if no primary claims
         claims = [claim.text for claim in mining_result.secondary_claims[:3]]
     
-    # Score individual claims
+    # Score individual claims using Evidence Shepherd integration
     claim_analyses = []
     if claims:
-        claim_analyses = [score_individual_claim(claim) for claim in claims]
+        # Prepare context from ClaimMiner results for Evidence Shepherd
+        claim_context = {
+            "source_type": analysis.type,
+            "content_length": len(all_text) if all_text else 0,
+            "mining_result": {
+                "total_claims_found": len(mining_result.primary_claims) + len(mining_result.secondary_claims) if mining_result else 0,
+                "context_type": getattr(mining_result, 'analysis_meta', {}).get('context_type', 'unknown') if mining_result else 'unknown'
+            }
+        }
+        
+        # Add URL-specific context if available  
+        if analysis.type == "url" and 'url_data' in locals():
+            claim_context.update({
+                "url_title": url_data.get("title", ""),
+                "url_domain": url_data.get("domain", ""),
+                "url_description": url_data.get("description", "")
+            })
+        
+        # Process each claim with Evidence Shepherd integration
+        print(f"DEBUG: Processing {len(claims)} claims with Evidence Shepherd integration")
+        for i, claim_text in enumerate(claims):
+            try:
+                # Use new Evidence Shepherd integration (async)
+                claim_analysis = await score_claim_with_evidence_shepherd(claim_text, claim_context)
+                claim_analyses.append(claim_analysis)
+                print(f"DEBUG: Claim {i+1}/{len(claims)} processed - Score: {claim_analysis.trust_score}, Grade: {claim_analysis.evidence_grade}")
+            except Exception as e:
+                print(f"ERROR: Failed to process claim {i+1} with ES integration: {e}")
+                # Fallback to old scoring
+                fallback_analysis = score_individual_claim(claim_text)
+                claim_analyses.append(fallback_analysis)
+                print(f"DEBUG: Claim {i+1}/{len(claims)} fallback - Score: {fallback_analysis.trust_score}, Grade: {fallback_analysis.evidence_grade}")
     
     # Calculate cumulative scores
     overall_score, overall_grade, overall_assessment = calculate_cumulative_score(claim_analyses)
