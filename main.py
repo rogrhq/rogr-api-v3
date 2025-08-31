@@ -571,7 +571,52 @@ async def create_analysis(analysis: AnalysisInput):
         ocr_insight = ocr_service.format_ocr_insight(all_text)
         base_why.append(ocr_insight)
     
-    fake_capsule = TrustCapsule(
+    # Extract real citations from Evidence Shepherd results
+    real_citations = []
+    seen_urls = set()  # Avoid duplicates
+    
+    for claim_analysis in claim_analyses:
+        # Get all evidence sources from this claim
+        all_evidence = (claim_analysis.supporting_evidence + 
+                       claim_analysis.contradicting_evidence + 
+                       claim_analysis.neutral_evidence)
+        
+        for evidence in all_evidence:
+            # Skip if we've already seen this URL
+            if evidence.source_url in seen_urls:
+                continue
+            seen_urls.add(evidence.source_url)
+            
+            # Create citation from real evidence
+            citation = Citation(
+                title=evidence.source_title or f"Source from {evidence.source_domain}",
+                domain=evidence.source_domain,
+                date=datetime.now().strftime("%Y-%m-%d"),  # Use current date for now, ES could provide actual dates later
+                url=evidence.source_url
+            )
+            real_citations.append(citation)
+            
+            # Limit to reasonable number of citations
+            if len(real_citations) >= 6:
+                break
+        
+        if len(real_citations) >= 6:
+            break
+    
+    # Fallback to generic citations if no real citations found (e.g., ES failed)
+    if not real_citations:
+        real_citations = [
+            Citation(
+                title="Fallback Verification Process",
+                domain="rogr.app",
+                date=datetime.now().strftime("%Y-%m-%d"),
+                url="https://rogr.app/verification-process"
+            )
+        ]
+    
+    print(f"DEBUG: Generated {len(real_citations)} real citations from Evidence Shepherd results")
+
+    trust_capsule = TrustCapsule(
         id=analysis_id,
         trust_score=overall_score,
         evidence_grade=overall_grade,
@@ -579,20 +624,7 @@ async def create_analysis(analysis: AnalysisInput):
         why=base_why,
         claims=claim_analyses,
         overall_assessment=overall_assessment,
-        citations=[
-            Citation(
-                title="Reuters Fact Check Database",
-                domain="reuters.com",
-                date="2024-08-15",
-                url="https://reuters.com/fact-check/example"
-            ),
-            Citation(
-                title="Associated Press Verification",
-                domain="apnews.com", 
-                date="2024-08-20",
-                url="https://apnews.com/article/verification"
-            )
-        ],
+        citations=real_citations,
         capsule_version=1,
         signed=True,
         created_at=datetime.now().isoformat(),
@@ -601,11 +633,11 @@ async def create_analysis(analysis: AnalysisInput):
     )
     
     # Store capsule, original input, and extracted claims for focus analysis
-    analyses_db[analysis_id] = fake_capsule
+    analyses_db[analysis_id] = trust_capsule
     analyses_input_db[analysis_id] = analysis.input
     analyses_claims_db[analysis_id] = claims
     
-    return fake_capsule
+    return trust_capsule
 
 @app.get("/analyses/{id}")
 def get_analysis(id: str):
