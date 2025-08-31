@@ -274,6 +274,34 @@ async def score_claim_with_evidence_shepherd(claim_text: str, claim_context: dic
         confidence_band = "Medium"
         uncertainty_notes = []
         
+        # EMERGENCY FIX: Apply immediate score caps for contradicting evidence
+        # If we have contradicting evidence and no supporting evidence, cap the score
+        if contradicting_evidence and not supporting_evidence:
+            # Count high-quality contradicting sources (medical, academic domains)
+            high_quality_contradicting = 0
+            for evidence in contradicting_evidence:
+                domain = evidence.source_domain.lower()
+                if any(quality_domain in domain for quality_domain in [
+                    'nih.gov', 'cdc.gov', 'who.int', 'nature.com', 'pmc.ncbi.nlm.nih.gov',
+                    'pubmed', 'nejm.org', 'bmj.com', 'thelancet.com', '.edu', 'harvard.edu',
+                    'stanford.edu', 'mit.edu', 'oxford.ac.uk', 'cambridge.org'
+                ]):
+                    high_quality_contradicting += 1
+            
+            # If we have high-quality contradicting evidence, cap the score low
+            if high_quality_contradicting > 0:
+                trust_score = min(trust_score, 30.0)  # Cap at 30
+                confidence_band = "Low"
+                uncertainty_notes.append(f"High-quality contradicting evidence from {high_quality_contradicting} authoritative source(s)")
+                print(f"DEBUG: EMERGENCY CAP APPLIED - High-quality contradicting evidence found, score capped at {trust_score}")
+            
+            # Even for lower quality contradicting evidence, cap higher
+            elif len(contradicting_evidence) >= 1:
+                trust_score = min(trust_score, 45.0)  # Cap at 45 for any contradicting evidence
+                confidence_band = "Low"
+                uncertainty_notes.append("Contradicting evidence found without supporting evidence")
+                print(f"DEBUG: CONTRADICTING EVIDENCE CAP - Score capped at {trust_score}")
+        
         if consensus_metadata:
             ai_consensus = consensus_metadata.get('ai_consensus', 100)
             disagreement_level = consensus_metadata.get('disagreement_level', 0)
