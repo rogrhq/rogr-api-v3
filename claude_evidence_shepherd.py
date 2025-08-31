@@ -363,7 +363,7 @@ RELEVANCE SCORING (0-100):
 STANCE relative to the claim "{claim_text}":
 - "supporting": Evidence that supports/proves the claim is TRUE
 - "contradicting": Evidence that disproves/refutes the claim is FALSE
-- "neutral": Evidence that neither supports nor contradicts the claim"""
+- "neutral": Evidence that neither supports nor contradicts the claim
 
 Return ONLY JSON:
 {
