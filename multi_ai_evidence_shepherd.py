@@ -84,27 +84,45 @@ class MultiAIEvidenceShepherd(EvidenceShepherd):
     
     def get_search_strategy(self, claim_text: str) -> SearchStrategy:
         """Get search strategy - use first available AI shepherd"""
-        return self.ai_shepherds[0].get_search_strategy(claim_text)
+        # ClaudeEvidenceShepherd uses analyze_claim() to return SearchStrategy
+        if hasattr(self.ai_shepherds[0], 'analyze_claim'):
+            return self.ai_shepherds[0].analyze_claim(claim_text)
+        else:
+            # Fallback to minimal strategy
+            return SearchStrategy.SCIENTIFIC
     
     async def find_evidence_for_claim(self, claim_text: str, search_strategy: SearchStrategy, context: Dict = None) -> ProcessedEvidence:
-        """Find evidence using multi-AI consensus approach"""
+        """Find evidence using multi-AI consensus approach adapted for ClaudeEvidenceShepherd interface"""
         
         print(f"Starting multi-AI consensus analysis for claim: {claim_text[:50]}...")
         
-        # Collect evidence from all available AI shepherds
-        ai_results = []
+        # Collect evidence from all available AI shepherds using their actual methods
+        ai_evidence_lists = []
         
         for i, (ai_shepherd, ai_name) in enumerate(zip(self.ai_shepherds, self.ai_names)):
             try:
                 print(f"Getting evidence from {ai_name}...")
-                result = await ai_shepherd.find_evidence_for_claim(claim_text, search_strategy, context)
-                ai_results.append((ai_name, result))
-                print(f"{ai_name} found {len(result.evidence_pieces)} pieces of evidence")
+                
+                # Use the actual methods available in ClaudeEvidenceShepherd
+                if hasattr(ai_shepherd, 'search_real_evidence'):
+                    # ClaudeEvidenceShepherd method
+                    evidence_list = ai_shepherd.search_real_evidence(claim_text)
+                    ai_evidence_lists.append((ai_name, evidence_list))
+                    print(f"{ai_name} found {len(evidence_list)} pieces of evidence")
+                elif hasattr(ai_shepherd, 'find_evidence_for_claim'):
+                    # If other shepherds have this method
+                    result = await ai_shepherd.find_evidence_for_claim(claim_text, search_strategy, context)
+                    ai_evidence_lists.append((ai_name, result.evidence_pieces if hasattr(result, 'evidence_pieces') else []))
+                    print(f"{ai_name} found evidence")
+                else:
+                    print(f"{ai_name} doesn't have supported evidence methods")
+                    continue
+                    
             except Exception as e:
                 print(f"Error getting evidence from {ai_name}: {e}")
                 continue
         
-        if not ai_results:
+        if not ai_evidence_lists:
             print("No AI shepherds returned evidence - returning empty result")
             return ProcessedEvidence(
                 claim_text=claim_text,
@@ -114,18 +132,31 @@ class MultiAIEvidenceShepherd(EvidenceShepherd):
                 total_sources_found=0
             )
         
-        # Perform consensus analysis
-        consensus_result = await self._analyze_consensus(claim_text, ai_results)
+        # Convert evidence lists to the format expected by consensus analysis
+        ai_results_converted = []
+        for ai_name, evidence_list in ai_evidence_lists:
+            # Create a mock ProcessedEvidence result for consensus analysis
+            mock_result = ProcessedEvidence(
+                claim_text=claim_text,
+                evidence_pieces=evidence_list,
+                confidence_score=50.0,  # Will be recalculated by consensus
+                search_queries_used=[f"{ai_name}_search"],
+                total_sources_found=len(evidence_list)
+            )
+            ai_results_converted.append((ai_name, mock_result))
+        
+        # Perform consensus analysis with quality assessment
+        consensus_result = await self._analyze_consensus(claim_text, ai_results_converted)
         
         # Merge evidence pieces from all AIs
         all_evidence_pieces = []
         all_search_queries = []
         total_sources = 0
         
-        for ai_name, result in ai_results:
-            all_evidence_pieces.extend(result.evidence_pieces)
-            all_search_queries.extend(result.search_queries_used)
-            total_sources += result.total_sources_found
+        for ai_name, evidence_list in ai_evidence_lists:
+            all_evidence_pieces.extend(evidence_list)
+            all_search_queries.append(f"{ai_name}_multi_search")
+            total_sources += len(evidence_list)
         
         # Deduplicate evidence pieces by URL
         unique_evidence = {}
@@ -174,7 +205,9 @@ class MultiAIEvidenceShepherd(EvidenceShepherd):
             
             # Count stance votes based on evidence
             for evidence in result.evidence_pieces:
-                if evidence.stance:
+                if hasattr(evidence, 'ai_stance') and evidence.ai_stance:
+                    stance_votes[evidence.ai_stance.lower()] = stance_votes.get(evidence.ai_stance.lower(), 0) + 1
+                elif hasattr(evidence, 'stance') and evidence.stance:
                     stance_votes[evidence.stance.lower()] = stance_votes.get(evidence.stance.lower(), 0) + 1
         
         # Calculate consensus score (agreement level)
@@ -200,20 +233,32 @@ class MultiAIEvidenceShepherd(EvidenceShepherd):
         
         for evidence in all_evidence_pieces[:6]:  # Limit to prevent timeout
             try:
-                # Assess evidence quality
+                # Assess evidence quality using ProcessedEvidence attributes
+                evidence_text = evidence.text if hasattr(evidence, 'text') else getattr(evidence, 'key_excerpt', '')
+                evidence_url = evidence.source_url if hasattr(evidence, 'source_url') else ''
+                evidence_title = evidence.source_title if hasattr(evidence, 'source_title') else ''
+                
                 quality_metrics = self.quality_assessor.assess_evidence_quality(
-                    evidence.key_excerpt,
-                    evidence.source_url,
-                    evidence.source_title
+                    evidence_text,
+                    evidence_url,
+                    evidence_title
                 )
                 
                 quality_scores.append(quality_metrics.overall_quality_score())
                 
-                # Calculate quality-weighted impact
+                # Calculate quality-weighted impact  
+                evidence_stance = 'neutral'
+                if hasattr(evidence, 'ai_stance') and evidence.ai_stance:
+                    evidence_stance = evidence.ai_stance
+                elif hasattr(evidence, 'stance') and evidence.stance:
+                    evidence_stance = evidence.stance
+                
+                evidence_relevance = evidence.ai_relevance_score if hasattr(evidence, 'ai_relevance_score') else getattr(evidence, 'relevance_score', 50)
+                
                 weighted_impact = self.quality_assessor.quality_weighted_stance_score(
-                    evidence.stance or 'neutral',
+                    evidence_stance,
                     quality_metrics,
-                    evidence.relevance_score
+                    evidence_relevance
                 )
                 
                 quality_weighted_impacts.append(weighted_impact)
