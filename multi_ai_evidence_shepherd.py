@@ -24,6 +24,31 @@ class AIConsensusResult:
 class MultiAIEvidenceShepherd(EvidenceShepherd):
     """Multi-AI Evidence Shepherd with consensus scoring for bias prevention"""
     
+    def is_enabled(self) -> bool:
+        """Check if Multi-AI Evidence Shepherd is enabled"""
+        return len(self.ai_shepherds) > 0
+    
+    def analyze_claim(self, claim_text: str, claim_type: ClaimType) -> float:
+        """Analyze claim - use first available shepherd"""
+        if self.ai_shepherds:
+            if hasattr(self.ai_shepherds[0], 'analyze_claim'):
+                return self.ai_shepherds[0].analyze_claim(claim_text, claim_type)
+        return 0.5  # Default neutral
+    
+    def filter_evidence_batch(self, evidence_candidates: List[EvidenceCandidate], max_count: int = 5) -> List[EvidenceCandidate]:
+        """Filter evidence batch - use first available shepherd"""
+        if self.ai_shepherds:
+            if hasattr(self.ai_shepherds[0], 'filter_evidence_batch'):
+                return self.ai_shepherds[0].filter_evidence_batch(evidence_candidates, max_count)
+        return evidence_candidates[:max_count]  # Default limit
+    
+    def score_evidence_relevance(self, evidence: EvidenceCandidate, claim_text: str) -> float:
+        """Score evidence relevance - use first available shepherd"""
+        if self.ai_shepherds:
+            if hasattr(self.ai_shepherds[0], 'score_evidence_relevance'):
+                return self.ai_shepherds[0].score_evidence_relevance(evidence, claim_text)
+        return 0.5  # Default medium relevance
+    
     def __init__(self):
         # Initialize available AI shepherds
         self.ai_shepherds = []
