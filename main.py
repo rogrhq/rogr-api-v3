@@ -203,20 +203,28 @@ def generate_evidence_statements(claim_text: str, trust_score: int) -> tuple[Lis
     return supporting_evidence[:3], contradicting_evidence[:2], neutral_evidence[:2]
 
 async def score_claim_with_evidence_shepherd(claim_text: str, claim_context: dict = None) -> ClaimAnalysis:
-    """Score a claim using real Evidence Shepherd with web search and AI analysis"""
+    """Score a claim using advanced Multi-AI Evidence Shepherd with quality assessment and uncertainty quantification"""
     
-    # Initialize Evidence Shepherd - prefer Claude, fallback to OpenAI, then NoOp
+    # Initialize Advanced Multi-AI Evidence Shepherd
     evidence_shepherd = None
+    use_multi_ai = os.getenv('USE_MULTI_AI_CONSENSUS', 'true').lower() == 'true'
+    
     try:
-        if os.getenv('ANTHROPIC_API_KEY'):
-            evidence_shepherd = ClaudeEvidenceShepherd()
-            print(f"DEBUG: Using Claude Evidence Shepherd for claim: {claim_text[:50]}...")
-        elif os.getenv('OPENAI_API_KEY'):
-            evidence_shepherd = OpenAIEvidenceShepherd()
-            print(f"DEBUG: Using OpenAI Evidence Shepherd for claim: {claim_text[:50]}...")
+        if use_multi_ai:
+            from multi_ai_evidence_shepherd import MultiAIEvidenceShepherd
+            evidence_shepherd = MultiAIEvidenceShepherd()
+            print(f"DEBUG: Using Multi-AI Evidence Shepherd (advanced) for claim: {claim_text[:50]}...")
         else:
-            evidence_shepherd = NoOpEvidenceShepherd()
-            print(f"DEBUG: Using NoOp Evidence Shepherd (no API keys) for claim: {claim_text[:50]}...")
+            # Fallback to single AI (Phase 1 behavior)
+            if os.getenv('ANTHROPIC_API_KEY'):
+                evidence_shepherd = ClaudeEvidenceShepherd()
+                print(f"DEBUG: Using Claude Evidence Shepherd (single AI) for claim: {claim_text[:50]}...")
+            elif os.getenv('OPENAI_API_KEY'):
+                evidence_shepherd = OpenAIEvidenceShepherd()
+                print(f"DEBUG: Using OpenAI Evidence Shepherd (single AI) for claim: {claim_text[:50]}...")
+            else:
+                evidence_shepherd = NoOpEvidenceShepherd()
+                print(f"DEBUG: Using NoOp Evidence Shepherd (no API keys) for claim: {claim_text[:50]}...")
     except Exception as e:
         print(f"ERROR: Failed to initialize Evidence Shepherd: {e}")
         evidence_shepherd = NoOpEvidenceShepherd()
@@ -254,11 +262,56 @@ async def score_claim_with_evidence_shepherd(claim_text: str, claim_context: dic
             else:
                 neutral_evidence.append(evidence_statement)
         
-        # Calculate trust score based on Evidence Shepherd analysis
-        trust_score = processed_evidence.confidence_score
+        # Advanced trust score calculation with uncertainty quantification
+        base_trust_score = processed_evidence.confidence_score
         sources_count = len(processed_evidence.evidence_pieces)
         
-        # Generate evidence summary from real evidence
+        # Extract advanced consensus metadata if available (from Multi-AI system)
+        consensus_metadata = getattr(processed_evidence, 'consensus_metadata', {})
+        
+        # Apply uncertainty adjustments
+        trust_score = base_trust_score
+        confidence_band = "Medium"
+        uncertainty_notes = []
+        
+        if consensus_metadata:
+            ai_consensus = consensus_metadata.get('ai_consensus', 100)
+            disagreement_level = consensus_metadata.get('disagreement_level', 0)
+            evidence_quality_summary = consensus_metadata.get('evidence_quality_summary', {})
+            uncertainty_indicators = consensus_metadata.get('uncertainty_indicators', [])
+            
+            # Adjust confidence based on AI consensus
+            if disagreement_level > 40:
+                confidence_band = "Low"
+                uncertainty_notes.extend(uncertainty_indicators)
+            elif disagreement_level < 15 and ai_consensus > 80:
+                confidence_band = "High"
+            
+            # Apply evidence quality adjustments
+            avg_quality = evidence_quality_summary.get('avg_quality_score', 50)
+            high_quality_count = evidence_quality_summary.get('high_quality_count', 0)
+            low_quality_count = evidence_quality_summary.get('low_quality_count', 0)
+            
+            # Quality-based score adjustments
+            quality_factor = avg_quality / 100.0
+            
+            # High-quality contradicting evidence caps score low
+            if contradicting_evidence and high_quality_count > 0:
+                for evidence in contradicting_evidence:
+                    if evidence.relevance_score > 0.7:  # High relevance contradicting evidence
+                        # This is the key fix for our 5G/COVID problem
+                        trust_score = min(trust_score, 35.0)  # Cap at low score
+                        uncertainty_notes.append("High-quality contradicting evidence found")
+                        break
+            
+            # Low-quality evidence reduces confidence
+            if low_quality_count > high_quality_count:
+                confidence_band = "Low"
+                uncertainty_notes.append("Evidence quality concerns identified")
+            
+            print(f"DEBUG: Advanced scoring - Base: {base_trust_score:.1f}, Adjusted: {trust_score:.1f}, Quality: {avg_quality:.1f}")
+        
+        # Generate enhanced evidence summary with quality indicators
         evidence_summary = []
         if supporting_evidence:
             evidence_summary.append(f"Supported by {len(supporting_evidence)} source{'s' if len(supporting_evidence) > 1 else ''}")
@@ -267,7 +320,13 @@ async def score_claim_with_evidence_shepherd(claim_text: str, claim_context: dic
         if neutral_evidence:
             evidence_summary.append(f"Referenced in {len(neutral_evidence)} neutral context{'s' if len(neutral_evidence) > 1 else ''}")
         
-        evidence_summary.append(f"Analyzed across {sources_count} web sources")
+        # Add quality and consensus information
+        if consensus_metadata:
+            evidence_summary.append(f"Multi-AI consensus analysis completed")
+            if uncertainty_notes:
+                evidence_summary.append(f"Uncertainty: {'; '.join(uncertainty_notes[:2])}")
+        else:
+            evidence_summary.append(f"Analyzed across {sources_count} web sources")
         
         # Convert score to grade (same grading scale as before)
         if trust_score >= 90:
@@ -295,13 +354,8 @@ async def score_claim_with_evidence_shepherd(claim_text: str, claim_context: dic
         else:
             grade = "F"
         
-        # Confidence based on evidence quality and consensus
-        if trust_score >= 85 and sources_count >= 3:
-            confidence = "High"
-        elif trust_score >= 70 and sources_count >= 2:
-            confidence = "Medium"  
-        else:
-            confidence = "Low"
+        # Use dynamic confidence band from uncertainty quantification
+        confidence = confidence_band
         
         print(f"DEBUG: ES scoring complete - Score: {trust_score}, Grade: {grade}, Sources: {sources_count}")
         
