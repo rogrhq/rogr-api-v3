@@ -127,7 +127,7 @@ wikipedia_service = WikipediaService(evidence_shepherd=ai_shepherd)
 # Initialize Progressive Analysis Service
 progressive_service = ProgressiveAnalysisService(
     wikipedia_service=wikipedia_service,
-    claim_service=claim_service,
+    claim_service=claim_miner,
     evidence_shepherd=ai_shepherd
 )
 
