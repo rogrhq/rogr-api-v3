@@ -202,6 +202,126 @@ def generate_evidence_statements(claim_text: str, trust_score: int) -> tuple[Lis
     
     return supporting_evidence[:3], contradicting_evidence[:2], neutral_evidence[:2]
 
+async def score_claim_with_evidence_shepherd(claim_text: str, claim_context: dict = None) -> ClaimAnalysis:
+    """Score a claim using real Evidence Shepherd with web search and AI analysis"""
+    
+    # Initialize Evidence Shepherd - prefer Claude, fallback to OpenAI, then NoOp
+    evidence_shepherd = None
+    try:
+        if os.getenv('ANTHROPIC_API_KEY'):
+            evidence_shepherd = ClaudeEvidenceShepherd()
+            print(f"DEBUG: Using Claude Evidence Shepherd for claim: {claim_text[:50]}...")
+        elif os.getenv('OPENAI_API_KEY'):
+            evidence_shepherd = OpenAIEvidenceShepherd()
+            print(f"DEBUG: Using OpenAI Evidence Shepherd for claim: {claim_text[:50]}...")
+        else:
+            evidence_shepherd = NoOpEvidenceShepherd()
+            print(f"DEBUG: Using NoOp Evidence Shepherd (no API keys) for claim: {claim_text[:50]}...")
+    except Exception as e:
+        print(f"ERROR: Failed to initialize Evidence Shepherd: {e}")
+        evidence_shepherd = NoOpEvidenceShepherd()
+    
+    # Process claim through Evidence Shepherd
+    try:
+        # Use Evidence Shepherd to find and analyze evidence
+        processed_evidence = await evidence_shepherd.find_evidence_for_claim(
+            claim_text, 
+            search_strategy=evidence_shepherd.get_search_strategy(claim_text),
+            context=claim_context or {}
+        )
+        
+        print(f"DEBUG: Evidence Shepherd found {len(processed_evidence.evidence_pieces)} pieces of evidence")
+        
+        # Convert Evidence Shepherd results to ClaimAnalysis format
+        supporting_evidence = []
+        contradicting_evidence = []
+        neutral_evidence = []
+        
+        for evidence in processed_evidence.evidence_pieces:
+            evidence_statement = EvidenceStatement(
+                statement=evidence.key_excerpt,
+                source_title=evidence.source_title,
+                source_domain=evidence.source_domain,
+                source_url=evidence.source_url,
+                stance=evidence.stance.lower() if evidence.stance else "neutral",
+                relevance_score=evidence.relevance_score / 100.0  # Convert to 0-1 range
+            )
+            
+            if evidence.stance and evidence.stance.lower() == "supporting":
+                supporting_evidence.append(evidence_statement)
+            elif evidence.stance and evidence.stance.lower() == "contradicting":
+                contradicting_evidence.append(evidence_statement)
+            else:
+                neutral_evidence.append(evidence_statement)
+        
+        # Calculate trust score based on Evidence Shepherd analysis
+        trust_score = processed_evidence.confidence_score
+        sources_count = len(processed_evidence.evidence_pieces)
+        
+        # Generate evidence summary from real evidence
+        evidence_summary = []
+        if supporting_evidence:
+            evidence_summary.append(f"Supported by {len(supporting_evidence)} source{'s' if len(supporting_evidence) > 1 else ''}")
+        if contradicting_evidence:
+            evidence_summary.append(f"Challenged by {len(contradicting_evidence)} contradicting source{'s' if len(contradicting_evidence) > 1 else ''}")
+        if neutral_evidence:
+            evidence_summary.append(f"Referenced in {len(neutral_evidence)} neutral context{'s' if len(neutral_evidence) > 1 else ''}")
+        
+        evidence_summary.append(f"Analyzed across {sources_count} web sources")
+        
+        # Convert score to grade (same grading scale as before)
+        if trust_score >= 90:
+            grade = "A+"
+        elif trust_score >= 87:
+            grade = "A"
+        elif trust_score >= 83:
+            grade = "A-"
+        elif trust_score >= 80:
+            grade = "B+"
+        elif trust_score >= 77:
+            grade = "B"
+        elif trust_score >= 73:
+            grade = "B-"
+        elif trust_score >= 70:
+            grade = "C+"
+        elif trust_score >= 67:
+            grade = "C"
+        elif trust_score >= 63:
+            grade = "C-"
+        elif trust_score >= 60:
+            grade = "D+"
+        elif trust_score >= 50:
+            grade = "D"
+        else:
+            grade = "F"
+        
+        # Confidence based on evidence quality and consensus
+        if trust_score >= 85 and sources_count >= 3:
+            confidence = "High"
+        elif trust_score >= 70 and sources_count >= 2:
+            confidence = "Medium"  
+        else:
+            confidence = "Low"
+        
+        print(f"DEBUG: ES scoring complete - Score: {trust_score}, Grade: {grade}, Sources: {sources_count}")
+        
+        return ClaimAnalysis(
+            claim_text=claim_text,
+            trust_score=int(trust_score),
+            evidence_grade=grade,
+            confidence=confidence,
+            evidence_summary=evidence_summary,
+            sources_count=sources_count,
+            supporting_evidence=supporting_evidence,
+            contradicting_evidence=contradicting_evidence,
+            neutral_evidence=neutral_evidence
+        )
+        
+    except Exception as e:
+        print(f"ERROR: Evidence Shepherd processing failed for claim '{claim_text[:50]}...': {e}")
+        # Fallback to old scoring method
+        return score_individual_claim(claim_text)
+
 def score_individual_claim(claim_text: str) -> ClaimAnalysis:
     """Score an individual claim and provide evidence summary with actual evidence statements"""
     # Simulate evidence-based scoring
