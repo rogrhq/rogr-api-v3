@@ -256,17 +256,19 @@ async def score_claim_with_evidence_shepherd(claim_text: str, claim_context: dic
         
         for evidence in evidence_pieces:
             evidence_statement = EvidenceStatement(
-                statement=evidence.key_excerpt,
+                statement=evidence.text[:200] if evidence.text else "Evidence found from source",
                 source_title=evidence.source_title,
                 source_domain=evidence.source_domain,
                 source_url=evidence.source_url,
-                stance=evidence.stance.lower() if evidence.stance else "neutral",
-                relevance_score=evidence.relevance_score / 100.0  # Convert to 0-1 range
+                stance=evidence.ai_stance.lower() if evidence.ai_stance else "neutral",
+                relevance_score=evidence.ai_relevance_score / 100.0,  # Convert to 0-1 range
+                highlight_text=evidence.highlight_text if hasattr(evidence, 'highlight_text') else evidence.text[:100] if evidence.text else "",
+                highlight_context=evidence.highlight_context if hasattr(evidence, 'highlight_context') else evidence.text[:300] if evidence.text else ""
             )
             
-            if evidence.stance and evidence.stance.lower() == "supporting":
+            if evidence.ai_stance and evidence.ai_stance.lower() == "supporting":
                 supporting_evidence.append(evidence_statement)
-            elif evidence.stance and evidence.stance.lower() == "contradicting":
+            elif evidence.ai_stance and evidence.ai_stance.lower() == "contradicting":
                 contradicting_evidence.append(evidence_statement)
             else:
                 neutral_evidence.append(evidence_statement)
