@@ -245,7 +245,7 @@ Return ONLY JSON:
             return []
         
         # Claude can handle much more context - use full text
-        system_prompt = """Expert fact-checker: Score evidence relevance for a claim. 
+        system_prompt = f"""Expert fact-checker: Score evidence relevance for the claim: "{claim_text}"
 
 SCORING (0-100):
 90+: DIRECT proof/disproof with specific data
@@ -254,11 +254,15 @@ SCORING (0-100):
 60-69: WEAK relevance
 <60: IRRELEVANT
 
-STANCE: "supporting"/"contradicting"/"neutral"
+STANCE relative to the claim "{claim_text}":
+- "supporting": Evidence that supports/proves the claim is TRUE
+- "contradicting": Evidence that disproves/refutes the claim is FALSE  
+- "neutral": Evidence that neither supports nor contradicts the claim
+
 CONFIDENCE: How certain are you (0.0-1.0)?
 
 Return JSON array with ALL evidence scored:
-[{"evidence_index": 0, "relevance_score": 85, "stance": "supporting", "confidence": 0.9, "key_excerpt": "key quote"}]"""
+[{{"evidence_index": 0, "relevance_score": 85, "stance": "supporting", "confidence": 0.9, "key_excerpt": "key quote"}}]"""
 
         # Build evidence list - Claude can handle more content
         evidence_texts = []
@@ -346,7 +350,7 @@ Return JSON array with ALL evidence scored:
     def score_evidence_relevance_claude(self, claim_text: str, evidence: EvidenceCandidate) -> ProcessedEvidence:
         """Use Claude to score individual evidence relevance"""
         
-        system_prompt = """You are an expert fact-checker evaluating evidence relevance.
+        system_prompt = f"""You are an expert fact-checker evaluating evidence for the claim: "{claim_text}"
 
 RELEVANCE SCORING (0-100):
 90-100: DIRECT - Evidence directly proves/disproves the claim with specific data
@@ -356,10 +360,10 @@ RELEVANCE SCORING (0-100):
 50-59:  TANGENTIAL - Evidence related to topic but not claim specifics
 0-49:   IRRELEVANT - Evidence unrelated or extremely weak connection
 
-STANCE:
-- "supporting": Evidence backs up the claim
-- "contradicting": Evidence disputes the claim  
-- "neutral": Evidence provides context but doesn't take a side
+STANCE relative to the claim "{claim_text}":
+- "supporting": Evidence that supports/proves the claim is TRUE
+- "contradicting": Evidence that disproves/refutes the claim is FALSE
+- "neutral": Evidence that neither supports nor contradicts the claim"""
 
 Return ONLY JSON:
 {

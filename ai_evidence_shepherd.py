@@ -195,9 +195,9 @@ Return ONLY JSON:
     def score_evidence_relevance(self, claim_text: str, evidence: EvidenceCandidate) -> ProcessedEvidence:
         """Use AI to score evidence relevance with detailed analysis"""
         
-        system_prompt = """You are an expert fact-checker evaluating evidence relevance.
+        system_prompt = f"""You are an expert fact-checker evaluating evidence for the claim: "{claim_text}"
 
-Your task: Determine how well evidence supports, contradicts, or relates to a specific claim.
+Your task: Determine how well evidence supports, contradicts, or relates to this specific claim.
 
 RELEVANCE SCORING (0-100):
 90-100: DIRECT - Evidence directly proves/disproves the claim with specific data
@@ -207,10 +207,10 @@ RELEVANCE SCORING (0-100):
 50-59:  TANGENTIAL - Evidence related to topic but not claim specifics
 0-49:   IRRELEVANT - Evidence unrelated or extremely weak connection
 
-STANCE:
-- "supporting": Evidence backs up the claim
-- "contradicting": Evidence disputes the claim  
-- "neutral": Evidence provides context but doesn't take a side
+STANCE relative to the claim "{claim_text}":
+- "supporting": Evidence that supports/proves the claim is TRUE
+- "contradicting": Evidence that disproves/refutes the claim is FALSE
+- "neutral": Evidence that neither supports nor contradicts the claim
 
 CONFIDENCE (0-1):
 How certain are you about your assessment?
@@ -315,7 +315,7 @@ Return ONLY valid JSON:
             return []
         
         # ULTRA-FAST batch prompt for maximum speed
-        system_prompt = """Score evidence for claim. FAST processing.
+        system_prompt = f"""Score evidence for claim: "{claim_text}". FAST processing.
 
 90+: DIRECT proof/disproof
 80-89: STRONG support/contradiction
@@ -323,8 +323,13 @@ Return ONLY valid JSON:
 60-69: WEAK relevance
 <60: IRRELEVANT
 
+STANCE for "{claim_text}":
+- "supporting": proves claim TRUE
+- "contradicting": proves claim FALSE
+- "neutral": neither supports nor contradicts
+
 Return JSON only:
-[{"evidence_index": 0, "relevance_score": 85, "stance": "supporting", "confidence": 0.9, "key_excerpt": "key quote"}]"""
+[{{"evidence_index": 0, "relevance_score": 85, "stance": "supporting", "confidence": 0.9, "key_excerpt": "key quote"}}]"""
 
         # Build evidence list for batch processing (ULTRA-COMPRESSED for speed)
         evidence_texts = []
