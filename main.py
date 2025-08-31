@@ -574,6 +574,41 @@ def calculate_cumulative_score(claims: List[ClaimAnalysis]) -> tuple[int, str, s
 def health_check():
     return {"ok": True}
 
+@app.post("/test-mdeq")
+async def test_mdeq_direct(request: dict):
+    """Direct MDEQ testing endpoint - bypasses ClaimMiner for isolated testing"""
+    
+    claim_text = request.get("claim", "")
+    if not claim_text:
+        raise HTTPException(status_code=400, detail="Missing 'claim' parameter")
+    
+    print(f"🧪 DIRECT MDEQ TEST: '{claim_text}'")
+    
+    try:
+        # Direct call to MDEQ system bypassing ClaimMiner
+        from main import score_claim_with_evidence_shepherd
+        
+        claim_analysis = await score_claim_with_evidence_shepherd(claim_text, {
+            "source_type": "direct_test",
+            "bypass_claim_mining": True
+        })
+        
+        return {
+            "claim": claim_text,
+            "trust_score": claim_analysis.trust_score,
+            "evidence_grade": claim_analysis.evidence_grade,
+            "confidence": claim_analysis.confidence,
+            "evidence_summary": claim_analysis.evidence_summary,
+            "supporting_evidence_count": len(claim_analysis.supporting_evidence),
+            "contradicting_evidence_count": len(claim_analysis.contradicting_evidence),
+            "system_used": "MDEQ_DIRECT",
+            "bypass_claim_mining": True
+        }
+        
+    except Exception as e:
+        print(f"ERROR in direct MDEQ test: {e}")
+        raise HTTPException(status_code=500, detail=f"MDEQ test failed: {str(e)}")
+
 @app.post("/analyses", response_model=TrustCapsule)
 async def create_analysis(analysis: AnalysisInput):
     analysis_id = str(uuid.uuid4())
