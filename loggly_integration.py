@@ -83,3 +83,38 @@ def log_error(message: str, error: Optional[Exception] = None) -> None:
         logging.error(f"{message}: {str(error)}")
     else:
         logging.error(message)
+
+
+def get_recent_logs(minutes: int = 10, size: int = 50, 
+                   api_token: str = "2b379f67-1420-434d-95a8-ec842c5922bb",
+                   subdomain: str = "rogr") -> dict:
+    """
+    Retrieve recent logs from Loggly.
+    
+    Args:
+        minutes: Number of minutes back to search
+        size: Maximum number of logs to return
+        api_token: Loggly API token for retrieval
+        subdomain: Loggly account subdomain
+        
+    Returns:
+        Dictionary containing log events or error information
+    """
+    try:
+        url = f"https://{subdomain}.loggly.com/apiv2/events/iterate"
+        headers = {"Authorization": f"bearer {api_token}"}
+        params = {
+            "q": "service:rogr-api",
+            "from": f"-{minutes}m",
+            "until": "now",
+            "size": size
+        }
+        
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+        response.raise_for_status()
+        return response.json()
+        
+    except requests.RequestException as e:
+        return {"error": f"Failed to retrieve logs: {str(e)}", "events": []}
+    except Exception as e:
+        return {"error": f"Unexpected error: {str(e)}", "events": []}
