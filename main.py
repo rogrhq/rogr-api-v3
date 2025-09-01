@@ -13,7 +13,7 @@ from claude_evidence_shepherd import ClaudeEvidenceShepherd
 from evidence_shepherd import NoOpEvidenceShepherd
 from progressive_analysis_service import ProgressiveAnalysisService
 
-# Test comment - verifying git push workflow
+# Test comment - verifying git push workflows
 
 app = FastAPI()
 
