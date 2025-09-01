@@ -15,6 +15,11 @@ from progressive_analysis_service import ProgressiveAnalysisService
 
 # Test comment - verifying git push workflows
 
+# === LOGGLY INTEGRATION - REMOVE THIS BLOCK FOR CLEANUP ===
+from loggly_integration import setup_loggly_logging
+setup_loggly_logging()
+# === LOGGLY INTEGRATION END ===
+
 app = FastAPI()
 
 # Simple CORS headers
