@@ -334,29 +334,58 @@ Return ONLY valid JSON:
         if not evidence_batch:
             return []
         
-        # ULTRA-FAST batch prompt for maximum speed
-        system_prompt = f"""Score evidence for claim: "{claim_text}". FAST processing.
+        # AI-AGNOSTIC batch prompt - IDENTICAL to Claude for MDEQ consistency
+        system_prompt = f"""Expert fact-checker: Score evidence relevance for the claim: "{claim_text}"
 
-90+: DIRECT proof/disproof
-80-89: STRONG support/contradiction
-70-79: GOOD relevance
+SCORING (0-100):
+90+: DIRECT proof/disproof with specific data
+80-89: STRONG support/contradiction with related data  
+70-79: GOOD relevant context
 60-69: WEAK relevance
 <60: IRRELEVANT
 
-STANCE - What is evidence DOING:
-"contradicting": States claim FALSE, "no evidence," "no link," "myth"
-"supporting": States claim TRUE, "evidence shows," "confirmed"  
-"neutral": Just describes claim without judgment
+STANCE CLASSIFICATION - Analyze what the evidence is DOING with the claim:
 
-Return JSON only:
-[{{"evidence_index": 0, "relevance_score": 85, "stance": "supporting", "confidence": 0.9, "key_excerpt": "key quote"}}]"""
+"contradicting" - The evidence:
+  • States the claim is FALSE, incorrect, debunked, or disproven
+  • Provides data/facts that directly oppose the claim
+  • Uses language like "no evidence," "studies show otherwise," "myth," "false," "no link," "no association"
+  • Example: "Studies show no link between X and Y" when claim is "X causes Y"
 
-        # Build evidence list for batch processing (ULTRA-COMPRESSED for speed)
+"supporting" - The evidence:
+  • States the claim is TRUE, correct, or validated
+  • Provides data/facts that directly confirm the claim  
+  • Uses language like "evidence shows," "proven," "confirmed," "causes," "leads to"
+  • Example: "Research confirms X causes Y" when claim is "X causes Y"
+
+"neutral" - The evidence:
+  • Merely mentions or describes the claim without judgment
+  • Discusses the claim as a phenomenon/belief without endorsing or refuting
+  • Reports what others believe without taking a position
+  • Example: "Some people believe X causes Y" or "The theory that X causes Y"
+
+CRITICAL: Focus on what the evidence ASSERTS about truth, not just keyword presence.
+- Describing a theory WITHOUT endorsing it = neutral
+- Explaining why something is false = contradicting  
+- Providing evidence something is true = supporting
+
+CONFIDENCE: How certain are you (0.0-1.0)?
+
+Return ONLY valid JSON array with ALL evidence scored:
+[{{"evidence_index": 0, "relevance_score": 85, "stance": "supporting", "confidence": 0.9, "key_excerpt": "short key quote"}}]
+
+CRITICAL JSON FORMATTING:
+- key_excerpt must be under 100 characters
+- Escape all quotes in excerpts with \"
+- No line breaks in key_excerpt
+- Return only the JSON array, no explanatory text"""
+
+        # Build evidence list for batch processing - ALIGNED with Claude for consistency
         evidence_texts = []
         for i, evidence in enumerate(evidence_batch):
-            evidence_texts.append(f"EVIDENCE {i}: {evidence.text[:150]}")  # Reduced from 300 to 150 chars
+            evidence_texts.append(f"EVIDENCE {i}: {evidence.text[:400]}\nSOURCE: {evidence.source_title} ({evidence.source_domain})")  # Aligned with Claude: 400 chars + source info
         
-        batch_content = f"CLAIM: {claim_text[:100]}\n\n" + "\n".join(evidence_texts)  # Removed extra newlines
+        batch_content = f"CLAIM: {claim_text}\n\n" + "\n\n".join(evidence_texts)  # Full claim text + proper spacing like Claude
         
         print(f"BATCH: Sending {len(evidence_batch)} evidence items to OpenAI")
         print(f"BATCH: Total content length: {len(batch_content)} chars")
