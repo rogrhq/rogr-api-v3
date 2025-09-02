@@ -15,7 +15,7 @@
 
 ### 1. **Validate Stance Classification Fix**
 ```bash
-# Pull latest code, restart backend, then test:
+# Pull latest code, restart backend, then test
 curl -X POST "https://BACKEND_URL/test-mdeq" \
 -H "Content-Type: application/json" \
 -d '{"claim": "The Earth is flat"}'
