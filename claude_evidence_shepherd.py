@@ -258,9 +258,11 @@ STANCE CLASSIFICATION - Analyze what the evidence is DOING with the claim:
 
 "contradicting" - The evidence:
   • States the claim is FALSE, incorrect, debunked, or disproven
+  • Contains direct negation: "There are no X", "X does not exist", "No X found"
   • Provides data/facts that directly oppose the claim
   • Uses language like "no evidence," "studies show otherwise," "myth," "false," "no link," "no association"
   • Example: "Studies show no link between X and Y" when claim is "X causes Y"
+  • Example: "There are no microchips in vaccines" when claim is "Vaccines contain microchips"
 
 "supporting" - The evidence:
   • States the claim is TRUE, correct, or validated
