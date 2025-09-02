@@ -386,30 +386,10 @@ RELEVANCE SCORING (0-100):
 50-59:  TANGENTIAL - Evidence related to topic but not claim specifics
 0-49:   IRRELEVANT - Evidence unrelated or extremely weak connection
 
-STANCE CLASSIFICATION - Analyze what the evidence is DOING with the claim:
-
-"contradicting" - The evidence:
-  • States the claim is FALSE, incorrect, debunked, or disproven
-  • Provides data/facts that directly oppose the claim
-  • Uses language like "no evidence," "studies show otherwise," "myth," "false," "no link," "no association"
-  • Example: "Studies show no link between X and Y" when claim is "X causes Y"
-
-"supporting" - The evidence:
-  • States the claim is TRUE, correct, or validated
-  • Provides data/facts that directly confirm the claim  
-  • Uses language like "evidence shows," "proven," "confirmed," "causes," "leads to"
-  • Example: "Research confirms X causes Y" when claim is "X causes Y"
-
-"neutral" - The evidence:
-  • Merely mentions or describes the claim without judgment
-  • Discusses the claim as a phenomenon/belief without endorsing or refuting
-  • Reports what others believe without taking a position
-  • Example: "Some people believe X causes Y" or "The theory that X causes Y"
-
-CRITICAL: Focus on what the evidence ASSERTS about truth, not just keyword presence.
-- Describing a theory WITHOUT endorsing it = neutral
-- Explaining why something is false = contradicting  
-- Providing evidence something is true = supporting
+STANCE relative to the claim "{claim_text}":
+- "supporting": Evidence that supports/proves the claim is TRUE
+- "contradicting": Evidence that disproves/refutes the claim is FALSE
+- "neutral": Evidence that neither supports nor contradicts the claim
 
 Return ONLY valid JSON:
 {
