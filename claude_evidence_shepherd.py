@@ -244,8 +244,14 @@ Return ONLY JSON:
         if not evidence_batch:
             return []
         
-        # Claude can handle much more context - use full text
+        # EVIDENCE EVALUATION PROTOCOL - IDENTICAL to OpenAI for MDEQ consistency
         system_prompt = f"""Expert fact-checker: Score evidence relevance for the claim: "{claim_text}"
+
+EVIDENCE EVALUATION PROTOCOL - Follow this sequence:
+STEP 1: CLAIM ISOLATION - Focus only on core factual assertion: "{claim_text}"
+STEP 3: RELEVANCE-STANCE ALIGNMENT - If unclear → default to "neutral"  
+STEP 4: NEGATION OVERRIDE - Explicit negation words → "contradicting" (regardless of context)
+STEP 5: CONFIDENCE GATE - If confidence < 0.7 → default to "neutral"
 
 SCORING (0-100):
 90+: DIRECT proof/disproof with specific data
