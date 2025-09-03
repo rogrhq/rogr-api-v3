@@ -375,9 +375,12 @@ STANCE CLASSIFICATION - Analyze what the evidence is DOING with the claim:
   • Reports what others believe without taking a position
   • Example: "Some people believe X causes Y" or "The theory that X causes Y"
 
-NEGATION DETECTION: Evidence containing ["no", "not", "false", "debunked", "myth", "disproven"] regarding the claim = "contradicting"
+MANDATORY STEP 4 - NEGATION OVERRIDE:
+If evidence contains ["no", "not", "false", "debunked", "myth", "disproven"] directly about the claim → FORCE stance = "contradicting"
+Example: "There are no microchips" for claim "vaccines contain microchips" = CONTRADICTING (not supporting)
 
-CONFIDENCE GATE: If your confidence < 0.7, classify as "neutral" for safety.
+MANDATORY STEP 5 - CONFIDENCE GATE:
+If your confidence < 0.7 → FORCE stance = "neutral" for safety
 
 Return ONLY valid JSON array with ALL evidence scored:
 [{{"evidence_index": 0, "relevance_score": 85, "stance": "supporting", "confidence": 0.9, "key_excerpt": "short key quote"}}]
