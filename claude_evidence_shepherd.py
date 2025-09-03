@@ -247,25 +247,36 @@ Return ONLY JSON:
         # Claude can handle much more context - use full text
         system_prompt = f"""Expert fact-checker: Score evidence relevance for the claim: "{claim_text}"
 
-EVIDENCE EVALUATION PROTOCOL - Follow this sequence:
-STEP 1: CLAIM ISOLATION - Focus only on core factual assertion: "{claim_text}"
-
-STEP 2: TRUTH POSITION ANALYSIS - Explicit reasoning required:
-A) What specific assertion does the CLAIM make? 
-B) What specific assertion does the EVIDENCE make?
-C) Do these assertions AGREE or OPPOSE each other?
-   - Same/compatible assertions = supporting
-   - Opposite/incompatible assertions = contradicting  
-   - Unrelated/unclear = neutral
-D) State your reasoning: "Evidence asserts X, claim asserts Y, therefore stance is Z"
-
-STEP 3: RELEVANCE-STANCE ALIGNMENT - If unclear after reasoning → default to "neutral"  
-STEP 4: NEGATION OVERRIDE - Explicit negation words → "contradicting" (regardless of context)
-STEP 5: CONFIDENCE GATE - If confidence < 0.7 → default to "neutral"
-
 SCORING (0-100):
 90+: DIRECT proof/disproof with specific data
 80-89: STRONG support/contradiction with related data  
+70-79: GOOD relevant context
+60-69: WEAK relevance
+<60: IRRELEVANT
+
+STANCE CLASSIFICATION - Analyze what the evidence is DOING with the claim:
+
+"contradicting" - The evidence:
+  • States the claim is FALSE, incorrect, debunked, or disproven
+  • Contains direct negation: "There are no X", "X does not exist", "No X found"
+  • Provides data/facts that directly oppose the claim
+  • Uses language like "no evidence," "studies show otherwise," "myth," "false," "no link," "no association"
+  • Example: "Studies show no link between X and Y" when claim is "X causes Y"
+  • Example: "There are no microchips in vaccines" when claim is "Vaccines contain microchips"
+
+"supporting" - The evidence:
+  • States the claim is TRUE, correct, or validated
+  • Provides data/facts that directly confirm the claim  
+  • Uses language like "evidence shows," "proven," "confirmed," "causes," "leads to"
+  • Example: "Research confirms X causes Y" when claim is "X causes Y"
+
+"neutral" - The evidence:
+  • Merely mentions or describes the claim without judgment
+  • Discusses the claim as a phenomenon/belief without endorsing or refuting
+  • Reports what others believe without taking a position
+  • Example: "Some people believe X causes Y" or "The theory that X causes Y"
+
+CONFIDENCE: How certain are you (0.0-1.0)?
 70-79: GOOD relevant context
 60-69: WEAK relevance
 <60: IRRELEVANT
