@@ -13,7 +13,7 @@ class OpenAIEvidenceShepherd(EvidenceShepherd):
     def __init__(self):
         self.api_key = os.getenv('OPENAI_API_KEY')
         self.base_url = "https://api.openai.com/v1/chat/completions"
-        self.model = "gpt-4o-mini"  # Upgrade for better instruction following
+        self.model = "gpt-3.5-turbo"  # Revert - gpt-4o-mini causing 0 evidence results
         
         # Initialize web search and content extraction services
         self.web_search = WebSearchService()
