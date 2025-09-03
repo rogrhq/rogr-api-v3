@@ -216,6 +216,16 @@ class MultiAIEvidenceShepherd(EvidenceShepherd):
             individual_scores.append((ai_name, result.confidence_score))
             all_evidence_pieces.extend(result.evidence_pieces)
             
+            # DEBUG: Log individual AI results before consensus
+            print(f"\n=== {ai_name.upper()} INDIVIDUAL RESULTS ===")
+            print(f"Evidence pieces: {len(result.evidence_pieces)}")
+            for i, evidence in enumerate(result.evidence_pieces):
+                stance = getattr(evidence, 'ai_stance', None) or getattr(evidence, 'stance', 'unknown')
+                score = getattr(evidence, 'ai_relevance_score', 'unknown')
+                source = getattr(evidence, 'source_domain', 'unknown')
+                excerpt = getattr(evidence, 'highlight_text', 'no excerpt')[:100]
+                print(f"  [{i}] {source}: stance={stance}, score={score}, text='{excerpt}...'")
+            
             # Count stance votes based on evidence
             for evidence in result.evidence_pieces:
                 if hasattr(evidence, 'ai_stance') and evidence.ai_stance:
