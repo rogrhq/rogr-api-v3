@@ -36,7 +36,7 @@ class OpenAIEvidenceShepherd(EvidenceShepherd):
                 'model': self.model,
                 'messages': messages,
                 'temperature': temperature,
-                'max_tokens': 800  # Increased to ensure all evidence scores returned
+                'max_tokens': 2000  # Match Claude's analytical capacity
             }
             
             response = requests.post(self.base_url, headers=headers, json=payload, timeout=6)  # Reduced from 8 to 6
