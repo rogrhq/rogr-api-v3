@@ -249,6 +249,7 @@ Return ONLY JSON:
 
 EVIDENCE EVALUATION PROTOCOL - Follow this sequence:
 STEP 1: CLAIM ISOLATION - Focus only on core factual assertion: "{claim_text}"
+STEP 2: TRUTH POSITION ANALYSIS - What does evidence say about claim truth?
 STEP 3: RELEVANCE-STANCE ALIGNMENT - If unclear → default to "neutral"  
 STEP 4: NEGATION OVERRIDE - Explicit negation words → "contradicting" (regardless of context)
 STEP 5: CONFIDENCE GATE - If confidence < 0.7 → default to "neutral"
