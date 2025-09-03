@@ -336,8 +336,15 @@ Return ONLY valid JSON:
         if not evidence_batch:
             return []
         
-        # AI-AGNOSTIC batch prompt - IDENTICAL to Claude for MDEQ consistency
+        # SEQUENTIAL EVALUATION PROTOCOL - IDENTICAL to Claude for MDEQ consistency
         system_prompt = f"""Expert fact-checker: Score evidence relevance for the claim: "{claim_text}"
+
+EVIDENCE EVALUATION PROTOCOL - Follow this sequence:
+STEP 1: CLAIM ISOLATION - Focus only on core factual assertion: "{claim_text}"
+STEP 2: TRUTH POSITION ANALYSIS - What does evidence say about claim truth?
+STEP 3: RELEVANCE-STANCE ALIGNMENT - If unclear → default to "neutral"  
+STEP 4: NEGATION OVERRIDE - Explicit negation → "contradicting" (regardless of context)
+STEP 5: CONFIDENCE GATE - If confidence < 0.7 → default to "neutral"
 
 SCORING (0-100):
 90+: DIRECT proof/disproof with specific data
@@ -368,12 +375,9 @@ STANCE CLASSIFICATION - Analyze what the evidence is DOING with the claim:
   • Reports what others believe without taking a position
   • Example: "Some people believe X causes Y" or "The theory that X causes Y"
 
-CRITICAL: Focus on what the evidence ASSERTS about truth, not just keyword presence.
-- Describing a theory WITHOUT endorsing it = neutral
-- Explaining why something is false = contradicting  
-- Providing evidence something is true = supporting
+NEGATION DETECTION: Evidence containing ["no", "not", "false", "debunked", "myth", "disproven"] regarding the claim = "contradicting"
 
-CONFIDENCE: How certain are you (0.0-1.0)?
+CONFIDENCE GATE: If your confidence < 0.7, classify as "neutral" for safety.
 
 Return ONLY valid JSON array with ALL evidence scored:
 [{{"evidence_index": 0, "relevance_score": 85, "stance": "supporting", "confidence": 0.9, "key_excerpt": "short key quote"}}]
