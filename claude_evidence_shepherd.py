@@ -249,9 +249,18 @@ Return ONLY JSON:
 
 EVIDENCE EVALUATION PROTOCOL - Follow this sequence:
 STEP 1: CLAIM ISOLATION - Focus only on core factual assertion: "{claim_text}"
-STEP 2: TRUTH POSITION ANALYSIS - What does evidence say about claim truth?
-STEP 3: RELEVANCE-STANCE ALIGNMENT - If unclear → default to "neutral"  
-STEP 4: NEGATION OVERRIDE - Explicit negation → "contradicting" (regardless of context)
+
+STEP 2: TRUTH POSITION ANALYSIS - Explicit reasoning required:
+A) What specific assertion does the CLAIM make? 
+B) What specific assertion does the EVIDENCE make?
+C) Do these assertions AGREE or OPPOSE each other?
+   - Same/compatible assertions = supporting
+   - Opposite/incompatible assertions = contradicting  
+   - Unrelated/unclear = neutral
+D) State your reasoning: "Evidence asserts X, claim asserts Y, therefore stance is Z"
+
+STEP 3: RELEVANCE-STANCE ALIGNMENT - If unclear after reasoning → default to "neutral"  
+STEP 4: NEGATION OVERRIDE - Explicit negation words → "contradicting" (regardless of context)
 STEP 5: CONFIDENCE GATE - If confidence < 0.7 → default to "neutral"
 
 SCORING (0-100):
