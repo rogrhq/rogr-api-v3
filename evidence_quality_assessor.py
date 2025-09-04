@@ -129,8 +129,8 @@ class EvidenceQualityAssessor:
         
         content_lower = content.lower()
         
-        # Base score starts at 20 (basic content)
-        score = 20.0
+        # Higher base score - ES filters for credible sources
+        score = 40.0
         
         # Check for methodology indicators
         if 'systematic review' in content_lower or 'meta-analysis' in content_lower:
@@ -166,18 +166,7 @@ class EvidenceQualityAssessor:
         url_lower = source_url.lower()
         title_lower = source_title.lower()
         
-        score = 10.0  # Base score
-        
-        # Academic domain indicators (high quality)
-        academic_domains = [
-            'pubmed.ncbi.nlm.nih.gov', 'pmc.ncbi.nlm.nih.gov', 'doi.org',
-            'scholar.google.', 'researchgate.net', 'academia.edu',
-            '.edu/', 'springer.com', 'sciencedirect.com', 'wiley.com',
-            'nature.com', 'cell.com', 'science.org', 'pnas.org'
-        ]
-        
-        if any(domain in url_lower for domain in academic_domains):
-            score += 25
+        score = 35.0  # Higher base score - Evidence Shepherds already filter for credible sources
         
         # Peer review indicators in content
         peer_review_indicators = [
@@ -197,18 +186,16 @@ class EvidenceQualityAssessor:
         if any(phrase in content_lower for phrase in ['volume', 'issue', 'pages', 'published']):
             score += 10
         
-        # Journal quality indicators
-        impact_journals = [
-            'new england journal', 'lancet', 'jama', 'bmj', 'nature',
-            'science', 'cell', 'pnas', 'cochrane review'
+        # Content authority indicators (bias-free)
+        authority_indicators = [
+            'authoritative', 'definitive', 'established', 'consensus',
+            'widely accepted', 'confirmed', 'verified', 'validated'
         ]
         
-        if any(journal in content_lower or journal in title_lower for journal in impact_journals):
-            score += 20
+        if any(indicator in content_lower or indicator in title_lower for indicator in authority_indicators):
+            score += 15
         
-        # Preprint indicators (lower score)
-        if any(preprint in url_lower for preprint in ['biorxiv', 'arxiv', 'preprint']):
-            score -= 10
+        # Remove preprint penalty - can be high quality too
         
         return min(100.0, max(0.0, score))
     
@@ -216,7 +203,7 @@ class EvidenceQualityAssessor:
         """Assess reproducibility indicators and methodological transparency"""
         
         content_lower = content.lower()
-        score = 15.0  # Base score
+        score = 30.0  # Higher base score - ES filters for credible sources
         
         # Data availability indicators
         data_availability = [
@@ -266,7 +253,7 @@ class EvidenceQualityAssessor:
         """Assess citation patterns and academic impact indicators"""
         
         content_lower = content.lower()
-        score = 20.0  # Base score
+        score = 40.0  # Higher base score - ES filters for credible sources
         
         # High citation count indicators (heuristic)
         citation_indicators = [
@@ -310,7 +297,7 @@ class EvidenceQualityAssessor:
         """Assess transparency in methodology, funding, and conflicts of interest"""
         
         content_lower = content.lower()
-        score = 25.0  # Base score
+        score = 45.0  # Higher base score - ES filters for credible sources
         
         # Funding disclosure
         funding_indicators = [
