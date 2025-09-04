@@ -1330,3 +1330,71 @@ async def debug_ocr_test():
             "credentials_present": bool(os.getenv('GOOGLE_CLOUD_CREDENTIALS')),
             "help": "Check Google Cloud credentials and Vision API setup"
         }
+
+@app.post("/debug/claim-miner")
+async def debug_claim_miner(request: dict):
+    """Debug endpoint to test ClaimMiner isolation"""
+    try:
+        # Extract input parameters
+        text = request.get("input", "")
+        context_type = request.get("context_type", "text")
+        source_context = request.get("source_context", {})
+        
+        if not text or len(text.strip()) < 5:
+            return {
+                "error": "Input text too short (minimum 5 characters)",
+                "claim_miner_enabled": claim_miner.is_enabled()
+            }
+        
+        # Test ClaimMiner directly
+        mining_result = claim_miner.mine_claims(text, context_type=context_type, source_context=source_context)
+        
+        # Format results for debugging
+        return {
+            "claim_miner_enabled": claim_miner.is_enabled(),
+            "input_text": text[:200] + "..." if len(text) > 200 else text,
+            "context_type": context_type,
+            "results": {
+                "primary_claims": [
+                    {
+                        "text": claim.text,
+                        "relevance_score": claim.relevance_score,
+                        "specificity_score": claim.specificity_score,
+                        "consequence_score": claim.consequence_score,
+                        "factual_assertion": claim.factual_assertion,
+                        "claim_type": claim.claim_type,
+                        "context_reasoning": claim.context_reasoning
+                    } for claim in mining_result.primary_claims
+                ],
+                "secondary_claims": [
+                    {
+                        "text": claim.text,
+                        "relevance_score": claim.relevance_score,
+                        "claim_type": claim.claim_type,
+                        "context_reasoning": claim.context_reasoning
+                    } for claim in mining_result.secondary_claims
+                ],
+                "tertiary_claims": [
+                    {
+                        "text": claim.text,
+                        "relevance_score": claim.relevance_score,
+                        "claim_type": claim.claim_type
+                    } for claim in mining_result.tertiary_claims
+                ],
+                "analysis_meta": mining_result.analysis_meta
+            },
+            "summary": {
+                "total_claims_found": len(mining_result.primary_claims) + len(mining_result.secondary_claims) + len(mining_result.tertiary_claims),
+                "primary_count": len(mining_result.primary_claims),
+                "secondary_count": len(mining_result.secondary_claims),
+                "tertiary_count": len(mining_result.tertiary_claims),
+                "claude_api_used": claim_miner.is_enabled() and not mining_result.analysis_meta.get("fallback_mode", False)
+            }
+        }
+        
+    except Exception as e:
+        return {
+            "claim_miner_enabled": claim_miner.is_enabled(),
+            "error": f"ClaimMiner error: {str(e)}",
+            "help": "Check ClaimMiner configuration and Claude API setup"
+        }
