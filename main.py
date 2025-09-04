@@ -439,6 +439,123 @@ async def score_claim_with_evidence_shepherd(claim_text: str, claim_context: dic
         # Fallback to old scoring method
         return score_individual_claim(claim_text)
 
+async def score_claim_with_evidence_shepherd_v2(claim_text: str, claim_context: dict = None) -> ClaimAnalysis:
+    """Score a claim using V2 Evidence Shepherd system for comparison testing"""
+    
+    # Initialize V2 Evidence Shepherd  
+    evidence_shepherd = None
+    
+    try:
+        from multi_ai_evidence_shepherd_v2 import MultiAIEvidenceShepherdV2
+        evidence_shepherd = MultiAIEvidenceShepherdV2()
+        print(f"DEBUG: Using V2 Evidence Shepherd for claim: {claim_text[:50]}...")
+    except Exception as e:
+        print(f"ERROR: Failed to initialize V2 Evidence Shepherd: {e}")
+        # Fallback to v1 system
+        return await score_claim_with_evidence_shepherd(claim_text, claim_context)
+    
+    # Process claim through V2 Evidence Shepherd
+    try:
+        # Use V2 Evidence Shepherd to find and analyze evidence
+        evidence_pieces = evidence_shepherd.find_evidence(claim_text, max_evidence=8)
+        
+        print(f"DEBUG: V2 Evidence Shepherd found {len(evidence_pieces)} pieces of evidence")
+        
+        # Convert V2 Evidence Shepherd results to ClaimAnalysis format
+        supporting_evidence = []
+        contradicting_evidence = []
+        neutral_evidence = []
+        
+        for evidence in evidence_pieces:
+            evidence_statement = EvidenceStatement(
+                statement=evidence.text[:200] if evidence.text else "Evidence found from source",
+                source_title=evidence.source_title,
+                source_domain=evidence.source_domain,
+                source_url=evidence.source_url,
+                stance=evidence.ai_stance.lower() if evidence.ai_stance else "neutral",
+                relevance_score=evidence.ai_relevance_score if evidence.ai_relevance_score else 50.0,
+                highlight_text=evidence.highlight_text,
+                highlight_context=evidence.highlight_context
+            )
+            
+            if evidence.ai_stance.lower() == "supporting":
+                supporting_evidence.append(evidence_statement)
+            elif evidence.ai_stance.lower() == "contradicting":
+                contradicting_evidence.append(evidence_statement)
+            else:
+                neutral_evidence.append(evidence_statement)
+        
+        # Calculate trust score (simplified V2 version)
+        if not evidence_pieces:
+            trust_score = 50.0
+            confidence_band = "Low"
+            evidence_summary = ["V2: No evidence found"]
+        else:
+            # Simple V2 scoring: based on consensus
+            supporting_count = len(supporting_evidence)
+            contradicting_count = len(contradicting_evidence)
+            avg_confidence = sum(e.ai_confidence for e in evidence_pieces) / len(evidence_pieces)
+            avg_relevance = sum(e.ai_relevance_score for e in evidence_pieces) / len(evidence_pieces)
+            
+            if supporting_count > contradicting_count and avg_relevance > 80:
+                trust_score = min(97, int(avg_relevance * avg_confidence))
+            elif contradicting_count > supporting_count:
+                trust_score = max(0, int(20 * avg_confidence))  
+            else:
+                trust_score = 50.0
+                
+            confidence_band = "High" if trust_score > 80 else "Medium" if trust_score > 40 else "Low"
+            evidence_summary = [
+                f"V2 system analyzed {len(evidence_pieces)} sources",
+                f"Supporting: {supporting_count}, Contradicting: {contradicting_count}",
+                f"Average AI confidence: {avg_confidence:.2f}"
+            ]
+        
+        # Convert trust score to letter grade
+        if trust_score >= 95:
+            letter_grade = "A+"
+        elif trust_score >= 90:
+            letter_grade = "A"  
+        elif trust_score >= 85:
+            letter_grade = "A-"
+        elif trust_score >= 80:
+            letter_grade = "B+"
+        elif trust_score >= 75:
+            letter_grade = "B"
+        elif trust_score >= 70:
+            letter_grade = "B-"
+        elif trust_score >= 65:
+            letter_grade = "C+"
+        elif trust_score >= 60:
+            letter_grade = "C"
+        elif trust_score >= 55:
+            letter_grade = "C-"
+        elif trust_score >= 50:
+            letter_grade = "D+"
+        elif trust_score >= 45:
+            letter_grade = "D"
+        elif trust_score >= 40:
+            letter_grade = "D-"
+        else:
+            letter_grade = "F"
+        
+        return ClaimAnalysis(
+            claim_text=claim_text,
+            trust_score=int(trust_score),
+            evidence_grade=letter_grade,
+            confidence=confidence_band,
+            evidence_summary=evidence_summary,
+            sources_count=len(evidence_pieces),
+            supporting_evidence=supporting_evidence,
+            contradicting_evidence=contradicting_evidence,
+            neutral_evidence=neutral_evidence
+        )
+        
+    except Exception as e:
+        print(f"ERROR: V2 Evidence Shepherd processing failed for claim '{claim_text[:50]}...': {e}")
+        # Fallback to v1 system
+        return await score_claim_with_evidence_shepherd(claim_text, claim_context)
+
 def score_individual_claim(claim_text: str) -> ClaimAnalysis:
     """Score an individual claim and provide evidence summary with actual evidence statements"""
     # Simulate evidence-based scoring
@@ -771,6 +888,85 @@ async def create_analysis(analysis: AnalysisInput):
     analyses_db[analysis_id] = trust_capsule
     analyses_input_db[analysis_id] = analysis.input
     analyses_claims_db[analysis_id] = claims
+    
+    return trust_capsule
+
+@app.post("/test-v2", response_model=TrustCapsule)
+async def test_v2_analysis(analysis: AnalysisInput):
+    """Test Evidence Shepherd v2 system - apples to apples comparison with main analysis"""
+    analysis_id = str(uuid.uuid4())
+    
+    # Extract claims (using same logic as main analysis)
+    claims = []
+    if analysis.type == "text":
+        claims = claim_miner.extract_claims(analysis.input)
+    else:
+        claims = [analysis.input]  # Fallback for other types
+    
+    print(f"DEBUG: V2 TEST - Processing {len(claims)} claims")
+    
+    # Process claims with V2 Evidence Shepherd 
+    claim_analyses = []
+    for i, claim_text in enumerate(claims):
+        try:
+            print(f"DEBUG: V2 TEST - Processing claim {i+1}: {claim_text[:50]}...")
+            claim_analysis = await score_claim_with_evidence_shepherd_v2(claim_text)
+            claim_analyses.append(claim_analysis)
+            print(f"DEBUG: V2 TEST - Claim {i+1} processed - Score: {claim_analysis.trust_score}, Grade: {claim_analysis.evidence_grade}")
+        except Exception as e:
+            print(f"ERROR: V2 TEST - Failed to process claim {i+1}: {e}")
+            # Fallback to v1 system
+            fallback_analysis = await score_claim_with_evidence_shepherd(claim_text)
+            claim_analyses.append(fallback_analysis)
+    
+    # Calculate cumulative scores (same logic as main analysis)
+    overall_score, overall_grade, overall_assessment = calculate_cumulative_score(claim_analyses)
+    
+    # Generate base summary
+    base_why = [f"V2 TEST: {len(claims)} claim{'s' if len(claims) != 1 else ''} analyzed"]
+    for i, claim in enumerate(claim_analyses):
+        base_why.append(f"Claim {i+1}: {claim.evidence_grade} ({claim.trust_score})")
+    base_why.append(overall_assessment)
+    
+    # Extract real citations from V2 evidence
+    real_citations = []
+    seen_urls = set()
+    
+    for claim_analysis in claim_analyses:
+        all_evidence = (claim_analysis.supporting_evidence + 
+                       claim_analysis.contradicting_evidence + 
+                       claim_analysis.neutral_evidence)
+        
+        for evidence in all_evidence:
+            if evidence.source_url in seen_urls:
+                continue
+            seen_urls.add(evidence.source_url)
+            
+            citation = Citation(
+                title=evidence.source_title or f"Source from {evidence.source_domain}",
+                domain=evidence.source_domain,
+                date=datetime.now().strftime("%Y-%m-%d"),
+                url=evidence.source_url
+            )
+            real_citations.append(citation)
+    
+    print(f"DEBUG: V2 TEST - Generated {len(real_citations)} citations")
+
+    trust_capsule = TrustCapsule(
+        id=analysis_id,
+        trust_score=overall_score,
+        evidence_grade=overall_grade,
+        confidence="High" if overall_score >= 85 else "Medium" if overall_score >= 70 else "Low",
+        why=base_why,
+        claims=claim_analyses,
+        overall_assessment=f"V2 TEST: {overall_assessment}",
+        citations=real_citations,
+        capsule_version=2,  # Mark as v2 test
+        signed=True,
+        created_at=datetime.now().isoformat(),
+        input_type=analysis.type,
+        mode=analysis.mode
+    )
     
     return trust_capsule
 
