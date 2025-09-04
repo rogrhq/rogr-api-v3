@@ -14,7 +14,6 @@ class EvidenceQualityMetrics:
     citation_impact: float  # 0-100: Citation patterns and academic impact
     transparency: float  # 0-100: Data/methods disclosure and accessibility
     temporal_consistency: float  # 0-100: Consistency over time and updates
-    content_type: str = "general"  # Detected content type for quality assessment
     
     def overall_quality_score(self) -> float:
         """Calculate weighted overall quality score"""
@@ -160,123 +159,25 @@ class EvidenceQualityAssessor:
         
         return min(100.0, score)
     
-    def _detect_content_type(self, content: str, source_url: str, source_title: str) -> str:
-        """Detect the primary content type for appropriate quality assessment"""
+    def assess_peer_review_status(self, content: str, source_url: str, source_title: str) -> float:
+        """Assess peer review and publication quality indicators"""
+        
         content_lower = content.lower()
         url_lower = source_url.lower()
         title_lower = source_title.lower()
         
-        # Research Content - academic papers, studies, journals
-        research_indicators = [
-            'abstract', 'methodology', 'results', 'conclusion', 'peer reviewed',
-            'doi:', 'pmid:', 'journal', 'study', 'research', 'systematic review',
-            'meta-analysis', 'statistical analysis', 'sample size', 'control group'
+        score = 10.0  # Base score
+        
+        # Academic domain indicators (high quality)
+        academic_domains = [
+            'pubmed.ncbi.nlm.nih.gov', 'pmc.ncbi.nlm.nih.gov', 'doi.org',
+            'scholar.google.', 'researchgate.net', 'academia.edu',
+            '.edu/', 'springer.com', 'sciencedirect.com', 'wiley.com',
+            'nature.com', 'cell.com', 'science.org', 'pnas.org'
         ]
-        if sum(1 for indicator in research_indicators if indicator in content_lower) >= 3:
-            return 'research'
         
-        # News Content - journalism, reporting, news outlets
-        news_indicators = [
-            'reported', 'according to', 'sources say', 'breaking news',
-            'correspondent', 'journalist', 'news desk', 'editorial',
-            'fact-check', 'verified', 'confirmed by'
-        ]
-        if sum(1 for indicator in news_indicators if indicator in content_lower) >= 2:
-            return 'news'
-        
-        # Reference Content - encyclopedias, fact sheets, educational
-        reference_indicators = [
-            'encyclopedia', 'reference', 'overview', 'definition',
-            'explanation', 'guide', 'fact sheet', 'educational',
-            'summary', 'introduction to'
-        ]
-        if sum(1 for indicator in reference_indicators if indicator in content_lower) >= 2:
-            return 'reference'
-            
-        # Official Content - government, institutions, organizations
-        official_indicators = [
-            'official', 'agency', 'department', 'administration',
-            'government', 'federal', 'national', 'institute',
-            'organization', 'foundation', 'authority'
-        ]
-        if sum(1 for indicator in official_indicators if indicator in content_lower) >= 2:
-            return 'official'
-        
-        # Expert Content - professional analysis, expert opinion
-        expert_indicators = [
-            'expert', 'professor', 'dr.', 'phd', 'analysis',
-            'professional', 'specialist', 'authority', 'experience'
-        ]
-        if sum(1 for indicator in expert_indicators if indicator in content_lower) >= 2:
-            return 'expert'
-        
-        # Default to general content
-        return 'general'
-
-    def assess_peer_review_status(self, content: str, source_url: str, source_title: str) -> float:
-        """Assess publication quality using content-type-aware evaluation"""
-        
-        content_lower = content.lower()
-        content_type = self._detect_content_type(content, source_url, source_title)
-        
-        print(f"Content type detected: {content_type} for {source_title[:30]}...")
-        
-        score = 20.0  # Higher base score for all content types
-        
-        # Content-type-specific quality assessment
-        if content_type == 'research':
-            # Academic/Research Content Quality
-            if any(indicator in content_lower for indicator in ['peer reviewed', 'refereed', 'editorial board']):
-                score += 25
-            if any(indicator in content_lower for indicator in ['doi:', 'pmid:', 'arxiv:']):
-                score += 20
-            if any(indicator in content_lower for indicator in ['methodology', 'statistical analysis', 'sample size']):
-                score += 15
-                
-        elif content_type == 'news':
-            # News Content Quality
-            if any(indicator in content_lower for indicator in ['fact-check', 'verified', 'confirmed']):
-                score += 20
-            if any(indicator in content_lower for indicator in ['sources', 'according to', 'reported by']):
-                score += 15
-            if any(indicator in content_lower for indicator in ['editorial standards', 'news desk', 'correspondent']):
-                score += 15
-                
-        elif content_type == 'reference':
-            # Reference Content Quality  
-            if any(indicator in content_lower for indicator in ['encyclopedia', 'curated', 'editorial oversight']):
-                score += 20
-            if any(indicator in content_lower for indicator in ['references', 'citations', 'sources']):
-                score += 15
-            if any(indicator in content_lower for indicator in ['fact-checked', 'verified', 'accuracy']):
-                score += 15
-                
-        elif content_type == 'official':
-            # Official/Institutional Content Quality
-            if any(indicator in content_lower for indicator in ['official statement', 'agency report', 'government data']):
-                score += 25
-            if any(indicator in content_lower for indicator in ['statistics', 'data', 'findings']):
-                score += 20
-            if any(indicator in content_lower for indicator in ['transparency', 'accountability', 'public record']):
-                score += 15
-                
-        elif content_type == 'expert':
-            # Expert Content Quality
-            if any(indicator in content_lower for indicator in ['credentials', 'qualifications', 'expertise']):
-                score += 20
-            if any(indicator in content_lower for indicator in ['analysis', 'assessment', 'evaluation']):
-                score += 15
-            if any(indicator in content_lower for indicator in ['evidence', 'research', 'studies']):
-                score += 15
-                
-        else:
-            # General Content Quality
-            if any(indicator in content_lower for indicator in ['sources', 'references', 'citations']):
-                score += 15
-            if any(indicator in content_lower for indicator in ['fact-check', 'verified', 'confirmed']):
-                score += 15
-            if any(indicator in content_lower for indicator in ['evidence', 'data', 'research']):
-                score += 10
+        if any(domain in url_lower for domain in academic_domains):
+            score += 25
         
         # Peer review indicators in content
         peer_review_indicators = [
@@ -296,21 +197,18 @@ class EvidenceQualityAssessor:
         if any(phrase in content_lower for phrase in ['volume', 'issue', 'pages', 'published']):
             score += 10
         
-        # Authority indicators (content-based, not journal names)
-        authority_indicators = [
-            'expert consensus', 'scientific consensus', 'established science',
-            'peer reviewed study', 'systematic review', 'meta-analysis',
-            'authoritative source', 'definitive study', 'landmark research'
+        # Journal quality indicators
+        impact_journals = [
+            'new england journal', 'lancet', 'jama', 'bmj', 'nature',
+            'science', 'cell', 'pnas', 'cochrane review'
         ]
         
-        if any(indicator in content_lower or indicator in title_lower for indicator in authority_indicators):
+        if any(journal in content_lower or journal in title_lower for journal in impact_journals):
             score += 20
         
-        # Publication stage indicators
-        if 'preprint' in content_lower or 'pre-print' in content_lower:
-            score += 5  # Still valuable, just not yet peer reviewed
-        elif 'draft' in content_lower or 'preliminary' in content_lower:
-            score += 2  # Early stage work
+        # Preprint indicators (lower score)
+        if any(preprint in url_lower for preprint in ['biorxiv', 'arxiv', 'preprint']):
+            score -= 10
         
         return min(100.0, max(0.0, score))
     
@@ -495,9 +393,6 @@ class EvidenceQualityAssessor:
         
         print(f"Assessing evidence quality for: {source_title[:50]}...")
         
-        # Detect content type for contextual assessment
-        content_type = self._detect_content_type(content, source_url, source_title)
-        
         # Assess all quality dimensions
         methodology_rigor = self.assess_methodology_rigor(content, source_url)
         peer_review_status = self.assess_peer_review_status(content, source_url, source_title)
@@ -512,8 +407,7 @@ class EvidenceQualityAssessor:
             reproducibility=reproducibility,
             citation_impact=citation_impact,
             transparency=transparency,
-            temporal_consistency=temporal_consistency,
-            content_type=content_type
+            temporal_consistency=temporal_consistency
         )
         
         print(f"Quality Assessment Complete - Overall: {metrics.overall_quality_score():.1f}, Tier: {metrics.quality_tier()}")
