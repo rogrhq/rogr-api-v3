@@ -168,31 +168,16 @@ class EvidenceQualityAssessor:
         
         score = 10.0  # Base score
         
-        # Content-based quality patterns (replacing domain bias)
-        # 1. Peer review indicators
-        peer_reviewed_indicators = ['peer reviewed', 'editorial board', 'submitted to journal']
-        if any(indicator in content_lower for indicator in peer_reviewed_indicators):
-            score += 15
-
-        # 2. Government research patterns  
-        government_research_patterns = ['agency report', 'federal study', 'official statistics']
-        if any(pattern in content_lower for pattern in government_research_patterns):
-            score += 20
-
-        # 3. Reference work patterns
-        reference_work_patterns = ['encyclopedia entry', 'curated references', 'editorial oversight']  
-        if any(pattern in content_lower for pattern in reference_work_patterns):
-            score += 18
-
-        # 4. Academic publication patterns
-        academic_patterns = ['doi:', 'PMID:', 'journal impact factor', 'institutional affiliation']
-        if any(pattern in content_lower for pattern in academic_patterns):
-            score += 20
-
-        # 5. Evidence structure quality
-        high_quality_structure = ['citations included', 'methodology section', 'data visualization']
-        if any(pattern in content_lower for pattern in high_quality_structure):
-            score += 12
+        # Academic domain indicators (high quality)
+        academic_domains = [
+            'pubmed.ncbi.nlm.nih.gov', 'pmc.ncbi.nlm.nih.gov', 'doi.org',
+            'scholar.google.', 'researchgate.net', 'academia.edu',
+            '.edu/', 'springer.com', 'sciencedirect.com', 'wiley.com',
+            'nature.com', 'cell.com', 'science.org', 'pnas.org'
+        ]
+        
+        if any(domain in url_lower for domain in academic_domains):
+            score += 25
         
         # Peer review indicators in content
         peer_review_indicators = [
