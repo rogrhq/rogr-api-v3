@@ -735,19 +735,16 @@ async def create_analysis(analysis: AnalysisInput):
         mining_result = claim_miner.mine_claims(analysis.input, context_type="text")
         print(f"DEBUG: ClaimMiner found {len(mining_result.primary_claims) if mining_result else 0} primary claims for text input")
     
-    # ENABLE ClaimMiner - Use AI-powered claim mining
-    if mining_result and mining_result.primary_claims:
-        claims = [claim.text for claim in mining_result.primary_claims]
-        print(f"DEBUG: ClaimMiner found {len(claims)} primary claims")
-    elif mining_result and mining_result.secondary_claims:
-        claims = [claim.text for claim in mining_result.secondary_claims[:3]]
-        print(f"DEBUG: ClaimMiner found {len(claims)} secondary claims (no primary)")
-    else:
-        # Fallback to raw text if ClaimMiner fails
-        claims = [all_text.strip()] if all_text and all_text.strip() else [analysis.input.strip()]
-        print(f"DEBUG: ClaimMiner failed - Using raw text fallback: '{claims[0][:100] if claims else 'None'}'")
+    # BYPASS ClaimMiner - Send raw text directly to ES for isolated testing
+    # Re-enabling bypass to isolate Evidence Shepherd testing first
+    claims = [all_text.strip()] if all_text and all_text.strip() else [analysis.input.strip()]
+    print(f"DEBUG: BYPASSING ClaimMiner - Processing raw text as claim: '{claims[0][:100] if claims else 'None'}'")
     
-    print(f"DEBUG: Processing {len(claims)} claims through Evidence Shepherd")
+    # Original ClaimMiner logic (disabled for ES isolation):
+    # if mining_result and mining_result.primary_claims:
+    #     claims = [claim.text for claim in mining_result.primary_claims]
+    # elif mining_result and mining_result.secondary_claims:
+    #     claims = [claim.text for claim in mining_result.secondary_claims[:3]]
     
     # Score individual claims - toggle between Evidence Shepherd integration and old scoring
     use_evidence_shepherd = os.getenv('USE_EVIDENCE_SHEPHERD', 'true').lower() == 'true'
