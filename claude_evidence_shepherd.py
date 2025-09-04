@@ -261,6 +261,13 @@ SCORING (0-100):
 60-69: WEAK relevance
 <60: IRRELEVANT
 
+STANCE CLASSIFICATION - Analyze what the evidence is DOING with the SPECIFIC CLAIM:
+
+CRITICAL: For complex claims, focus on the CORE ASSERTION, not peripheral facts:
+- Claim "X is rigged/fraudulent/fake" → Focus on PROCESS INTEGRITY, not outcomes
+- Claim "X causes Y" → Focus on CAUSAL RELATIONSHIP, not just presence of X or Y
+- Claim "X contains Y" → Focus on COMPOSITION, not just existence of X
+
 STANCE CLASSIFICATION - Analyze what the evidence is DOING with the claim:
 
 "contradicting" - The evidence:
@@ -280,7 +287,10 @@ STANCE CLASSIFICATION - Analyze what the evidence is DOING with the claim:
 "neutral" - The evidence:
   • Merely mentions or describes the claim without judgment
   • Discusses the claim as a phenomenon/belief without endorsing or refuting
+  • Reports outcomes/results WITHOUT addressing the process/mechanism in the claim
   • Reports what others believe without taking a position
+  • ELECTIONS: Simple results ("X won") are NEUTRAL to process claims ("election rigged")
+  • Example: "Biden won the election" is NEUTRAL to "Election was rigged"
   • Example: "Some people believe X causes Y" or "The theory that X causes Y"
 
 CONFIDENCE: How certain are you (0.0-1.0)?
@@ -288,6 +298,13 @@ CONFIDENCE: How certain are you (0.0-1.0)?
 60-69: WEAK relevance
 <60: IRRELEVANT
 
+STANCE CLASSIFICATION - Analyze what the evidence is DOING with the SPECIFIC CLAIM:
+
+CRITICAL: For complex claims, focus on the CORE ASSERTION, not peripheral facts:
+- Claim "X is rigged/fraudulent/fake" → Focus on PROCESS INTEGRITY, not outcomes
+- Claim "X causes Y" → Focus on CAUSAL RELATIONSHIP, not just presence of X or Y
+- Claim "X contains Y" → Focus on COMPOSITION, not just existence of X
+
 STANCE CLASSIFICATION - Analyze what the evidence is DOING with the claim:
 
 "contradicting" - The evidence:
@@ -307,7 +324,10 @@ STANCE CLASSIFICATION - Analyze what the evidence is DOING with the claim:
 "neutral" - The evidence:
   • Merely mentions or describes the claim without judgment
   • Discusses the claim as a phenomenon/belief without endorsing or refuting
+  • Reports outcomes/results WITHOUT addressing the process/mechanism in the claim
   • Reports what others believe without taking a position
+  • ELECTIONS: Simple results ("X won") are NEUTRAL to process claims ("election rigged")
+  • Example: "Biden won the election" is NEUTRAL to "Election was rigged"
   • Example: "Some people believe X causes Y" or "The theory that X causes Y"
 
 MANDATORY STEP 4 - NEGATION OVERRIDE:
