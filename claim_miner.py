@@ -115,22 +115,36 @@ class ClaimMiner:
             # Fallback to simple extraction if Claude fails
             return self._fallback_claim_mining(content)
         
+        # DEBUG: Log Claude's actual response
+        print(f"ClaimMiner: Claude response received, length: {len(response)}")
+        print(f"ClaimMiner: Raw response: {response[:500]}...")
+        
         try:
-            # Parse Claude's JSON response
+            # Improved JSON extraction similar to Evidence Shepherd
             json_start = response.find('{')
             json_end = response.rfind('}') + 1
             
+            print(f"ClaimMiner: JSON extraction - start: {json_start}, end: {json_end}")
+            
             if json_start >= 0 and json_end > json_start:
                 json_text = response[json_start:json_end]
+                print(f"ClaimMiner: Extracted JSON: {json_text[:200]}...")
+                
                 result_data = json.loads(json_text)
+                print(f"ClaimMiner: Successfully parsed JSON with {len(result_data)} top-level keys")
                 
                 return self._process_claude_results(result_data, context_info)
             else:
-                print(f"ClaimMiner: No valid JSON in Claude response")
+                print(f"ClaimMiner: No valid JSON object found in response")
+                print(f"ClaimMiner: Response content: '{response}'")
                 return self._fallback_claim_mining(content)
                 
-        except (json.JSONDecodeError, KeyError) as e:
-            print(f"ClaimMiner: Error parsing Claude response: {e}")
+        except json.JSONDecodeError as e:
+            print(f"ClaimMiner: JSON decode error: {e}")
+            print(f"ClaimMiner: Failed JSON text: {json_text if 'json_text' in locals() else 'Not extracted'}")
+            return self._fallback_claim_mining(content)
+        except Exception as e:
+            print(f"ClaimMiner: Unexpected error parsing Claude response: {e}")
             return self._fallback_claim_mining(content)
     
     def _build_context_info(self, content: str, context_type: str, source_context: Dict) -> Dict:
