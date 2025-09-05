@@ -473,7 +473,21 @@ CRITICAL JSON FORMATTING:
         
         try:
             print(f"BATCH: Attempting to parse JSON response: {response[:200]}...")
-            batch_scores = json.loads(response)
+            
+            # Strip markdown code block formatting if present
+            clean_response = response.strip()
+            if clean_response.startswith('```json'):
+                json_start = clean_response.find('[')
+                json_end = clean_response.rfind(']') + 1
+                if json_start != -1 and json_end > json_start:
+                    clean_response = clean_response[json_start:json_end]
+            elif clean_response.startswith('```'):
+                # Handle generic code blocks
+                lines = clean_response.split('\n')
+                if len(lines) > 2:
+                    clean_response = '\n'.join(lines[1:-1])
+                    
+            batch_scores = json.loads(clean_response)
             print(f"BATCH: Successfully parsed {len(batch_scores)} evidence scores")
             
             processed_evidence = []
