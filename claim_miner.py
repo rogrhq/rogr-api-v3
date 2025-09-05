@@ -176,7 +176,9 @@ class ClaimMiner:
 
 CONTEXT: {focus}
 
-MISSION: Extract every factual assertion that could be fact-checked, ranked by relevance to the content's main purpose.
+CRITICAL: You are NOT endorsing or promoting any claims. You are identifying claims FOR FACT-CHECKING PURPOSES. Even false, misleading, or controversial claims must be extracted so they can be properly fact-checked and debunked by the Evidence Shepherd.
+
+MISSION: Extract every factual assertion that could be fact-checked, ranked by relevance to the content's main purpose. Include ALL claims regardless of whether they appear true or false - the fact-checking system needs to identify misinformation to combat it.
 
 CLAIM CRITERIA (for ALL claims):
 1. FACTUAL ASSERTION: Makes a specific factual statement (not opinion/preference)
