@@ -1336,24 +1336,60 @@ async def debug_claim_miner(request: dict):
     """Debug endpoint to test ClaimMiner isolation"""
     try:
         # Extract input parameters
-        text = request.get("input", "")
+        input_data = request.get("input", "")
         context_type = request.get("context_type", "text")
         source_context = request.get("source_context", {})
         
-        if not text or len(text.strip()) < 5:
+        if not input_data or len(input_data.strip()) < 5:
             return {
-                "error": "Input text too short (minimum 5 characters)",
+                "error": "Input too short (minimum 5 characters)",
                 "claim_miner_enabled": claim_miner.is_enabled()
             }
         
-        # Test ClaimMiner directly
-        mining_result = claim_miner.mine_claims(text, context_type=context_type, source_context=source_context)
+        # Replicate main pipeline preprocessing based on context_type
+        all_text = ""
+        mining_result = None
+        preprocessing_info = {}
+        
+        if context_type == "article_url":
+            # URL preprocessing - replicate main.py lines 706-719
+            print(f"DEBUG: ClaimMiner endpoint extracting content from URL: {input_data}")
+            url_data = claim_miner.extract_url_metadata_and_text(input_data)
+            print(f"DEBUG: ClaimMiner endpoint URL data keys: {list(url_data.keys()) if url_data else 'None'}")
+            all_text = claim_miner.merge_text_sources(url_data)
+            print(f"DEBUG: ClaimMiner endpoint merged text length: {len(all_text) if all_text else 0}")
+            
+            # Build source context from URL data
+            source_context = {
+                "title": url_data.get("title", ""),
+                "domain": url_data.get("domain", ""),
+                "description": url_data.get("description", "")
+            }
+            preprocessing_info = {
+                "url_data": url_data,
+                "extracted_text_length": len(all_text) if all_text else 0
+            }
+            
+            mining_result = claim_miner.mine_claims(all_text, context_type=context_type, source_context=source_context)
+            
+        elif context_type == "text":
+            # Direct text processing - replicate main.py lines 734-735
+            all_text = input_data
+            mining_result = claim_miner.mine_claims(input_data, context_type=context_type, source_context=source_context)
+            preprocessing_info = {"processed_as": "direct_text"}
+            
+        else:
+            # Other context types (image_ocr, social_post) - treat as text for now
+            all_text = input_data
+            mining_result = claim_miner.mine_claims(input_data, context_type=context_type, source_context=source_context)
+            preprocessing_info = {"processed_as": "fallback_text"}
         
         # Format results for debugging
         return {
             "claim_miner_enabled": claim_miner.is_enabled(),
-            "input_text": text[:200] + "..." if len(text) > 200 else text,
+            "input_data": input_data[:200] + "..." if len(input_data) > 200 else input_data,
             "context_type": context_type,
+            "preprocessing_info": preprocessing_info,
             "results": {
                 "primary_claims": [
                     {
