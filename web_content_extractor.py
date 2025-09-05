@@ -255,43 +255,65 @@ class WebContentExtractor:
             }
             
             # Collect results as they complete
-            for future in concurrent.futures.as_completed(future_to_url, timeout=15):  # 15 second total limit
-                url = future_to_url[future]
-                try:
-                    result = future.result(timeout=2)  # Individual result timeout
-                    results.append(result)
-                    if result['success']:
-                        print(f"✅ Extracted: {result['domain']} ({result['word_count']} words)")
-                    else:
-                        print(f"❌ Failed: {result['domain']} - {result.get('error', 'Unknown error')}")
-                except concurrent.futures.TimeoutError:
-                    print(f"⏱️ Timeout: {self._extract_domain(url)}")
-                    results.append({
-                        'title': '',
-                        'content': '',
-                        'description': '',
-                        'author': '',
-                        'publish_date': '',
-                        'url': url,
-                        'domain': self._extract_domain(url),
-                        'word_count': 0,
-                        'success': False,
-                        'error': 'Extraction timeout'
-                    })
-                except Exception as e:
-                    print(f"💥 Exception: {self._extract_domain(url)} - {str(e)}")
-                    results.append({
-                        'title': '',
-                        'content': '',
-                        'description': '',
-                        'author': '',
-                        'publish_date': '',
-                        'url': url,
-                        'domain': self._extract_domain(url),
-                        'word_count': 0,
-                        'success': False,
-                        'error': str(e)
-                    })
+            try:
+                for future in concurrent.futures.as_completed(future_to_url, timeout=15):  # 15 second total limit
+                    url = future_to_url[future]
+                    try:
+                        result = future.result(timeout=2)  # Individual result timeout
+                        results.append(result)
+                        if result['success']:
+                            print(f"✅ Extracted: {result['domain']} ({result['word_count']} words)")
+                        else:
+                            print(f"❌ Failed: {result['domain']} - {result.get('error', 'Unknown error')}")
+                    except concurrent.futures.TimeoutError:
+                        print(f"⏱️ Timeout: {self._extract_domain(url)}")
+                        results.append({
+                            'title': '',
+                            'content': '',
+                            'description': '',
+                            'author': '',
+                            'publish_date': '',
+                            'url': url,
+                            'domain': self._extract_domain(url),
+                            'word_count': 0,
+                            'success': False,
+                            'error': 'Extraction timeout'
+                        })
+                    except Exception as e:
+                        print(f"💥 Exception: {self._extract_domain(url)} - {str(e)}")
+                        results.append({
+                            'title': '',
+                            'content': '',
+                            'description': '',
+                            'author': '',
+                            'publish_date': '',
+                            'url': url,
+                            'domain': self._extract_domain(url),
+                            'word_count': 0,
+                            'success': False,
+                            'error': str(e)
+                        })
+            except concurrent.futures.TimeoutError:
+                # Handle overall timeout - some futures didn't complete in time
+                completed_count = len(results)
+                unfinished_count = len(future_to_url) - completed_count
+                print(f"⏱️ Overall timeout: {completed_count}/{len(future_to_url)} completed, {unfinished_count} unfinished")
+                
+                # Add placeholder results for unfinished extractions
+                for future, url in future_to_url.items():
+                    if not future.done():
+                        results.append({
+                            'title': '',
+                            'content': '',
+                            'description': '',
+                            'author': '',
+                            'publish_date': '',
+                            'url': url,
+                            'domain': self._extract_domain(url),
+                            'word_count': 0,
+                            'success': False,
+                            'error': 'Overall extraction timeout'
+                        })
         
         successful_extractions = sum(1 for r in results if r['success'])
         print(f"Parallel extraction complete: {successful_extractions}/{len(urls)} successful")

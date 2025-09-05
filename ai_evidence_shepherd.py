@@ -39,7 +39,7 @@ class OpenAIEvidenceShepherd(EvidenceShepherd):
                 'max_tokens': 2000  # Match Claude's analytical capacity
             }
             
-            response = requests.post(self.base_url, headers=headers, json=payload, timeout=6)  # Reduced from 8 to 6
+            response = requests.post(self.base_url, headers=headers, json=payload, timeout=30)  # Increased for complex evidence processing
             response.raise_for_status()
             
             result = response.json()
@@ -601,7 +601,7 @@ CRITICAL JSON FORMATTING:
             return processed_evidence
         
         except Exception as e:
-            print(f"Real web search failed: {e}")
+            print(f"Real web search failed: {str(e)}")
             return []
     
     def is_enabled(self) -> bool:
