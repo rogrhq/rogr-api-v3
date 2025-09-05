@@ -735,16 +735,17 @@ async def create_analysis(analysis: AnalysisInput):
         mining_result = claim_miner.mine_claims(analysis.input, context_type="text")
         print(f"DEBUG: ClaimMiner found {len(mining_result.primary_claims) if mining_result else 0} primary claims for text input")
     
-    # BYPASS ClaimMiner - Send raw text directly to ES for isolated testing
-    # Re-enabling bypass to isolate Evidence Shepherd testing first
-    claims = [all_text.strip()] if all_text and all_text.strip() else [analysis.input.strip()]
-    print(f"DEBUG: BYPASSING ClaimMiner - Processing raw text as claim: '{claims[0][:100] if claims else 'None'}'")
-    
-    # Original ClaimMiner logic (disabled for ES isolation):
-    # if mining_result and mining_result.primary_claims:
-    #     claims = [claim.text for claim in mining_result.primary_claims]
-    # elif mining_result and mining_result.secondary_claims:
-    #     claims = [claim.text for claim in mining_result.secondary_claims[:3]]
+    # ClaimMiner→Evidence Shepherd Integration (bypass removed)
+    if mining_result and mining_result.primary_claims:
+        claims = [claim.text for claim in mining_result.primary_claims]
+        print(f"DEBUG: Using {len(claims)} primary claims from ClaimMiner: {[c[:50]+'...' if len(c)>50 else c for c in claims]}")
+    elif mining_result and mining_result.secondary_claims:
+        claims = [claim.text for claim in mining_result.secondary_claims[:3]]
+        print(f"DEBUG: Using {len(claims)} secondary claims from ClaimMiner: {[c[:50]+'...' if len(c)>50 else c for c in claims]}")
+    else:
+        # Fallback to direct text if ClaimMiner found nothing
+        claims = [all_text.strip()] if all_text and all_text.strip() else [analysis.input.strip()]
+        print(f"DEBUG: ClaimMiner found no claims - fallback to direct text: '{claims[0][:100] if claims else 'None'}'...")
     
     # Score individual claims - toggle between Evidence Shepherd integration and old scoring
     use_evidence_shepherd = os.getenv('USE_EVIDENCE_SHEPHERD', 'true').lower() == 'true'
