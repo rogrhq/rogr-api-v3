@@ -147,7 +147,7 @@ Return ONLY JSON:
 
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Analyze this claim: {claim_text}"}
+            {"role": "user", "content": "Analyze this claim: {}".format(claim_text)}
         ]
         
         response = self._call_openai(messages)
@@ -195,7 +195,7 @@ Return ONLY JSON:
     def score_evidence_relevance(self, claim_text: str, evidence: EvidenceCandidate) -> ProcessedEvidence:
         """Use AI to score evidence relevance with detailed analysis"""
         
-        system_prompt = f"""You are an expert fact-checker evaluating evidence for the claim: "{claim_text}"
+        system_prompt = """You are an expert fact-checker evaluating evidence for the claim: "{}"
 
 Your task: Determine how well evidence supports, contradicts, or relates to this specific claim.
 
@@ -254,11 +254,11 @@ Return ONLY valid JSON:
   "confidence": 0.9,
   "reasoning": "Explain why this score/stance in 1-2 sentences",
   "key_excerpt": "The most important 10-20 words from evidence"
-}"""
+}""".format(claim_text)
 
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"CLAIM: {claim_text}\n\nEVIDENCE: {evidence.text[:800]}\n\nSOURCE: {evidence.source_title} ({evidence.source_domain})"}
+            {"role": "user", "content": "CLAIM: {}\n\nEVIDENCE: {}\n\nSOURCE: {} ({})".format(claim_text, evidence.text[:800], evidence.source_title, evidence.source_domain)}
         ]
         
         response = self._call_openai(messages, temperature=0.1)
@@ -347,10 +347,10 @@ Return ONLY valid JSON:
             return []
         
         # EVIDENCE EVALUATION PROTOCOL - IDENTICAL to Claude for MDEQ consistency
-        system_prompt = f"""Expert fact-checker: Score evidence relevance for the claim: "{claim_text}"
+        system_prompt = """Expert fact-checker: Score evidence relevance for the claim: "{}"
 
 EVIDENCE EVALUATION PROTOCOL - Follow this sequence:
-STEP 1: CLAIM ISOLATION - Focus only on core factual assertion: "{claim_text}"
+STEP 1: CLAIM ISOLATION - Focus only on core factual assertion: "{}"
 STEP 2: TRUTH POSITION ANALYSIS - What does evidence say about claim truth?
 STEP 3: RELEVANCE-STANCE ALIGNMENT - If unclear → default to "neutral"  
 STEP 4: NEGATION OVERRIDE - Explicit negation words → "contradicting" (regardless of context)
@@ -446,14 +446,14 @@ CRITICAL JSON FORMATTING:
 - key_excerpt must be under 100 characters
 - Escape all quotes in excerpts with \"
 - No line breaks in key_excerpt
-- Return only the JSON array, no explanatory text"""
+- Return only the JSON array, no explanatory text""".format(claim_text, claim_text)
 
         # Build evidence list for batch processing - ALIGNED with Claude for consistency
         evidence_texts = []
         for i, evidence in enumerate(evidence_batch):
-            evidence_texts.append(f"EVIDENCE {i}: {evidence.text[:400]}\nSOURCE: {evidence.source_title} ({evidence.source_domain})")  # Aligned with Claude: 400 chars + source info
+            evidence_texts.append("EVIDENCE {}: {}\nSOURCE: {} ({})".format(i, evidence.text[:400], evidence.source_title, evidence.source_domain))  # Aligned with Claude: 400 chars + source info
         
-        batch_content = f"CLAIM: {claim_text}\n\n" + "\n\n".join(evidence_texts)  # Full claim text + proper spacing like Claude
+        batch_content = "CLAIM: {}\n\n".format(claim_text) + "\n\n".join(evidence_texts)  # Full claim text + proper spacing like Claude
         
         print(f"BATCH: Sending {len(evidence_batch)} evidence items to OpenAI")
         print(f"BATCH: Total content length: {len(batch_content)} chars")
