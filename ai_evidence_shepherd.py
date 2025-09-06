@@ -299,13 +299,13 @@ CONFIDENCE (0-1):
 How certain are you about your assessment?
 
 Return ONLY valid JSON:
-{
+{{
   "relevance_score": 85,
   "stance": "supporting",
   "confidence": 0.9,
   "reasoning": "Explain why this score/stance in 1-2 sentences",
   "key_excerpt": "The most important 10-20 words from evidence"
-}""".format(claim_text)
+}}""".format(claim_text)
 
         messages = [
             {"role": "system", "content": system_prompt},
