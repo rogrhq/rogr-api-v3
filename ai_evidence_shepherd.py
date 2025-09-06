@@ -272,7 +272,7 @@ Return ONLY valid JSON:
 
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"CLAIM: {claim_text}\n\nEVIDENCE: {evidence.text[:800].replace('{', '{{').replace('}', '}}')}\n\nSOURCE: {evidence.source_title.replace('{', '{{').replace('}', '}}'))} ({evidence.source_domain.replace('{', '{{').replace('}', '}}')})"}
+            {"role": "user", "content": f"CLAIM: {claim_text}\n\nEVIDENCE: {evidence.text[:800].replace('{', '{{').replace('}', '}}')}\n\nSOURCE: {evidence.source_title.replace('{', '{{').replace('}', '}}'))} ({evidence.source_domain.replace('{', '{{').replace('}', '}}')})"} 
         ]
         
         response = self._call_openai(messages, temperature=0.1)
