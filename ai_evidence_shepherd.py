@@ -272,7 +272,7 @@ Return ONLY valid JSON:
 
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"CLAIM: {claim_text}\n\nEVIDENCE: {evidence.text[:800]}\n\nSOURCE: {evidence.source_title} ({evidence.source_domain})"}
+            {"role": "user", "content": f"CLAIM: {claim_text}\n\nEVIDENCE: {evidence.text[:800].replace('{', '{{').replace('}', '}}')}\n\nSOURCE: {evidence.source_title.replace('{', '{{').replace('}', '}}'))} ({evidence.source_domain.replace('{', '{{').replace('}', '}}')})"}
         ]
         
         response = self._call_openai(messages, temperature=0.1)
@@ -470,7 +470,11 @@ CRITICAL JSON FORMATTING:
         # Build evidence list for batch processing - ALIGNED with Claude for consistency
         evidence_texts = []
         for i, evidence in enumerate(evidence_batch):
-            evidence_texts.append(f"EVIDENCE {i}: {evidence.text[:400]}\nSOURCE: {evidence.source_title} ({evidence.source_domain})")  # Aligned with Claude: 400 chars + source info
+            # Sanitize evidence text to prevent f-string format errors
+            safe_text = evidence.text[:400].replace('{', '{{').replace('}', '}}')
+            safe_title = evidence.source_title.replace('{', '{{').replace('}', '}}')
+            safe_domain = evidence.source_domain.replace('{', '{{').replace('}', '}}')
+            evidence_texts.append(f"EVIDENCE {i}: {safe_text}\nSOURCE: {safe_title} ({safe_domain})")  # Aligned with Claude: 400 chars + source info
         
         batch_content = f"CLAIM: {claim_text}\n\n" + "\n\n".join(evidence_texts)  # Full claim text + proper spacing like Claude
         
