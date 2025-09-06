@@ -39,14 +39,28 @@ class OpenAIEvidenceShepherd(EvidenceShepherd):
                 'max_tokens': 2000  # Match Claude's analytical capacity
             }
             
+            print(f"🔍 OpenAI API CALL DEBUG:")
+            print(f"   Model: {self.model}")
+            print(f"   Messages: {len(messages)} messages")
+            print(f"   Last message length: {len(messages[-1]['content']) if messages else 0} chars")
+            print(f"   Timeout: 30s")
+            
             response = requests.post(self.base_url, headers=headers, json=payload, timeout=30)  # Increased for complex evidence processing
             response.raise_for_status()
             
             result = response.json()
-            return result['choices'][0]['message']['content'].strip()
+            response_content = result['choices'][0]['message']['content'].strip()
+            
+            print(f"✅ OpenAI API SUCCESS:")
+            print(f"   Response length: {len(response_content)} chars")
+            print(f"   First 200 chars: {response_content[:200]}...")
+            
+            return response_content
             
         except Exception as e:
-            print(f"OpenAI API error: {e}")
+            print(f"❌ OpenAI API ERROR: {e}")
+            print(f"   Request timeout: 30s")
+            print(f"   Model: {self.model}")
             return None
     
     def is_non_claim(self, claim_text: str) -> bool:
@@ -343,7 +357,12 @@ Return ONLY valid JSON:
     def _batch_score_evidence(self, claim_text: str, evidence_batch: List[EvidenceCandidate]) -> List[ProcessedEvidence]:
         """SPEED OPTIMIZATION: Score all evidence in single API call"""
         
+        print(f"🔍 OPENAI BATCH PROCESSING DEBUG:")
+        print(f"   Claim: '{claim_text}'")
+        print(f"   Evidence batch size: {len(evidence_batch)}")
+        
         if not evidence_batch:
+            print(f"❌ Empty evidence batch - returning []")
             return []
         
         # EVIDENCE EVALUATION PROTOCOL - IDENTICAL to Claude for MDEQ consistency
@@ -523,6 +542,13 @@ CRITICAL JSON FORMATTING:
                 ev for ev in processed_evidence 
                 if ev.ai_relevance_score >= 60 and ev.ai_confidence >= 0.5  # Lowered thresholds
             ]
+            
+            print(f"🔍 OPENAI BATCH RESULT DEBUG:")
+            print(f"   Parsed: {len(processed_evidence)} evidence items")
+            print(f"   Passed threshold: {len(high_relevance)} items")
+            print(f"   Returning: {min(len(high_relevance), 6)} items")
+            for i, ev in enumerate(high_relevance[:3]):
+                print(f"     Item {i+1}: score={ev.ai_relevance_score}, stance={ev.ai_stance}, confidence={ev.ai_confidence}")
             
             return high_relevance[:6]
             
