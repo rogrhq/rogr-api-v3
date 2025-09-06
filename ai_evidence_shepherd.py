@@ -22,8 +22,9 @@ class OpenAIEvidenceShepherd(EvidenceShepherd):
         print(f"AI Evidence Shepherd initialized with real web search: {self.web_search.is_enabled()}")
         
     def _call_openai(self, messages: List[Dict], temperature: float = 0.3) -> Optional[str]:
-        """Make API call to OpenAI"""
+        """Make API call to OpenAI with comprehensive logging"""
         if not self.api_key:
+            print("OPENAI DEBUG: No API key provided")
             return None
             
         try:
@@ -39,14 +40,64 @@ class OpenAIEvidenceShepherd(EvidenceShepherd):
                 'max_tokens': 2000  # Match Claude's analytical capacity
             }
             
+            print(f"OPENAI DEBUG: Calling OpenAI API - Model: {self.model}, Temp: {temperature}")
+            print(f"OPENAI DEBUG: Request payload size: {len(str(payload))} chars")
+            print(f"OPENAI DEBUG: Messages count: {len(messages)}")
+            
             response = requests.post(self.base_url, headers=headers, json=payload, timeout=30)  # Increased for complex evidence processing
+            
+            # Enhanced HTTP response logging
+            print(f"OPENAI DEBUG: HTTP Status: {response.status_code}")
+            print(f"OPENAI DEBUG: Response headers: {dict(response.headers)}")
+            
+            if response.status_code != 200:
+                print(f"OPENAI ERROR: Non-200 status code: {response.status_code}")
+                print(f"OPENAI ERROR: Response text: {response.text}")
+                return None
+                
             response.raise_for_status()
             
             result = response.json()
-            return result['choices'][0]['message']['content'].strip()
+            print(f"OPENAI DEBUG: Response JSON keys: {list(result.keys())}")
             
+            # Check for OpenAI error responses
+            if 'error' in result:
+                print(f"OPENAI ERROR: API returned error: {result['error']}")
+                return None
+                
+            if 'choices' not in result or not result['choices']:
+                print(f"OPENAI ERROR: No choices in response: {result}")
+                return None
+                
+            content = result['choices'][0]['message']['content'].strip()
+            print(f"OPENAI DEBUG: Content length: {len(content)} chars")
+            print(f"OPENAI DEBUG: Content preview: {content[:200]}...")
+            
+            # Check for content filtering
+            if not content or content == '[]':
+                print(f"OPENAI WARNING: Empty or minimal content returned")
+                print(f"OPENAI WARNING: Full response: {result}")
+                if 'finish_reason' in result['choices'][0]:
+                    finish_reason = result['choices'][0]['finish_reason']
+                    print(f"OPENAI DEBUG: Finish reason: {finish_reason}")
+                    if finish_reason == 'content_filter':
+                        print(f"OPENAI ERROR: Content filtered by OpenAI moderation")
+            
+            return content
+            
+        except requests.exceptions.HTTPError as e:
+            print(f"OPENAI HTTP ERROR: {e}")
+            print(f"OPENAI HTTP ERROR: Response: {e.response.text if hasattr(e, 'response') else 'No response'}")
+            return None
+        except requests.exceptions.RequestException as e:
+            print(f"OPENAI REQUEST ERROR: {e}")
+            return None
+        except json.JSONDecodeError as e:
+            print(f"OPENAI JSON ERROR: Failed to parse response: {e}")
+            return None
         except Exception as e:
-            print(f"OpenAI API error: {e}")
+            print(f"OPENAI UNKNOWN ERROR: {e}")
+            print(f"OPENAI UNKNOWN ERROR TYPE: {type(e).__name__}")
             return None
     
     def is_non_claim(self, claim_text: str) -> bool:
@@ -464,12 +515,17 @@ CRITICAL JSON FORMATTING:
         ]
         
         # Single API call for all evidence
+        print(f"BATCH: Sending batch request to OpenAI for {len(evidence_batch)} evidence pieces")
+        print(f"BATCH: Batch content length: {len(batch_content)} chars")
+        print(f"BATCH: System prompt length: {len(system_prompt)} chars")
+        
         response = self._call_openai(messages, temperature=0.1)
         if not response:
-            print("BATCH: OpenAI API call failed")
+            print("BATCH: OpenAI API call failed - check OPENAI DEBUG logs above")
             return []  # Will trigger fallback to individual processing
         
         print(f"BATCH: OpenAI response received, length: {len(response)}")
+        print(f"BATCH: Full response content: {response}")
         
         try:
             print(f"BATCH: Attempting to parse JSON response: {response[:200]}...")
@@ -527,7 +583,10 @@ CRITICAL JSON FORMATTING:
             return high_relevance[:6]
             
         except (json.JSONDecodeError, KeyError, ValueError) as e:
-            print(f"Error parsing batch AI response: {e}")
+            print(f"BATCH JSON ERROR: Failed to parse OpenAI response: {e}")
+            print(f"BATCH JSON ERROR: Raw response: {response}")
+            print(f"BATCH JSON ERROR: Cleaned response: {clean_response}")
+            print(f"BATCH JSON ERROR: Response type: {type(response)}")
             return []  # Will trigger fallback
     
     def search_real_evidence(self, claim_text: str) -> List[EvidenceCandidate]:
@@ -601,7 +660,11 @@ CRITICAL JSON FORMATTING:
             return processed_evidence
         
         except Exception as e:
-            print(f"Real web search failed: {str(e)}")
+            print(f"REAL SEARCH ERROR: {str(e)}")
+            print(f"REAL SEARCH ERROR TYPE: {type(e).__name__}")
+            print(f"REAL SEARCH ERROR: Claim text: {claim_text[:100]}...")
+            import traceback
+            print(f"REAL SEARCH ERROR: Full traceback: {traceback.format_exc()}")
             return []
     
     def is_enabled(self) -> bool:
