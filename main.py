@@ -1308,6 +1308,40 @@ async def debug_dual_claude_test(request: dict):
         ]
     }
 
+@app.post("/debug/dual-ai-test")
+async def debug_dual_ai_test(request: dict):
+    """Debug endpoint: Test Dual AI Evidence Shepherd"""
+    import time
+    from dual_ai_evidence_shepherd import DualAIEvidenceShepherd
+    
+    claim_text = request.get("claim", "")
+    if not claim_text:
+        return {"error": "Missing 'claim' field"}
+    
+    # Initialize Dual AI ES
+    dual_ai_es = DualAIEvidenceShepherd()
+    
+    # Time the consensus analysis
+    start_time = time.time()
+    evidence_list = dual_ai_es.search_real_evidence(claim_text)
+    end_time = time.time()
+    
+    processing_time = end_time - start_time
+    
+    return {
+        "claim": claim_text,
+        "processing_time_seconds": round(processing_time, 2),
+        "evidence_count": len(evidence_list),
+        "dual_ai_type": "Dual AI Evidence Shepherd (Primary + Secondary Claude)",
+        "evidence_preview": [
+            {
+                "source": getattr(ev, 'source_domain', 'unknown'),
+                "score": getattr(ev, 'ai_relevance_score', 0),
+                "text": getattr(ev, 'text', '')[:100] + "..."
+            } for ev in evidence_list[:5]
+        ]
+    }
+
 @app.get("/debug/ocr-test")
 async def debug_ocr_test():
     """Debug endpoint to test Google Cloud Vision OCR service"""
