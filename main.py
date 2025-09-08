@@ -1275,74 +1275,9 @@ async def debug_evidence_comparison():
     
     return results
 
-@app.post("/debug/dual-claude-test")
-async def debug_dual_claude_test(request: dict):
-    """Debug endpoint: Test Dual Claude Consensus"""
-    import time
-    from dual_claude_evidence_shepherd import DualClaudeEvidenceShepherd
-    
-    claim_text = request.get("claim", "")
-    if not claim_text:
-        return {"error": "Missing 'claim' field"}
-    
-    # Initialize Dual Claude ES
-    dual_claude_es = DualClaudeEvidenceShepherd()
-    
-    # Time the consensus analysis
-    start_time = time.time()
-    evidence_list = dual_claude_es.search_real_evidence(claim_text)
-    end_time = time.time()
-    
-    processing_time = end_time - start_time
-    
-    return {
-        "claim": claim_text,
-        "processing_time_seconds": round(processing_time, 2),
-        "evidence_count": len(evidence_list),
-        "consensus_type": "Dual Claude Evidence Shepherd (Primary + Academic)",
-        "evidence_preview": [
-            {
-                "source": getattr(ev, 'source_domain', 'unknown'),
-                "score": getattr(ev, 'ai_relevance_score', 0),
-                "quality": getattr(ev, 'quality_score', 0),
-                "text": getattr(ev, 'text', '')[:100] + "..."
-            } for ev in evidence_list[:5]
-        ]
-    }
+# Legacy endpoint removed - replaced by ROGR system
 
-@app.post("/debug/dual-ai-test")
-async def debug_dual_ai_test(request: dict):
-    """Debug endpoint: Test Dual AI Evidence Shepherd"""
-    import time
-    from dual_ai_evidence_shepherd import DualAIEvidenceShepherd
-    
-    claim_text = request.get("claim", "")
-    if not claim_text:
-        return {"error": "Missing 'claim' field"}
-    
-    # Initialize Dual AI ES
-    dual_ai_es = DualAIEvidenceShepherd()
-    
-    # Time the consensus analysis
-    start_time = time.time()
-    evidence_list = dual_ai_es.search_real_evidence(claim_text)
-    end_time = time.time()
-    
-    processing_time = end_time - start_time
-    
-    return {
-        "claim": claim_text,
-        "processing_time_seconds": round(processing_time, 2),
-        "evidence_count": len(evidence_list),
-        "dual_ai_type": "Dual AI Evidence Shepherd (Primary + Secondary Claude)",
-        "evidence_preview": [
-            {
-                "source": getattr(ev, 'source_domain', 'unknown'),
-                "score": getattr(ev, 'ai_relevance_score', 0),
-                "text": getattr(ev, 'text', '')[:100] + "..."
-            } for ev in evidence_list[:5]
-        ]
-    }
+# Legacy endpoint removed - replaced by ROGR system
 
 @app.post("/debug/claude-single-test")
 async def debug_claude_single_test(request: dict):
