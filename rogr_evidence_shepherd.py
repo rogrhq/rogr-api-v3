@@ -127,26 +127,33 @@ class ROGREvidenceShepherd(EvidenceShepherd):
             print(f"SKIPPED non-claim: '{claim_text[:50]}...'")
             return self._create_minimal_strategy(claim_text)
         
-        # Specialized prompt for Claude
-        system_prompt = """You are an expert fact-checker analyzing claims for optimal verification strategy.
+        # Specialized prompt for Claude - CLAIM-SPECIFIC search strategy
+        system_prompt = f"""You are an expert fact-checker creating search queries to verify this specific claim: "{claim_text}"
 
-CLAIM TYPES & SEARCH OPTIMIZATION:
-- STATISTICAL: Numbers, percentages → Search official sources, surveys, government data
-- POLICY: Government actions → Search official announcements, news reports, gov sites  
-- SCIENTIFIC: Research findings → Search journals, studies, institutional sources
-- HISTORICAL: Past events → Search news archives, official records, multiple sources
-- FACTUAL: General verifiable facts → Search authoritative sources, primary documentation
+CRITICAL: Your queries must be DIRECTLY RELATED to verifying this exact claim, not general topics.
 
-SPEED REQUIREMENTS: Focus on 2 highest-impact search queries for authoritative evidence.
+CLAIM-SPECIFIC SEARCH STRATEGY:
+- INCLUDE the claim's key terms in search queries
+- SEARCH for direct verification, not general background
+- PRIORITIZE authoritative sources that would address this specific assertion
+
+EXAMPLES:
+Bad: "what is X" (too general)
+Good: "X is Y scientific classification" (claim-specific)
+
+Bad: "definition of stars" 
+Good: "sun stellar classification astronomy" (for "sun is a star")
+
+REQUIREMENTS: Generate 3 targeted search queries that directly verify or refute this claim.
 
 Return ONLY JSON:
-{
-  "claim_type": "STATISTICAL",
-  "search_queries": ["specific high-impact query 1", "specific high-impact query 2"],
-  "target_domains": ["authoritative-domain.gov", "major-source.org"],
+{{
+  "claim_type": "FACTUAL",
+  "search_queries": ["claim-specific query 1", "claim-specific query 2", "claim-specific query 3"],
+  "target_domains": ["relevant-authority.gov", "relevant-source.org"],
   "time_relevance_months": 12,
   "reasoning": "Brief strategy explanation"
-}"""
+}}"""
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -200,8 +207,8 @@ Return ONLY JSON:
         if len(evidence_batch) == 0:
             return []
         
-        # Limit evidence to process (quality over quantity)
-        evidence_to_process = evidence_batch[:4]  # Same as OpenAI for comparison
+        # Process all available evidence for professional fact-checking
+        evidence_to_process = evidence_batch  # No artificial limits - process all candidates
         
         # Process evidence batch with ROGR system (no fallbacks - fail fast)
         batch_results = self._batch_score_evidence_claude(claim_text, evidence_to_process)
@@ -496,14 +503,14 @@ CRITICAL: key_excerpt must be under 100 characters with escaped quotes (\")"""
             # Step 2: Execute real web searches using Claude-generated queries
             all_search_results = []
             
-            for query in search_strategy.search_queries[:2]:  # Same as OpenAI for comparison
+            for query in search_strategy.search_queries[:3]:  # Process more queries for thoroughness
                 print(f"Searching web for: '{query}'")
-                search_results = self.web_search.search_web(query, max_results=6)
+                search_results = self.web_search.search_web(query, max_results=8)  # More results per query
                 all_search_results.extend(search_results)
                 print(f"Found {len(search_results)} results for '{query}'")
             
-            # Step 3: PARALLEL content extraction from discovered URLs (OPTIMIZED)
-            top_results = all_search_results[:6]  # Reduced from 8 to 6 for speed
+            # Step 3: PARALLEL content extraction from discovered URLs (COMPREHENSIVE)
+            top_results = all_search_results[:10]  # More results for professional thoroughness
             urls_to_extract = [result.url for result in top_results]
             
             print(f"CLAUDE PARALLEL EXTRACTION: Processing {len(urls_to_extract)} URLs simultaneously")
