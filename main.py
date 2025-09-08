@@ -12,7 +12,7 @@ from ai_evidence_shepherd import OpenAIEvidenceShepherd
 from claude_evidence_shepherd import ClaudeEvidenceShepherd
 from evidence_shepherd import NoOpEvidenceShepherd
 from progressive_analysis_service import ProgressiveAnalysisService
-from rogr_fc_scoring_engine import ROGRFCScoringEngine
+from rogr_fc_scoring_engine_zero_start import ROGRFCScoringEngineZeroStart
 from rogr_dual_evidence_shepherd import ROGRDualEvidenceShepherd
 
 # Test comment - verifying git push workflows
@@ -1510,8 +1510,8 @@ async def test_rogr_fc_scoring(request: ClaimRequest):
         
         print(f"✅ Found {len(evidence_pieces)} evidence pieces")
         
-        # Apply new ROGR FC scoring to same evidence
-        rogr_scorer = ROGRFCScoringEngine()
+        # Apply new ROGR FC scoring to same evidence - Zero Start Model
+        rogr_scorer = ROGRFCScoringEngineZeroStart()
         new_results = rogr_scorer.score_evidence_pool(request.claim, evidence_pieces)
         
         # Prepare evidence summary for debugging
