@@ -12,6 +12,16 @@ class ClaimType(Enum):
     FACTUAL = "factual"         # "Company has 500 employees"
 
 @dataclass
+class MultiDomainClaimAnalysis:
+    """Multi-dimensional claim analysis for professional fact-checking"""
+    primary_domains: List[str]      # Must have evidence (e.g., ['virology', 'epidemiology'])
+    secondary_domains: List[str]    # Should have evidence (e.g., ['intelligence', 'geopolitics']) 
+    domain_priorities: Dict[str, float]  # Weight by importance (0.0-1.0)
+    cross_domain_dependencies: Dict[str, List[str]]  # Which domains should reference others
+    specialized_queries: Dict[str, List[str]]  # Domain-specific search queries
+    authority_domains: Dict[str, List[str]]  # Preferred domains per domain type
+
+@dataclass
 class SearchStrategy:
     """Defines how to search for evidence for a specific claim"""
     claim_type: ClaimType
@@ -20,6 +30,8 @@ class SearchStrategy:
     time_relevance_months: int  # How recent should evidence be
     authority_weight: float    # How much to weight source authority
     confidence_threshold: float  # Minimum confidence to include evidence
+    # NEW: Multi-domain support
+    multi_domain_analysis: Optional[MultiDomainClaimAnalysis] = None
 
 @dataclass 
 class EvidenceCandidate:

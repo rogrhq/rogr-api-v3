@@ -3,7 +3,7 @@ import json
 import re
 from typing import List, Dict, Optional
 import requests
-from evidence_shepherd import EvidenceShepherd, SearchStrategy, EvidenceCandidate, ProcessedEvidence, ClaimType
+from evidence_shepherd import EvidenceShepherd, SearchStrategy, EvidenceCandidate, ProcessedEvidence, ClaimType, MultiDomainClaimAnalysis
 from web_search_service import WebSearchService
 from web_content_extractor import WebContentExtractor
 
@@ -119,13 +119,90 @@ class ROGREvidenceShepherd(EvidenceShepherd):
         
         return False  # Default to processing if unsure
     
+    def _classify_claim_domains(self, claim_text: str) -> Optional[MultiDomainClaimAnalysis]:
+        """Classify claim into multiple domains for professional fact-checking"""
+        
+        system_prompt = f"""You are an expert fact-checker analyzing this claim for multi-domain evidence requirements: "{claim_text}"
+
+MULTI-DOMAIN ANALYSIS: Identify if this claim requires evidence from multiple domains:
+
+DOMAIN TYPES:
+- scientific: Medical, biological, physical sciences, peer-reviewed research
+- medical: Healthcare, pharmaceuticals, clinical studies, medical institutions  
+- intelligence: Government assessments, classified analysis, geopolitical intelligence
+- policy: Government regulations, official announcements, legislative actions
+- economic: Financial data, market analysis, economic indicators
+- historical: Past events, chronological facts, documented occurrences
+- statistical: Data analysis, surveys, numerical claims, demographics
+
+MULTI-DOMAIN EXAMPLES:
+- "Lab leak theory is most likely COVID origin" → PRIMARY: [scientific, medical], SECONDARY: [intelligence]
+- "Climate policies will hurt economy" → PRIMARY: [economic, policy], SECONDARY: [scientific]
+- "Vaccines cause autism" → PRIMARY: [medical, scientific], SECONDARY: []
+
+Return ONLY JSON:
+{{
+  "primary_domains": ["domain1", "domain2"],
+  "secondary_domains": ["domain3"],
+  "domain_priorities": {{"scientific": 0.8, "medical": 0.7, "intelligence": 0.4}},
+  "specialized_queries": {{
+    "scientific": ["scientific query 1", "scientific query 2"],
+    "medical": ["medical query 1"],  
+    "intelligence": ["intelligence query 1"]
+  }},
+  "authority_domains": {{
+    "scientific": ["nature.com", "science.org", "pmc.ncbi.nlm.nih.gov"],
+    "medical": ["cdc.gov", "who.int", "mayoclinic.org"],
+    "intelligence": ["oversight.house.gov", "dni.gov"]
+  }},
+  "reasoning": "Multi-domain strategy explanation"
+}}
+
+If single domain, use: "primary_domains": ["single_domain"], "secondary_domains": []"""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Analyze domains for: {claim_text}"}
+        ]
+        
+        try:
+            response = self._call_claude(messages, max_tokens=800)
+            if not response:
+                return None
+            
+            domain_data = json.loads(response)
+            
+            return MultiDomainClaimAnalysis(
+                primary_domains=domain_data.get('primary_domains', []),
+                secondary_domains=domain_data.get('secondary_domains', []),
+                domain_priorities=domain_data.get('domain_priorities', {}),
+                cross_domain_dependencies={},  # Can be enhanced later
+                specialized_queries=domain_data.get('specialized_queries', {}),
+                authority_domains=domain_data.get('authority_domains', {})
+            )
+            
+        except (json.JSONDecodeError, KeyError, Exception) as e:
+            print(f"⚠️ Multi-domain analysis failed: {e}")
+            return None
+
     def analyze_claim(self, claim_text: str) -> SearchStrategy:
-        """Use Claude to analyze claim and create optimal search strategy"""
+        """Use Claude to analyze claim and create optimal search strategy with multi-domain support"""
         
         # SPEED OPTIMIZATION: Skip non-claims immediately
         if self.is_non_claim(claim_text):
             print(f"SKIPPED non-claim: '{claim_text[:50]}...'")
             return self._create_minimal_strategy(claim_text)
+
+        # NEW: Multi-domain claim classification
+        print(f"🔍 Analyzing claim domains: {claim_text}")
+        multi_domain_analysis = self._classify_claim_domains(claim_text)
+        
+        if multi_domain_analysis:
+            print(f"📊 Multi-domain detected: PRIMARY {multi_domain_analysis.primary_domains}, SECONDARY {multi_domain_analysis.secondary_domains}")
+            return self._create_multi_domain_search_strategy(claim_text, multi_domain_analysis)
+        else:
+            print("📄 Single-domain analysis fallback")
+            # Fallback to original single-domain approach
         
         # Specialized prompt for Claude - CLAIM-SPECIFIC search strategy
         system_prompt = f"""You are an expert fact-checker creating search queries to verify this specific claim: "{claim_text}"
@@ -200,6 +277,53 @@ Return ONLY JSON:
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             print(f"❌ ROGR strategy parsing failed: {e}")
             raise ValueError(f"ROGR Evidence Shepherd: Failed to parse claim analysis: {e}")
+
+    def _create_multi_domain_search_strategy(self, claim_text: str, analysis: MultiDomainClaimAnalysis) -> SearchStrategy:
+        """Create search strategy for multi-domain claims"""
+        
+        # Combine all specialized queries from all domains
+        all_queries = []
+        all_target_domains = []
+        
+        # Add queries for primary domains (most important)
+        for domain in analysis.primary_domains:
+            domain_queries = analysis.specialized_queries.get(domain, [])
+            all_queries.extend(domain_queries)
+            
+            # Add authority domains for this domain type
+            domain_authorities = analysis.authority_domains.get(domain, [])
+            all_target_domains.extend(domain_authorities)
+        
+        # Add queries for secondary domains (supporting evidence)
+        for domain in analysis.secondary_domains:
+            domain_queries = analysis.specialized_queries.get(domain, [])
+            all_queries.extend(domain_queries[:2])  # Limit secondary queries
+            
+            # Add some authority domains for secondary domains
+            domain_authorities = analysis.authority_domains.get(domain, [])
+            all_target_domains.extend(domain_authorities[:3])  # Limit secondary domains
+        
+        # Fallback if no queries generated
+        if not all_queries:
+            all_queries = [claim_text]
+        
+        # Determine primary claim type for authority weighting
+        primary_domain = analysis.primary_domains[0] if analysis.primary_domains else 'factual'
+        claim_type = ClaimType.SCIENTIFIC if primary_domain in ['scientific', 'medical'] else ClaimType.FACTUAL
+        
+        # Set authority weights based on primary domain
+        authority_weight = 1.0 if 'scientific' in analysis.primary_domains or 'medical' in analysis.primary_domains else 0.7
+        confidence_threshold = 0.85 if 'scientific' in analysis.primary_domains else 0.75
+        
+        return SearchStrategy(
+            claim_type=claim_type,
+            search_queries=all_queries[:6],  # Limit total queries for performance
+            target_domains=list(set(all_target_domains)),  # Remove duplicates
+            time_relevance_months=12,  # Multi-domain claims often need recent evidence
+            authority_weight=authority_weight,
+            confidence_threshold=confidence_threshold,
+            multi_domain_analysis=analysis
+        )
     
     def filter_evidence_batch(self, claim_text: str, evidence_batch: List[EvidenceCandidate]) -> List[ProcessedEvidence]:
         """Process evidence batch efficiently with Claude scoring - OPTIMIZED for speed"""
