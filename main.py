@@ -1342,6 +1342,42 @@ async def debug_dual_ai_test(request: dict):
         ]
     }
 
+@app.post("/debug/claude-single-test")
+async def debug_claude_single_test(request: dict):
+    """Debug endpoint: Test Single Claude Evidence Shepherd"""
+    import time
+    from claude_evidence_shepherd import ClaudeEvidenceShepherd
+    
+    claim_text = request.get("claim", "")
+    if not claim_text:
+        return {"error": "Missing 'claim' field"}
+    
+    # Initialize Single Claude ES
+    claude_es = ClaudeEvidenceShepherd()
+    
+    # Time the evidence search
+    start_time = time.time()
+    evidence_list = claude_es.search_real_evidence(claim_text)
+    end_time = time.time()
+    
+    processing_time = end_time - start_time
+    
+    return {
+        "claim": claim_text,
+        "processing_time_seconds": round(processing_time, 2),
+        "evidence_count": len(evidence_list),
+        "single_claude_type": "Single Claude Evidence Shepherd",
+        "evidence_preview": [
+            {
+                "source": getattr(ev, 'source_domain', 'unknown'),
+                "relevance_score": getattr(ev, 'ai_relevance_score', 0),
+                "quality_score": getattr(ev, 'quality_score', 'N/A'),
+                "stance": getattr(ev, 'ai_stance', 'unknown'),
+                "text": getattr(ev, 'text', '')[:100] + "..."
+            } for ev in evidence_list[:5]
+        ]
+    }
+
 @app.get("/debug/ocr-test")
 async def debug_ocr_test():
     """Debug endpoint to test Google Cloud Vision OCR service"""
