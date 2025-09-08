@@ -13,7 +13,7 @@ from claude_evidence_shepherd import ClaudeEvidenceShepherd
 from evidence_shepherd import NoOpEvidenceShepherd
 from progressive_analysis_service import ProgressiveAnalysisService
 from rogr_fc_scoring_engine import ROGRFCScoringEngine
-from dual_ai_evidence_shepherd import DualAIEvidenceShepherd
+from rogr_dual_evidence_shepherd import ROGRDualEvidenceShepherd
 
 # Test comment - verifying git push workflows
 
@@ -1553,10 +1553,10 @@ async def test_rogr_fc_scoring(request: ClaimRequest):
     try:
         print(f"🔍 ROGR FC Scoring Test: {request.claim[:50]}...")
         
-        # Use existing dual-AI system to gather evidence
-        dual_ai_shepherd = DualAIEvidenceShepherd()
+        # Use ROGR dual evidence system to gather evidence
+        rogr_dual_shepherd = ROGRDualEvidenceShepherd()
         
-        if not dual_ai_shepherd.is_enabled():
+        if not rogr_dual_shepherd.is_enabled():
             return {
                 "error": "Dual-AI Evidence Shepherd not enabled",
                 "claim": request.claim,
@@ -1564,7 +1564,7 @@ async def test_rogr_fc_scoring(request: ClaimRequest):
             }
         
         print("📊 Gathering evidence using dual-AI system...")
-        evidence_pieces = dual_ai_shepherd.search_real_evidence(request.claim)
+        evidence_pieces = rogr_dual_shepherd.search_real_evidence(request.claim)
         
         if not evidence_pieces:
             return {
