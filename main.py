@@ -12,6 +12,8 @@ from ai_evidence_shepherd import OpenAIEvidenceShepherd
 from claude_evidence_shepherd import ClaudeEvidenceShepherd
 from evidence_shepherd import NoOpEvidenceShepherd
 from progressive_analysis_service import ProgressiveAnalysisService
+from rogr_fc_scoring_engine import ROGRFCScoringEngine
+from dual_ai_evidence_shepherd import DualAIEvidenceShepherd
 
 # Test comment - verifying git push workflows
 
@@ -1539,4 +1541,86 @@ async def debug_claim_miner(request: dict):
             "claim_miner_enabled": claim_miner.is_enabled(),
             "error": f"ClaimMiner error: {str(e)}",
             "help": "Check ClaimMiner configuration and Claude API setup"
+        }
+
+# ROGR Professional Fact-Checking Scoring Test Endpoint
+class ClaimRequest(BaseModel):
+    claim: str
+
+@app.post("/debug/rogr-fc-scoring-test")
+async def test_rogr_fc_scoring(request: ClaimRequest):
+    """Test ROGR Professional Fact-Checking Scoring Engine using existing dual-AI evidence"""
+    try:
+        print(f"🔍 ROGR FC Scoring Test: {request.claim[:50]}...")
+        
+        # Use existing dual-AI system to gather evidence
+        dual_ai_shepherd = DualAIEvidenceShepherd()
+        
+        if not dual_ai_shepherd.is_enabled():
+            return {
+                "error": "Dual-AI Evidence Shepherd not enabled",
+                "claim": request.claim,
+                "available_shepherds": 0
+            }
+        
+        print("📊 Gathering evidence using dual-AI system...")
+        evidence_pieces = dual_ai_shepherd.search_real_evidence(request.claim)
+        
+        if not evidence_pieces:
+            return {
+                "error": "No evidence pieces gathered",
+                "claim": request.claim,
+                "dual_ai_status": "enabled but no results"
+            }
+        
+        print(f"✅ Found {len(evidence_pieces)} evidence pieces")
+        
+        # Apply new ROGR FC scoring to same evidence
+        rogr_scorer = ROGRFCScoringEngine()
+        new_results = rogr_scorer.score_evidence_pool(request.claim, evidence_pieces)
+        
+        # Prepare evidence summary for debugging
+        evidence_summary = []
+        for i, ev in enumerate(evidence_pieces):
+            evidence_summary.append({
+                "index": i,
+                "domain": getattr(ev, 'source_domain', 'unknown'),
+                "title": getattr(ev, 'source_title', 'no title')[:100],
+                "stance": getattr(ev, 'ai_stance', 'unknown'),
+                "relevance": getattr(ev, 'ai_relevance_score', 0),
+                "content_length": len(getattr(ev, 'text', '') or '')
+            })
+        
+        print(f"🎯 ROGR Scoring Complete: Trust Score {new_results.trust_score:.1f}, Evidence Grade {new_results.evidence_grade}")
+        
+        # Return ROGR professional scoring results
+        return {
+            "claim": request.claim,
+            "rogr_results": {
+                "trust_score": round(new_results.trust_score, 1),
+                "evidence_grade": new_results.evidence_grade,
+                "evidence_grade_score": round(new_results.evidence_grade_score, 1),
+                "grade_description": new_results.grade_description()
+            },
+            "evidence_analysis": {
+                "total_sources": len(evidence_pieces),
+                "source_domains": list(set(getattr(ev, 'source_domain', '') for ev in evidence_pieces if getattr(ev, 'source_domain', ''))),
+                "stance_distribution": new_results.metadata.get('evidence_analysis', {}).get('stance_distribution', {}),
+                "avg_relevance": new_results.metadata.get('evidence_analysis', {}).get('avg_relevance_score', 0)
+            },
+            "methodology": {
+                "scoring_engine": new_results.metadata.get('scoring_methodology', 'ROGR FC Engine'),
+                "ifcn_compliance": new_results.metadata.get('ifcn_compliance', {}),
+                "grade_breakdown": new_results.metadata.get('grade_breakdown', {})
+            },
+            "evidence_pieces": evidence_summary[:5],  # First 5 for debugging
+            "processing_time": "measured_in_production"
+        }
+        
+    except Exception as e:
+        print(f"❌ ERROR in ROGR FC scoring test: {e}")
+        return {
+            "error": f"ROGR FC scoring test failed: {str(e)}",
+            "claim": request.claim,
+            "debug_info": str(e)
         }
