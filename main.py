@@ -1414,17 +1414,20 @@ async def debug_claim_miner(request: dict):
             }
             
             mining_result = claim_miner.mine_claims(all_text, context_type=context_type, source_context=source_context)
+            print(f"DEBUG: ClaimMiner found {len(mining_result.primary_claims) if mining_result else 0} primary + {len(mining_result.secondary_claims) if mining_result else 0} secondary claims")
             
         elif context_type == "text":
             # Direct text processing - replicate main.py lines 734-735
             all_text = input_data
             mining_result = claim_miner.mine_claims(input_data, context_type=context_type, source_context=source_context)
+            print(f"DEBUG: ClaimMiner found {len(mining_result.primary_claims) if mining_result else 0} primary + {len(mining_result.secondary_claims) if mining_result else 0} secondary claims")
             preprocessing_info = {"processed_as": "direct_text"}
             
         else:
             # Other context types (image_ocr, social_post) - treat as text for now
             all_text = input_data
             mining_result = claim_miner.mine_claims(input_data, context_type=context_type, source_context=source_context)
+            print(f"DEBUG: ClaimMiner found {len(mining_result.primary_claims) if mining_result else 0} primary + {len(mining_result.secondary_claims) if mining_result else 0} secondary claims")
             preprocessing_info = {"processed_as": "fallback_text"}
         
         # Format results for debugging
