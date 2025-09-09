@@ -1514,7 +1514,7 @@ async def test_rogr_fc_scoring(request: ClaimRequest):
         rogr_scorer = ROGRFCScoringEngineZeroStart()
         new_results = rogr_scorer.score_evidence_pool(request.claim, evidence_pieces)
         
-        # Prepare evidence summary for debugging
+        # Prepare evidence summary for debugging - INCLUDE HIGHLIGHT FIELDS
         evidence_summary = []
         for i, ev in enumerate(evidence_pieces):
             evidence_summary.append({
@@ -1523,7 +1523,10 @@ async def test_rogr_fc_scoring(request: ClaimRequest):
                 "title": getattr(ev, 'source_title', 'no title')[:100],
                 "stance": getattr(ev, 'ai_stance', 'unknown'),
                 "relevance": getattr(ev, 'ai_relevance_score', 0),
-                "content_length": len(getattr(ev, 'text', '') or '')
+                "content_length": len(getattr(ev, 'text', '') or ''),
+                "highlight_text": getattr(ev, 'highlight_text', 'no highlight text'),
+                "highlight_context": getattr(ev, 'highlight_context', 'no highlight context')[:200],
+                "source_url": getattr(ev, 'source_url', 'no url')
             })
         
         print(f"🎯 ROGR Scoring Complete: Trust Score {new_results.trust_score:.1f}, Evidence Grade {new_results.evidence_grade}")
