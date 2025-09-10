@@ -90,48 +90,49 @@ analyses_claims_db = {}  # Store extracted claims for focus analysis
 ocr_service = OCRService()
 claim_miner = ClaimMiner()
 
+# LEGACY INITIALIZATION DISABLED - Using NEW ROGR Evidence Shepherd only
 # Initialize AI Evidence Shepherd (modular) - Prioritize Claude for better performance
-ai_shepherd = None
+# ai_shepherd = None
 
 # Try Claude first (better context handling, no token truncation issues)
-if os.getenv('ANTHROPIC_API_KEY'):
-    try:
-        ai_shepherd = ClaudeEvidenceShepherd()
-        if ai_shepherd.is_enabled():
-            print("✅ AI Evidence Shepherd enabled (Claude)")
-        else:
-            ai_shepherd = None
-    except Exception as e:
-        print(f"❌ Claude Evidence Shepherd failed to initialize: {e}")
-        ai_shepherd = None
+# if os.getenv('ANTHROPIC_API_KEY'):
+#     try:
+#         ai_shepherd = ClaudeEvidenceShepherd()
+#         if ai_shepherd.is_enabled():
+#             print("✅ AI Evidence Shepherd enabled (Claude)")
+#         else:
+#             ai_shepherd = None
+#     except Exception as e:
+#         print(f"❌ Claude Evidence Shepherd failed to initialize: {e}")
+#         ai_shepherd = None
 
 # Fallback to OpenAI if Claude not available
-if ai_shepherd is None and os.getenv('OPENAI_API_KEY'):
-    try:
-        ai_shepherd = OpenAIEvidenceShepherd()
-        if ai_shepherd.is_enabled():
-            print("✅ AI Evidence Shepherd enabled (OpenAI)")
-        else:
-            ai_shepherd = NoOpEvidenceShepherd()
-            print("⚠️  AI Evidence Shepherd fallback to NoOp (OpenAI not configured)")
-    except Exception as e:
-        print(f"❌ OpenAI Evidence Shepherd failed to initialize: {e}")
-        ai_shepherd = NoOpEvidenceShepherd()
+# if ai_shepherd is None and os.getenv('OPENAI_API_KEY'):
+#     try:
+#         ai_shepherd = OpenAIEvidenceShepherd()
+#         if ai_shepherd.is_enabled():
+#             print("✅ AI Evidence Shepherd enabled (OpenAI)")
+#         else:
+#             ai_shepherd = NoOpEvidenceShepherd()
+#             print("⚠️  AI Evidence Shepherd fallback to NoOp (OpenAI not configured)")
+#     except Exception as e:
+#         print(f"❌ OpenAI Evidence Shepherd failed to initialize: {e}")
+#         ai_shepherd = NoOpEvidenceShepherd()
 
 # Final fallback to NoOp
-if ai_shepherd is None:
-    ai_shepherd = NoOpEvidenceShepherd()
-    print("ℹ️  AI Evidence Shepherd using NoOp implementation (no API keys available)")
+# if ai_shepherd is None:
+#     ai_shepherd = NoOpEvidenceShepherd()
+#     print("ℹ️  AI Evidence Shepherd using NoOp implementation (no API keys available)")
 
 # Initialize Wikipedia service with AI shepherd
-wikipedia_service = WikipediaService(evidence_shepherd=ai_shepherd)
+# wikipedia_service = WikipediaService(evidence_shepherd=ai_shepherd)
 
-# Initialize Progressive Analysis Service
-progressive_service = ProgressiveAnalysisService(
-    wikipedia_service=wikipedia_service,
-    claim_service=claim_miner,
-    evidence_shepherd=ai_shepherd
-)
+# Initialize Progressive Analysis Service - DISABLED for NEW ES only
+# progressive_service = ProgressiveAnalysisService(
+#     wikipedia_service=wikipedia_service,
+#     claim_service=claim_miner,
+#     evidence_shepherd=ai_shepherd
+# )
 
 # Claim scoring functions
 def generate_evidence_statements(claim_text: str, trust_score: int) -> tuple[List[EvidenceStatement], List[EvidenceStatement], List[EvidenceStatement]]:
@@ -283,14 +284,13 @@ async def score_claim_with_evidence_shepherd(claim_text: str, claim_context: dic
         # Advanced trust score calculation with uncertainty quantification
         sources_count = len(evidence_pieces)
         
-        # Use consensus quality score if available (MDEQ), otherwise fallback
+        # NEW ES MUST provide consensus quality score - no fallbacks
         if consensus_quality_score is not None:
             base_trust_score = consensus_quality_score
-            print(f"DEBUG: Using MDEQ consensus score as base: {base_trust_score:.1f}")
+            print(f"DEBUG: Using NEW ES consensus score: {base_trust_score:.1f}")
         else:
-            # Fallback scoring for non-MDEQ systems
-            base_trust_score = 50.0  # Neutral starting point
-            print(f"DEBUG: Using fallback base score: {base_trust_score:.1f}")
+            # NEW Evidence Shepherd should ALWAYS provide consensus score
+            raise Exception("NEW Evidence Shepherd failed to provide consensus_quality_score - system error")
         
         # Apply uncertainty adjustments
         trust_score = base_trust_score
@@ -433,9 +433,9 @@ async def score_claim_with_evidence_shepherd(claim_text: str, claim_context: dic
         )
         
     except Exception as e:
-        print(f"ERROR: Evidence Shepherd processing failed for claim '{claim_text[:50]}...': {e}")
-        # Fallback to old scoring method
-        return score_individual_claim(claim_text)
+        print(f"FATAL: NEW Evidence Shepherd processing failed for claim '{claim_text[:50]}...': {e}")
+        # NO FALLBACKS - if NEW ES fails, the system should fail
+        raise Exception(f"NEW Evidence Shepherd system failure: {str(e)}")
 
 async def score_claim_with_evidence_shepherd_v2(claim_text: str, claim_context: dict = None) -> ClaimAnalysis:
     """Score a claim using V2 Evidence Shepherd system for comparison testing"""
@@ -1099,60 +1099,61 @@ async def focus_analysis(id: str, focus: FocusRequest):
     analyses_db[id] = capsule
     return capsule
 
-@app.post("/analyses/progressive", response_model=dict)
-async def start_progressive_analysis(analysis: AnalysisInput):
-    """Start progressive analysis with live updates for large content"""
-    analysis_id = str(uuid.uuid4())
-    
-    try:
-        # Detect content size and set expectations
-        content_size, expectations = progressive_service.detect_content_size(analysis.input)
-        
-        print(f"Progressive analysis started: {analysis_id}, size: {content_size.value}, estimated: {expectations['estimated_time']}")
-        
-        # Start background processing
-        async def progress_callback(aid, status):
-            print(f"Progress {aid}: {status.phase.value} - {status.progress:.1%} - {status.message}")
-        
-        # Run progressive analysis in background
-        asyncio.create_task(
-            progressive_service.start_progressive_analysis(
-                analysis_id, analysis.input, analysis.type, progress_callback
-            )
-        )
-        
-        # Return immediate response with analysis ID and expectations
-        return {
-            "analysis_id": analysis_id,
-            "content_size": content_size.value,
-            "expectations": expectations,
-            "status": "started",
-            "message": "Analysis started. Use /analyses/progressive/{analysis_id}/status to check progress."
-        }
-        
-    except Exception as e:
-        print(f"Progressive analysis startup error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to start analysis: {str(e)}")
+# DISABLED: Progressive analysis endpoints require legacy services
+# @app.post("/analyses/progressive", response_model=dict)
+# async def start_progressive_analysis(analysis: AnalysisInput):
+#     """Start progressive analysis with live updates for large content"""
+#     analysis_id = str(uuid.uuid4())
+#     
+#     try:
+#         # Detect content size and set expectations
+#         content_size, expectations = progressive_service.detect_content_size(analysis.input)
+#         
+#         print(f"Progressive analysis started: {analysis_id}, size: {content_size.value}, estimated: {expectations['estimated_time']}")
+#         
+#         # Start background processing
+#         async def progress_callback(aid, status):
+#             print(f"Progress {aid}: {status.phase.value} - {status.progress:.1%} - {status.message}")
+#         
+#         # Run progressive analysis in background
+#         asyncio.create_task(
+#             progressive_service.start_progressive_analysis(
+#                 analysis_id, analysis.input, analysis.type, progress_callback
+#             )
+#         )
+#         
+#         # Return immediate response with analysis ID and expectations
+#         return {
+#             "analysis_id": analysis_id,
+#             "content_size": content_size.value,
+#             "expectations": expectations,
+#             "status": "started",
+#             "message": "Analysis started. Use /analyses/progressive/{analysis_id}/status to check progress."
+#         }
+#         
+#     except Exception as e:
+#         print(f"Progressive analysis startup error: {e}")
+#         raise HTTPException(status_code=500, detail=f"Failed to start analysis: {str(e)}")
 
-@app.get("/analyses/progressive/{analysis_id}/status")
-async def get_progressive_status(analysis_id: str):
-    """Get current status of progressive analysis"""
-    status = progressive_service.get_analysis_status(analysis_id)
-    
-    if not status:
-        raise HTTPException(status_code=404, detail="Analysis not found or completed")
-    
-    return status
+# @app.get("/analyses/progressive/{analysis_id}/status")
+# async def get_progressive_status(analysis_id: str):
+#     """Get current status of progressive analysis"""
+#     status = progressive_service.get_analysis_status(analysis_id)
+#     
+#     if not status:
+#         raise HTTPException(status_code=404, detail="Analysis not found or completed")
+#     
+#     return status
 
-@app.post("/analyses/progressive/{analysis_id}/cancel")
-async def cancel_progressive_analysis(analysis_id: str):
-    """Cancel active progressive analysis"""
-    success = progressive_service.cancel_analysis(analysis_id)
-    
-    if success:
-        return {"status": "cancelled", "analysis_id": analysis_id}
-    else:
-        raise HTTPException(status_code=404, detail="Analysis not found or already completed")
+# @app.post("/analyses/progressive/{analysis_id}/cancel")
+# async def cancel_progressive_analysis(analysis_id: str):
+#     """Cancel active progressive analysis"""
+#     success = progressive_service.cancel_analysis(analysis_id)
+#     
+#     if success:
+#         return {"status": "cancelled", "analysis_id": analysis_id}
+#     else:
+#         raise HTTPException(status_code=404, detail="Analysis not found or already completed")
 
 @app.get("/evidence")
 async def get_evidence(q: str):
@@ -1210,66 +1211,67 @@ async def get_evidence(q: str):
         print(f"AI evidence search error: {e}")
         raise HTTPException(status_code=500, detail=f"Error in AI evidence analysis: {str(e)}")
 
-@app.get("/debug/evidence-comparison")
-async def debug_evidence_comparison():
-    """Compare Wikipedia-guided vs Pure AI Evidence Shepherd approaches"""
-    
-    test_claim = "Wealthy enclaves sewage reveals higher than average cocaine levels"
-    
-    results = {
-        "test_claim": test_claim,
-        "approach_a_wikipedia_guided": {},
-        "approach_b_pure_ai": {}
-    }
-    
-    # APPROACH A: Wikipedia-Guided (Current)
-    try:
-        print(f"=== APPROACH A: Wikipedia-Guided ===")
-        wiki_evidence = wikipedia_service.search_evidence_for_claim(test_claim)
-        results["approach_a_wikipedia_guided"] = {
-            "evidence_count": len(wiki_evidence),
-            "sources": []
-        }
-        
-        for i, item in enumerate(wiki_evidence[:5]):
-            source_info = {
-                "index": i,
-                "source_url": item.get('source_url', 'NO URL'),
-                "source_domain": item.get('source_domain', 'NO DOMAIN'),
-                "source_title": item.get('source_title', 'NO TITLE'),
-                "statement": item.get('statement', 'NO STATEMENT')[:100] + "..." if item.get('statement') else "NO STATEMENT"
-            }
-            results["approach_a_wikipedia_guided"]["sources"].append(source_info)
-            print(f"Wiki Evidence {i}: {source_info['source_domain']} - {source_info['source_url']}")
-            
-    except Exception as e:
-        results["approach_a_wikipedia_guided"]["error"] = str(e)
-        print(f"Wikipedia approach error: {e}")
-    
-    # APPROACH B: Pure AI Evidence Shepherd
-    try:
-        print(f"=== APPROACH B: Pure AI Evidence Shepherd ===")
-        if hasattr(ai_shepherd, 'analyze_claim'):
-            # Test AI's independent search strategy
-            search_strategy = ai_shepherd.analyze_claim(test_claim)
-            results["approach_b_pure_ai"] = {
-                "claim_type": search_strategy.claim_type.value if search_strategy.claim_type else "unknown",
-                "search_queries": search_strategy.search_queries,
-                "target_domains": search_strategy.target_domains,
-                "authority_weight": search_strategy.authority_weight,
-                "confidence_threshold": search_strategy.confidence_threshold,
-                "ai_enabled": ai_shepherd.is_enabled()
-            }
-            print(f"AI Strategy: {search_strategy.claim_type.value}")
-            print(f"AI Queries: {search_strategy.search_queries}")
-            print(f"AI Target Domains: {search_strategy.target_domains}")
-        else:
-            results["approach_b_pure_ai"]["error"] = f"AI Evidence Shepherd analyze_claim not available. Type: {type(ai_shepherd)}"
-    except Exception as e:
-        results["approach_b_pure_ai"]["error"] = str(e)
-        print(f"AI approach error: {e}")
-    
-    return results
+# DISABLED: Legacy debug endpoint requires wikipedia_service
+# @app.get("/debug/evidence-comparison")
+# async def debug_evidence_comparison():
+#     """Compare Wikipedia-guided vs Pure AI Evidence Shepherd approaches"""
+#     
+#     test_claim = "Wealthy enclaves sewage reveals higher than average cocaine levels"
+#     
+#     results = {
+#         "test_claim": test_claim,
+#         "approach_a_wikipedia_guided": {},
+#         "approach_b_pure_ai": {}
+#     }
+#     
+#     # APPROACH A: Wikipedia-Guided (Current)
+#     try:
+#         print(f"=== APPROACH A: Wikipedia-Guided ===")
+#         wiki_evidence = wikipedia_service.search_evidence_for_claim(test_claim)
+#         results["approach_a_wikipedia_guided"] = {
+#             "evidence_count": len(wiki_evidence),
+#             "sources": []
+#         }
+#         
+#         for i, item in enumerate(wiki_evidence[:5]):
+#             source_info = {
+#                 "index": i,
+#                 "source_url": item.get('source_url', 'NO URL'),
+#                 "source_domain": item.get('source_domain', 'NO DOMAIN'),
+#                 "source_title": item.get('source_title', 'NO TITLE'),
+#                 "statement": item.get('statement', 'NO STATEMENT')[:100] + "..." if item.get('statement') else "NO STATEMENT"
+#             }
+#             results["approach_a_wikipedia_guided"]["sources"].append(source_info)
+#             print(f"Wiki Evidence {i}: {source_info['source_domain']} - {source_info['source_url']}")
+#             
+#     except Exception as e:
+#         results["approach_a_wikipedia_guided"]["error"] = str(e)
+#         print(f"Wikipedia approach error: {e}")
+#     
+#     # APPROACH B: Pure AI Evidence Shepherd
+#     try:
+#         print(f"=== APPROACH B: Pure AI Evidence Shepherd ===")
+#         if hasattr(ai_shepherd, 'analyze_claim'):
+#             # Test AI's independent search strategy
+#             search_strategy = ai_shepherd.analyze_claim(test_claim)
+#             results["approach_b_pure_ai"] = {
+#                 "claim_type": search_strategy.claim_type.value if search_strategy.claim_type else "unknown",
+#                 "search_queries": search_strategy.search_queries,
+#                 "target_domains": search_strategy.target_domains,
+#                 "authority_weight": search_strategy.authority_weight,
+#                 "confidence_threshold": search_strategy.confidence_threshold,
+#                 "ai_enabled": ai_shepherd.is_enabled()
+#             }
+#             print(f"AI Strategy: {search_strategy.claim_type.value}")
+#             print(f"AI Queries: {search_strategy.search_queries}")
+#             print(f"AI Target Domains: {search_strategy.target_domains}")
+#         else:
+#             results["approach_b_pure_ai"]["error"] = f"AI Evidence Shepherd analyze_claim not available. Type: {type(ai_shepherd)}"
+#     except Exception as e:
+#         results["approach_b_pure_ai"]["error"] = str(e)
+#         print(f"AI approach error: {e}")
+#     
+#     return results
 
 # Legacy endpoint removed - replaced by ROGR system
 
