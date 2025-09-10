@@ -90,49 +90,18 @@ analyses_claims_db = {}  # Store extracted claims for focus analysis
 ocr_service = OCRService()
 claim_miner = ClaimMiner()
 
-# LEGACY INITIALIZATION DISABLED - Using NEW ROGR Evidence Shepherd only
-# Initialize AI Evidence Shepherd (modular) - Prioritize Claude for better performance
-# ai_shepherd = None
-
-# Try Claude first (better context handling, no token truncation issues)
-# if os.getenv('ANTHROPIC_API_KEY'):
-#     try:
-#         ai_shepherd = ClaudeEvidenceShepherd()
-#         if ai_shepherd.is_enabled():
-#             print("✅ AI Evidence Shepherd enabled (Claude)")
-#         else:
-#             ai_shepherd = None
-#     except Exception as e:
-#         print(f"❌ Claude Evidence Shepherd failed to initialize: {e}")
-#         ai_shepherd = None
-
-# Fallback to OpenAI if Claude not available
-# if ai_shepherd is None and os.getenv('OPENAI_API_KEY'):
-#     try:
-#         ai_shepherd = OpenAIEvidenceShepherd()
-#         if ai_shepherd.is_enabled():
-#             print("✅ AI Evidence Shepherd enabled (OpenAI)")
-#         else:
-#             ai_shepherd = NoOpEvidenceShepherd()
-#             print("⚠️  AI Evidence Shepherd fallback to NoOp (OpenAI not configured)")
-#     except Exception as e:
-#         print(f"❌ OpenAI Evidence Shepherd failed to initialize: {e}")
-#         ai_shepherd = NoOpEvidenceShepherd()
-
-# Final fallback to NoOp
-# if ai_shepherd is None:
-#     ai_shepherd = NoOpEvidenceShepherd()
-#     print("ℹ️  AI Evidence Shepherd using NoOp implementation (no API keys available)")
-
-# Initialize Wikipedia service with AI shepherd
-# wikipedia_service = WikipediaService(evidence_shepherd=ai_shepherd)
-
-# Initialize Progressive Analysis Service - DISABLED for NEW ES only
-# progressive_service = ProgressiveAnalysisService(
-#     wikipedia_service=wikipedia_service,
-#     claim_service=claim_miner,
-#     evidence_shepherd=ai_shepherd
-# )
+# Initialize NEW ROGR Dual Evidence Shepherd at startup for reuse across requests
+rogr_dual_shepherd = None
+try:
+    rogr_dual_shepherd = ROGRDualEvidenceShepherd()
+    if rogr_dual_shepherd.is_enabled():
+        print("✅ NEW ROGR Dual Evidence Shepherd enabled at startup")
+    else:
+        print("❌ NEW ROGR Dual Evidence Shepherd disabled - no shepherds available")
+        rogr_dual_shepherd = None
+except Exception as e:
+    print(f"❌ NEW ROGR Dual Evidence Shepherd failed to initialize: {e}")
+    rogr_dual_shepherd = None
 
 # Claim scoring functions
 def generate_evidence_statements(claim_text: str, trust_score: int) -> tuple[List[EvidenceStatement], List[EvidenceStatement], List[EvidenceStatement]]:
@@ -224,7 +193,7 @@ async def score_claim_with_evidence_shepherd(claim_text: str, claim_context: dic
     try:
         if use_multi_ai:
             from rogr_dual_evidence_shepherd import ROGRDualEvidenceShepherd
-            evidence_shepherd = ROGRDualEvidenceShepherd()
+            evidence_shepherd = rogr_dual_shepherd
             print(f"DEBUG: Using ROGR Dual Evidence Shepherd (NEW) for claim: {claim_text[:50]}...")
         else:
             # Fallback to single AI (Phase 1 behavior)
@@ -1490,9 +1459,14 @@ async def test_rogr_fc_scoring(request: ClaimRequest):
         print(f"🔍 ROGR FC Scoring Test: {request.claim[:50]}...")
         
         # Use ROGR dual evidence system to gather evidence
-        rogr_dual_shepherd = ROGRDualEvidenceShepherd()
+        # Use startup instance if available
+        if rogr_dual_shepherd and rogr_dual_shepherd.is_enabled():
+            evidence_shepherd = rogr_dual_shepherd
+        else:
+            # Fallback to creating new instance if startup failed
+            evidence_shepherd = ROGRDualEvidenceShepherd()
         
-        if not rogr_dual_shepherd.is_enabled():
+        if not evidence_shepherd.is_enabled():
             return {
                 "error": "Dual-AI Evidence Shepherd not enabled",
                 "claim": request.claim,
