@@ -56,6 +56,8 @@ class ProcessedEvidence:
     ai_reasoning: str  # Why AI scored it this way
     highlight_text: Optional[str] = None
     highlight_context: Optional[str] = None
+    consensus_quality_score: Optional[float] = None  # Dual-AI consensus score
+    consensus_metadata: Optional[Dict] = None  # Consensus analysis metadata
     
 class EvidenceShepherd(ABC):
     """Abstract interface for AI-powered evidence processing"""

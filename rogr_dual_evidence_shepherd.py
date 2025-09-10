@@ -108,6 +108,17 @@ class ROGRDualEvidenceShepherd(EvidenceShepherd):
         for evidence_list in all_evidence.values():
             combined_evidence.extend(evidence_list)
         
+        # Attach consensus data to first evidence object
+        if combined_evidence:
+            combined_evidence[0].consensus_quality_score = consensus_result.quality_weighted_score
+            combined_evidence[0].consensus_metadata = {
+                'consensus_score': consensus_result.consensus_score,
+                'disagreement_level': consensus_result.disagreement_level,
+                'uncertainty_indicators': consensus_result.uncertainty_indicators,
+                'evidence_quality_summary': consensus_result.evidence_quality_summary,
+                'individual_scores': consensus_result.individual_scores
+            }
+        
         return combined_evidence
     
     def _analyze_consensus(self, claim_text: str, all_evidence: Dict[str, List[ProcessedEvidence]]) -> DualAIConsensusResult:
