@@ -243,11 +243,7 @@ async def score_claim_with_evidence_shepherd(claim_text: str, claim_context: dic
     # Process claim through Evidence Shepherd
     try:
         # Use Evidence Shepherd to find and analyze evidence
-        evidence_pieces = await evidence_shepherd.find_evidence_for_claim(
-            claim_text, 
-            search_strategy=evidence_shepherd.get_search_strategy(claim_text),
-            context=claim_context or {}
-        )
+        evidence_pieces = evidence_shepherd.search_real_evidence(claim_text)
         
         print(f"DEBUG: Evidence Shepherd found {len(evidence_pieces)} pieces of evidence")
         
