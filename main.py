@@ -222,9 +222,9 @@ async def score_claim_with_evidence_shepherd(claim_text: str, claim_context: dic
     
     try:
         if use_multi_ai:
-            from multi_ai_evidence_shepherd import MultiAIEvidenceShepherd
-            evidence_shepherd = MultiAIEvidenceShepherd()
-            print(f"DEBUG: Using Multi-AI Evidence Shepherd (advanced) for claim: {claim_text[:50]}...")
+            from rogr_dual_evidence_shepherd import ROGRDualEvidenceShepherd
+            evidence_shepherd = ROGRDualEvidenceShepherd()
+            print(f"DEBUG: Using ROGR Dual Evidence Shepherd (NEW) for claim: {claim_text[:50]}...")
         else:
             # Fallback to single AI (Phase 1 behavior)
             if os.getenv('ANTHROPIC_API_KEY'):
