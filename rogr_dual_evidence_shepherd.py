@@ -133,7 +133,7 @@ class ROGRDualEvidenceShepherd(EvidenceShepherd):
         
         for ai_name, shepherd in self.ai_shepherds:
             print(f"🔍 ROGR {ai_name}: Searching for evidence...")
-            evidence_list = shepherd.search_real_evidence(claim_text)
+            evidence_list = shepherd.search_real_evidence(claim_text, search_strategy)
             all_evidence[ai_name] = evidence_list
             print(f"✅ ROGR {ai_name}: Found {len(evidence_list)} evidence pieces")
         

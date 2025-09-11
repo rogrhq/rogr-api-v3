@@ -1,7 +1,10 @@
 import os
 import json
 import re
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from evidence_gathering.interfaces.search_strategy_interface import SearchStrategyResult
 import requests
 from evidence_shepherd import EvidenceShepherd, SearchStrategy, EvidenceCandidate, ProcessedEvidence, ClaimType, MultiDomainClaimAnalysis
 from web_search_service import WebSearchService
@@ -612,7 +615,7 @@ CRITICAL: key_excerpt must be under 100 characters with escaped quotes (\")"""
             print(f"❌ ROGR evidence scoring failed: {e}")
             raise ValueError(f"ROGR Evidence Shepherd: Failed to parse evidence scoring: {e}")
     
-    def search_real_evidence(self, claim_text: str) -> List[EvidenceCandidate]:
+    def search_real_evidence(self, claim_text: str, external_strategy: Optional['SearchStrategyResult'] = None) -> List[EvidenceCandidate]:
         """REAL WEB SEARCH: Find actual evidence from all available sources using Claude"""
         
         if not self.is_enabled():
@@ -620,14 +623,20 @@ CRITICAL: key_excerpt must be under 100 characters with escaped quotes (\")"""
             return []
         
         try:
-            # Step 1: Claude analyzes claim and creates search strategy
-            search_strategy = self.analyze_claim(claim_text)
-            print(f"Claude Search Strategy: {search_strategy.claim_type.value} with {len(search_strategy.search_queries)} queries")
+            # Step 1: Use external strategy (EEG) or generate internal strategy
+            if external_strategy:
+                queries = [q.query_text for q in external_strategy.queries]
+                print(f"EEG Strategy: Using {len(queries)} methodology-first queries")
+            else:
+                # Step 1: Claude analyzes claim and creates search strategy
+                search_strategy = self.analyze_claim(claim_text)
+                queries = search_strategy.search_queries[:3]
+                print(f"Claude Search Strategy: {search_strategy.claim_type.value} with {len(queries)} queries")
             
-            # Step 2: Execute real web searches using Claude-generated queries
+            # Step 2: Execute real web searches using strategy queries
             all_search_results = []
             
-            for query in search_strategy.search_queries[:3]:  # Process more queries for thoroughness
+            for query in queries:
                 print(f"Searching web for: '{query}'")
                 search_results = self.web_search.search_web(query, max_results=8)  # More results per query
                 all_search_results.extend(search_results)
