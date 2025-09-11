@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import requests
 from typing import List, Dict, Optional, TYPE_CHECKING
 from evidence_shepherd import EvidenceShepherd, SearchStrategy, EvidenceCandidate, ProcessedEvidence, ClaimType
 from web_search_service import WebSearchService
@@ -12,6 +13,7 @@ class ROGREvidenceShepherd(EvidenceShepherd):
     def __init__(self):
         """Initialize with just execution capabilities"""
         self.api_key = os.getenv('ANTHROPIC_API_KEY')
+        self.base_url = "https://api.anthropic.com/v1/messages"
         self.web_search = WebSearchService()
         self.content_extractor = WebContentExtractor()
     
@@ -115,38 +117,41 @@ class ROGREvidenceShepherd(EvidenceShepherd):
         return processed_evidence[:5]  # Return top 5 most relevant
     
     def score_evidence_relevance_claude(self, claim_text: str, evidence: EvidenceCandidate) -> ProcessedEvidence:
-        """Score evidence using Claude for relevance and stance"""
+        """Use Claude to score individual evidence relevance"""
         
-        scoring_prompt = f"""PROFESSIONAL FACT-CHECKING: Rate this evidence for the claim: "{claim_text}"
+        system_prompt = f"""You are an expert fact-checker evaluating evidence for the claim: "{claim_text}"
 
-EVIDENCE: {evidence.text[:400]}
-SOURCE: {evidence.source_domain} - {evidence.source_title}
+RELEVANCE SCORING (0-100):
+90-100: DIRECT - Evidence directly proves/disproves the claim with specific data
+80-89:  STRONG - Evidence strongly supports/contradicts with related data  
+70-79:  GOOD - Evidence provides relevant context or related information
+60-69:  WEAK - Evidence mentions topic but doesn't directly address claim
+50-59:  TANGENTIAL - Evidence related to topic but not claim specifics
+0-49:   IRRELEVANT - Evidence unrelated or extremely weak connection
 
-Rate 0-100 for RELEVANCE to the specific claim (not general topic):
-- 90-100: Directly addresses and verifies/refutes the exact claim
-- 70-89: Strong relevance with supporting/contradicting information  
-- 50-69: Moderate relevance, tangentially related
-- 30-49: Weak relevance, background information only
-- 0-29: Irrelevant or off-topic
+STANCE relative to the claim "{claim_text}":
+- "supporting": Evidence that supports/proves the claim is TRUE
+- "contradicting": Evidence that disproves/refutes the claim is FALSE
+- "neutral": Evidence that neither supports nor contradicts the claim
 
-STANCE (supporting/contradicting/neutral):
-- supporting: Evidence supports the claim's truth
-- contradicting: Evidence challenges/refutes the claim  
-- neutral: Evidence is factual but doesn't clearly support or contradict
-
-Return ONLY JSON:
+Return ONLY valid JSON:
 {{
   "relevance_score": 85,
-  "stance": "supporting",
-  "reasoning": "Brief explanation"
-}}"""
+  "stance": "supporting", 
+  "confidence": 0.9,
+  "reasoning": "Brief explanation",
+  "key_excerpt": "Short quote under 100 chars"
+}}
+
+CRITICAL: key_excerpt must be under 100 characters with escaped quotes (\")"""
 
         messages = [
-            {"role": "user", "content": f"Score this evidence"}
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"CLAIM: {claim_text}\n\nEVIDENCE: {evidence.text[:800]}\n\nSOURCE: {evidence.source_title} ({evidence.source_domain})"}
         ]
         
         try:
-            response = self._call_claude(messages, max_tokens=200, system_message=scoring_prompt)
+            response = self._call_claude(messages, max_tokens=300)
             if not response:
                 return self._create_fallback_evidence(claim_text, evidence)
             
@@ -157,10 +162,12 @@ Return ONLY JSON:
                 source_url=evidence.source_url,
                 source_domain=evidence.source_domain,
                 source_title=evidence.source_title,
-                ai_relevance_score=score_data.get('relevance_score', 50),
+                ai_relevance_score=float(score_data.get('relevance_score', 50)),
                 ai_stance=score_data.get('stance', 'neutral'),
-                ai_confidence=0.8,
-                ai_reasoning=score_data.get('reasoning', 'No reasoning provided')
+                ai_confidence=float(score_data.get('confidence', 0.8)),
+                ai_reasoning=score_data.get('reasoning', 'Claude analysis completed'),
+                highlight_text=score_data.get('key_excerpt', evidence.text[:100]),
+                highlight_context=evidence.text[:300]
             )
             
         except (json.JSONDecodeError, KeyError, ValueError) as e:
@@ -180,27 +187,43 @@ Return ONLY JSON:
             ai_reasoning='Fallback scoring due to AI unavailability'
         )
     
-    def _call_claude(self, messages: list, max_tokens: int = 1000, system_message: str = "") -> Optional[str]:
-        """Call Claude API with proper error handling"""
+    def _call_claude(self, messages: list, max_tokens: int = 1000) -> Optional[str]:
+        """Make API call to Claude"""
         if not self.is_enabled():
             return None
-        
-        import anthropic
-        
+            
         try:
-            client = anthropic.Anthropic(api_key=self.api_key)
+            headers = {
+                'x-api-key': self.api_key,
+                'Content-Type': 'application/json',
+                'anthropic-version': '2023-06-01'
+            }
             
-            response = client.messages.create(
-                model="claude-3-haiku-20240307",
-                max_tokens=max_tokens,
-                messages=messages,
-                system=system_message
-            )
+            # Convert messages to Claude format
+            system_message = ""
+            user_messages = []
             
-            return response.content[0].text
+            for msg in messages:
+                if msg['role'] == 'system':
+                    system_message = msg['content']
+                else:
+                    user_messages.append(msg)
+            
+            payload = {
+                'model': "claude-3-haiku-20240307",
+                'max_tokens': max_tokens,
+                'messages': user_messages,
+                'system': system_message
+            }
+            
+            response = requests.post(self.base_url, headers=headers, json=payload, timeout=30)
+            response.raise_for_status()
+            
+            result = response.json()
+            return result['content'][0]['text'].strip()
             
         except Exception as e:
-            print(f"Claude API call failed: {e}")
+            print(f"Claude API error: {e}")
             return None
 
     def analyze_claim(self, claim_text: str) -> SearchStrategy:
