@@ -32,6 +32,7 @@ class SearchStrategy:
     confidence_threshold: float  # Minimum confidence to include evidence
     # NEW: Multi-domain support
     multi_domain_analysis: Optional[MultiDomainClaimAnalysis] = None
+    strategy_source: str = "unknown"  # Source of strategy generation
 
 @dataclass 
 class EvidenceCandidate:

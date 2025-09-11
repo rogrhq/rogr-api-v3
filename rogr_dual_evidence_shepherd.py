@@ -103,37 +103,18 @@ class ROGRDualEvidenceShepherd(EvidenceShepherd):
             else:
                 return []
         
-        # EEG Phase 1: Enhanced search strategy generation
-        search_strategy = None
-        if self.use_eeg_phase_1 and self.methodology_strategist:
-            print(f"🧠 EEG Phase 1: Generating methodology-first search strategy...")
-            eeg_start = time.time()
-            try:
-                search_strategy = self.methodology_strategist.generate_search_strategy(claim_text)
-                eeg_time = time.time() - eeg_start
-                
-                # Record EEG metrics
-                performance_tester.record_eeg_strategy(
-                    test_id, eeg_time, len(search_strategy.queries),
-                    search_strategy.methodology_coverage,
-                    search_strategy.ifcn_compliance_status
-                )
-                
-                print(f"✅ EEG Phase 1: Generated {len(search_strategy.queries)} IFCN-compliant queries")
-                print(f"📊 EEG Phase 1: Strategy time: {eeg_time:.2f}s, Estimated total: {search_strategy.total_estimated_time}s")
-            except Exception as e:
-                errors.append(f"EEG strategy generation failed: {e}")
-                print(f"⚠️ EEG Phase 1 strategy generation failed: {e}")
-                search_strategy = None
         
         print(f"🔍 Starting dual AI evidence gathering for: {claim_text[:50]}...")
         
         # Gather evidence from both AI shepherds
         all_evidence = {}
         
+        # Get centralized strategy - NO fallbacks, single source
+        strategy = self._get_complete_strategy(claim_text)
+        
         for ai_name, shepherd in self.ai_shepherds:
             print(f"🔍 ROGR {ai_name}: Searching for evidence...")
-            evidence_list = shepherd.search_real_evidence(claim_text, search_strategy)
+            evidence_list = shepherd.search_real_evidence(claim_text, strategy)
             all_evidence[ai_name] = evidence_list
             print(f"✅ ROGR {ai_name}: Found {len(evidence_list)} evidence pieces")
         
@@ -175,6 +156,49 @@ class ROGRDualEvidenceShepherd(EvidenceShepherd):
         performance_tester.finish_test(test_id, total_time, errors)
         
         return combined_evidence
+    
+    def _get_complete_strategy(self, claim_text: str) -> SearchStrategy:
+        """SINGLE point of all strategy generation - centralized at orchestrator level"""
+        
+        if self.use_eeg_phase_1 and self.methodology_strategist:
+            # EEG Phase 1 Strategy Generation
+            print(f"🧠 EEG Phase 1: Generating methodology-first search strategy...")
+            eeg_start = time.time()
+            try:
+                eeg_result = self.methodology_strategist.generate_search_strategy(claim_text)
+                eeg_time = time.time() - eeg_start
+                
+                print(f"✅ EEG Phase 1: Generated {len(eeg_result.queries)} IFCN-compliant queries")
+                print(f"📊 EEG Phase 1: Strategy time: {eeg_time:.2f}s, Estimated total: {eeg_result.total_estimated_time}s")
+                
+                # Convert EEG result to SearchStrategy
+                return SearchStrategy(
+                    strategy_source="EEG_Phase_1",
+                    claim_type=ClaimType.SCIENTIFIC,
+                    search_queries=[q.query_text for q in eeg_result.queries],
+                    target_domains=[],
+                    time_relevance_months=12,
+                    authority_weight=0.8,
+                    confidence_threshold=0.7
+                )
+                
+            except Exception as e:
+                print(f"❌ EEG Phase 1 strategy generation failed: {e}")
+                # NO FALLBACK - fail fast
+                raise ValueError(f"Centralized strategy generation failed: {e}")
+        else:
+            # Legacy Orchestrator Strategy (for non-EEG mode)
+            # This would implement basic claim analysis at orchestrator level
+            # For now, return a simple strategy until legacy is needed
+            return SearchStrategy(
+                strategy_source="Legacy_Orchestrator", 
+                claim_type=ClaimType.FACTUAL,
+                search_queries=[claim_text],
+                target_domains=[],
+                time_relevance_months=12,
+                authority_weight=0.7,
+                confidence_threshold=0.7
+            )
     
     def _analyze_consensus(self, claim_text: str, all_evidence: Dict[str, List[ProcessedEvidence]]) -> DualAIConsensusResult:
         """Analyze consensus between AI shepherds"""
