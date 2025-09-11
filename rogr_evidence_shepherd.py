@@ -205,6 +205,20 @@ Return ONLY JSON:
             print(f"Claude API call failed: {e}")
             return None
 
+    def analyze_claim(self, claim_text: str) -> SearchStrategy:
+        """ARCHITECTURE EVOLUTION: Strategy generation moved to orchestrator level.
+        Individual Evidence Shepherds are now pure strategy executors.
+        This method should not be called - use orchestrator._get_complete_strategy()"""
+        raise NotImplementedError(
+            "Individual Evidence Shepherd is now a pure strategy executor. "
+            "Strategy generation has been moved to ROGRDualEvidenceShepherd._get_complete_strategy(). "
+            "Use search_real_evidence(claim_text, strategy) with external strategy instead."
+        )
+
+    def score_evidence_relevance(self, claim_text: str, evidence: EvidenceCandidate) -> ProcessedEvidence:
+        """ARCHITECTURE EVOLUTION: Method signature updated for pure executor pattern"""
+        return self.score_evidence_relevance_claude(claim_text, evidence)
+
     # REMOVED METHODS - No longer part of pure executor:
     # - analyze_claim() - Strategy generation moved to orchestrator
     # - _classify_claim_domains() - Multi-domain analysis moved to orchestrator

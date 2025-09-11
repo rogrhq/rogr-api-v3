@@ -72,10 +72,10 @@ class ROGRDualEvidenceShepherd(EvidenceShepherd):
         return len(self.ai_shepherds) > 0
     
     def analyze_claim(self, claim_text: str) -> SearchStrategy:
-        """Analyze claim using first available shepherd"""
+        """Analyze claim using orchestrator strategy generation"""
         if not self.ai_shepherds:
             raise ValueError("No AI shepherds available")
-        return self.ai_shepherds[0][1].analyze_claim(claim_text)
+        return self._get_complete_strategy(claim_text)
     
     def filter_evidence_batch(self, evidence_candidates: List[EvidenceCandidate], max_count: int = 5) -> List[EvidenceCandidate]:
         """Filter evidence batch using first available shepherd"""
