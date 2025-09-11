@@ -142,12 +142,11 @@ Return ONLY JSON:
 }}"""
 
         messages = [
-            {"role": "system", "content": scoring_prompt},
             {"role": "user", "content": f"Score this evidence"}
         ]
         
         try:
-            response = self._call_claude(messages, max_tokens=200)
+            response = self._call_claude(messages, max_tokens=200, system_message=scoring_prompt)
             if not response:
                 return self._create_fallback_evidence(claim_text, evidence)
             
@@ -158,11 +157,10 @@ Return ONLY JSON:
                 source_url=evidence.source_url,
                 source_domain=evidence.source_domain,
                 source_title=evidence.source_title,
-                found_via_query=evidence.found_via_query,
-                raw_relevance=evidence.raw_relevance,
                 ai_relevance_score=score_data.get('relevance_score', 50),
-                stance=score_data.get('stance', 'neutral'),
-                reasoning=score_data.get('reasoning', 'No reasoning provided')
+                ai_stance=score_data.get('stance', 'neutral'),
+                ai_confidence=0.8,
+                ai_reasoning=score_data.get('reasoning', 'No reasoning provided')
             )
             
         except (json.JSONDecodeError, KeyError, ValueError) as e:
@@ -176,14 +174,13 @@ Return ONLY JSON:
             source_url=evidence.source_url,
             source_domain=evidence.source_domain,
             source_title=evidence.source_title,
-            found_via_query=evidence.found_via_query,
-            raw_relevance=evidence.raw_relevance,
             ai_relevance_score=60,  # Neutral fallback score
-            stance='neutral',
-            reasoning='Fallback scoring due to AI unavailability'
+            ai_stance='neutral',
+            ai_confidence=0.3,
+            ai_reasoning='Fallback scoring due to AI unavailability'
         )
     
-    def _call_claude(self, messages: list, max_tokens: int = 1000) -> Optional[str]:
+    def _call_claude(self, messages: list, max_tokens: int = 1000, system_message: str = "") -> Optional[str]:
         """Call Claude API with proper error handling"""
         if not self.is_enabled():
             return None
@@ -196,7 +193,8 @@ Return ONLY JSON:
             response = client.messages.create(
                 model="claude-3-5-sonnet-20241022",
                 max_tokens=max_tokens,
-                messages=messages
+                messages=messages,
+                system=system_message
             )
             
             return response.content[0].text
