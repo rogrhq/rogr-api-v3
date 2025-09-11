@@ -191,7 +191,7 @@ Return ONLY JSON:
             client = anthropic.Anthropic(api_key=self.api_key)
             
             response = client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-3-haiku-20240307",
                 max_tokens=max_tokens,
                 messages=messages,
                 system=system_message
