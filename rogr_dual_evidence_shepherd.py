@@ -1,12 +1,15 @@
 import os
 import json
 import asyncio
+import time
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 import requests
 from evidence_shepherd import EvidenceShepherd, SearchStrategy, EvidenceCandidate, ProcessedEvidence, ClaimType
 from rogr_evidence_shepherd import ROGREvidenceShepherd
 from evidence_quality_assessor import EvidenceQualityAssessor, EvidenceQualityMetrics
+from evidence_gathering.search_strategy.methodology_strategist import MethodologySearchStrategist
+from performance_testing import performance_tester
 
 @dataclass
 class DualAIConsensusResult:
@@ -22,9 +25,20 @@ class DualAIConsensusResult:
 class ROGRDualEvidenceShepherd(EvidenceShepherd):
     """ROGR Dual Evidence Shepherd with Primary + Secondary AI consensus for professional fact-checking"""
     
-    def __init__(self):
+    def __init__(self, use_eeg_phase_1: bool = False):
         """Initialize Primary and Secondary Evidence Shepherds (both Claude)"""
         self.ai_shepherds = []
+        self.use_eeg_phase_1 = use_eeg_phase_1
+        self.methodology_strategist = None
+        
+        # Initialize EEG Phase 1 if enabled
+        if self.use_eeg_phase_1:
+            try:
+                self.methodology_strategist = MethodologySearchStrategist()
+                print("✅ EEG Phase 1 MethodologySearchStrategist initialized")
+            except Exception as e:
+                print(f"⚠️ EEG Phase 1 initialization failed: {e}")
+                self.use_eeg_phase_1 = False
         
         # Primary Evidence Shepherd
         try:
@@ -76,13 +90,41 @@ class ROGRDualEvidenceShepherd(EvidenceShepherd):
         return self.ai_shepherds[0][1].score_evidence_relevance(evidence, claim_text)
     
     def search_real_evidence(self, claim_text: str) -> List[ProcessedEvidence]:
-        """Search for evidence using dual AI consensus"""
+        """Search for evidence using dual AI consensus with optional EEG Phase 1 enhancement"""
+        
+        # Start performance tracking
+        test_id = performance_tester.start_test(claim_text, self.use_eeg_phase_1)
+        start_time = time.time()
+        errors = []
         if len(self.ai_shepherds) < 2:
             print("⚠️ Falling back to single AI - insufficient shepherds for consensus")
             if self.ai_shepherds:
                 return self.ai_shepherds[0][1].search_real_evidence(claim_text)
             else:
                 return []
+        
+        # EEG Phase 1: Enhanced search strategy generation
+        search_strategy = None
+        if self.use_eeg_phase_1 and self.methodology_strategist:
+            print(f"🧠 EEG Phase 1: Generating methodology-first search strategy...")
+            eeg_start = time.time()
+            try:
+                search_strategy = self.methodology_strategist.generate_search_strategy(claim_text)
+                eeg_time = time.time() - eeg_start
+                
+                # Record EEG metrics
+                performance_tester.record_eeg_strategy(
+                    test_id, eeg_time, len(search_strategy.queries),
+                    search_strategy.methodology_coverage,
+                    search_strategy.ifcn_compliance_status
+                )
+                
+                print(f"✅ EEG Phase 1: Generated {len(search_strategy.queries)} IFCN-compliant queries")
+                print(f"📊 EEG Phase 1: Strategy time: {eeg_time:.2f}s, Estimated total: {search_strategy.total_estimated_time}s")
+            except Exception as e:
+                errors.append(f"EEG strategy generation failed: {e}")
+                print(f"⚠️ EEG Phase 1 strategy generation failed: {e}")
+                search_strategy = None
         
         print(f"🔍 Starting dual AI evidence gathering for: {claim_text[:50]}...")
         
@@ -108,6 +150,15 @@ class ROGRDualEvidenceShepherd(EvidenceShepherd):
         for evidence_list in all_evidence.values():
             combined_evidence.extend(evidence_list)
         
+        # Record evidence and consensus results
+        performance_tester.record_evidence_results(
+            test_id, len(combined_evidence),
+            consensus_result.consensus_score,
+            consensus_result.disagreement_level,
+            consensus_result.quality_weighted_score,
+            consensus_result.individual_scores
+        )
+        
         # Attach consensus data to first evidence object
         if combined_evidence:
             combined_evidence[0].consensus_quality_score = consensus_result.quality_weighted_score
@@ -118,6 +169,10 @@ class ROGRDualEvidenceShepherd(EvidenceShepherd):
                 'evidence_quality_summary': consensus_result.evidence_quality_summary,
                 'individual_scores': consensus_result.individual_scores
             }
+        
+        # Finish performance tracking
+        total_time = time.time() - start_time
+        performance_tester.finish_test(test_id, total_time, errors)
         
         return combined_evidence
     

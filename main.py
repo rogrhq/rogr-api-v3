@@ -14,6 +14,9 @@ from evidence_shepherd import NoOpEvidenceShepherd
 from progressive_analysis_service import ProgressiveAnalysisService
 from rogr_fc_scoring_engine_zero_start import ROGRFCScoringEngineZeroStart
 from rogr_dual_evidence_shepherd import ROGRDualEvidenceShepherd
+from evidence_gathering.interfaces.search_strategy_interface import FeatureFlaggedSearchStrategy
+from evidence_gathering.search_strategy.methodology_strategist import MethodologySearchStrategist
+from performance_testing import performance_tester
 
 # Test comment - verifying git push workflows
 
@@ -93,7 +96,8 @@ claim_miner = ClaimMiner()
 # Initialize NEW ROGR Dual Evidence Shepherd at startup for reuse across requests
 rogr_dual_shepherd = None
 try:
-    rogr_dual_shepherd = ROGRDualEvidenceShepherd()
+    use_eeg_phase_1 = os.getenv('USE_EEG_PHASE_1', 'false').lower() == 'true'
+    rogr_dual_shepherd = ROGRDualEvidenceShepherd(use_eeg_phase_1=use_eeg_phase_1)
     if rogr_dual_shepherd.is_enabled():
         print("✅ NEW ROGR Dual Evidence Shepherd enabled at startup")
     else:
@@ -716,7 +720,9 @@ async def create_analysis(analysis: AnalysisInput):
     
     # Score individual claims - toggle between Evidence Shepherd integration and old scoring
     use_evidence_shepherd = os.getenv('USE_EVIDENCE_SHEPHERD', 'true').lower() == 'true'
+    use_eeg_phase_1 = os.getenv('USE_EEG_PHASE_1', 'false').lower() == 'true'
     print(f"DEBUG: USE_EVIDENCE_SHEPHERD = {use_evidence_shepherd}")
+    print(f"DEBUG: USE_EEG_PHASE_1 = {use_eeg_phase_1}")
     
     claim_analyses = []
     if claims:
@@ -1341,6 +1347,18 @@ async def debug_ocr_test():
             "help": "Check Google Cloud credentials and Vision API setup"
         }
 
+@app.get("/debug/performance-testing")
+async def debug_performance_testing():
+    """Get current performance testing session summary"""
+    return performance_tester.get_session_summary()
+
+@app.post("/debug/compare-performance")
+async def debug_compare_performance(request: dict):
+    """Compare performance between two test runs"""
+    baseline_test_id = request.get("baseline_test_id", "")
+    eeg_test_id = request.get("eeg_test_id", "")
+    return performance_tester.compare_performance(baseline_test_id, eeg_test_id)
+
 @app.post("/debug/claim-miner")
 async def debug_claim_miner(request: dict):
     """Debug endpoint to test ClaimMiner isolation"""
@@ -1464,7 +1482,7 @@ async def test_rogr_fc_scoring(request: ClaimRequest):
             evidence_shepherd = rogr_dual_shepherd
         else:
             # Fallback to creating new instance if startup failed
-            evidence_shepherd = ROGRDualEvidenceShepherd()
+            evidence_shepherd = ROGRDualEvidenceShepherd(use_eeg_phase_1=use_eeg_phase_1)
         
         if not evidence_shepherd.is_enabled():
             return {
