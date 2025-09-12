@@ -83,11 +83,18 @@ I have approximately [X] minutes available for this session. Based on the object
 - [ ] **AI implements specified components** with thread safety patterns
 
 ### **Step 7: Progress Monitoring**
-**Every 20-30 minutes, AI should provide status update:**
+**YOU must initiate progress checks every 20-30 minutes:**
+
+**Use this prompt:**
+```
+Status check - please provide:
 - Current task completion status
-- Any issues encountered and solutions applied
-- Estimated time remaining for current objective
-- Recommendation for session priorities if running low on time
+- Any issues encountered and solutions applied  
+- How much of our session objectives we've completed
+- Recommendation for priorities if we need to start wrapping up soon
+```
+
+**⚠️ IMPORTANT: AI will NOT automatically remind you about session time limits**
 
 ### **Step 8: Validation and Testing**
 **AI should test implementations before moving to next component:**
@@ -98,9 +105,16 @@ I have approximately [X] minutes available for this session. Based on the object
 ---
 
 ## **SESSION CONCLUSION (10-15 minutes) - CRITICAL**
+**⚠️ YOU must initiate session end - AI will NOT remind you**
+
+### **When to Start Session End Protocol:**
+- **75+ minutes elapsed**: Start wrapping up immediately
+- **Current task nearly complete**: Good stopping point
+- **Session feeling "heavy" or slow**: May be approaching auto-compact
+- **Better safe than sorry**: End early rather than lose context
 
 ### **Step 9: Context Update Protocol**
-**Tell AI to update context documents:**
+**Copy/paste this exact prompt to AI:**
 
 ```
 We're approaching the end of this session. Please update all context documents following the session end protocol:

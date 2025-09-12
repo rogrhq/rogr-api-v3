@@ -97,12 +97,32 @@ Before we start implementing, confirm you understand:
 4. This session's specific objectives: [list from NEXT_SESSION_OBJECTIVES.md]
 ```
 
-### **Progress Status Check:**
+### **Progress Status Check (Use Every 20-30 Minutes):**
 ```
 Status check: 
 - How are we progressing against the session objectives?
 - Any issues encountered that need attention?  
 - Should we adjust priorities based on remaining time?
+```
+
+### **Session Time Management Prompts:**
+
+#### **60-Minute Check:**
+```
+We should start thinking about session end soon. What's a good stopping point for the current work?
+```
+
+#### **75-Minute Warning:**
+```
+Time to start wrapping up this session. Please finish the current task and prepare for context document updates.
+```
+
+#### **Emergency Session End:**
+```
+I need to end this session immediately due to time constraints. Please:
+1. Commit any current work
+2. Update CURRENT_SESSION_STATE.md with progress
+3. Set clear NEXT_SESSION_OBJECTIVES.md
 ```
 
 ### **Implementation Validation:**
