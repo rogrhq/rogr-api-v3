@@ -50,3 +50,9 @@
 **Key Innovation**: Complete thread-safety through resource isolation + parallel execution
 **EEG Integration**: Methodology-first queries at orchestrator level
 **ACI Integration**: Semantic analysis enhancing search strategy generation
+
+## IMPORTANT: Complete Implementation Scope
+**Total Phases**: 5 phases (not 4) - Phase 5 Integration is CRITICAL
+**Phase 1-4**: Parallel evidence architecture implementation
+**Phase 5**: ClaimMiner + FastAPI endpoint integration (REQUIRED for frontend compatibility)
+**Without Phase 5**: System will not integrate with existing ClaimMiner or frontend

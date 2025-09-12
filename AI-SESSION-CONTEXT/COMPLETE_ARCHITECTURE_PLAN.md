@@ -532,4 +532,104 @@ class GradualRolloutManager:
 - **Integration Failures**: Extensive testing at each phase boundary
 - **Team Knowledge Transfer**: Complete documentation and context preservation
 
-This complete plan ensures **systematic implementation** of the parallel architecture while **preserving all EEG and ACI benefits** and maintaining **production system safety** throughout the migration process.
+---
+
+## **Phase 5: ClaimMiner & Frontend Integration** ⏱️ Week 5 
+
+### **CRITICAL: Required for Complete System Integration**
+
+### **Objectives**
+- Connect parallel evidence system to existing ClaimMiner workflow  
+- Integrate with FastAPI `/analyses` endpoint for frontend compatibility
+- Implement robust fallback and monitoring for production deployment
+- Validate end-to-end pipeline performance (<30s target)
+
+### **Implementation Steps**
+
+#### **Step 5.1: ClaimMiner Integration Layer (Day 1-2)**
+```python
+# parallel_evidence_system/integration/claim_miner_adapter.py
+class ClaimMinerParallelAdapter:
+    """Bridge connecting ClaimMiner output to parallel evidence processing"""
+    
+    def process_mined_claims(self, mining_result: ClaimMiningResult) -> List[TrustCapsule]:
+        """Main integration: ClaimMiner → Parallel Evidence → TrustCapsules"""
+        
+        # Extract claims for parallel processing
+        claims = [claim.claim_text for claim in mining_result.claims]
+        
+        # Process through parallel consensus engine with fallback
+        consensus_results = self.fallback_manager.execute_with_fallback(
+            lambda: self.evidence_system.process_claims_parallel(claims),
+            lambda: self._legacy_fallback_processing(claims)
+        )
+        
+        # Convert to TrustCapsule format for frontend
+        return [self.formatter.format_consensus_result(result, mining_result, claim) 
+                for result, claim in zip(consensus_results, mining_result.claims)]
+```
+
+#### **Step 5.2: FastAPI Endpoint Integration (Day 3)**
+```python
+# Update main.py /analyses endpoint:
+@app.post("/analyses", response_model=TrustCapsule)
+async def create_analysis(analysis: AnalysisInput):
+    """Enhanced with parallel evidence processing integration"""
+    
+    # Mine claims using existing ClaimMiner
+    mining_result = claim_miner.mine_claims(analysis.input)
+    
+    # Process through parallel evidence system
+    evidence_adapter = ClaimMinerParallelAdapter()
+    trust_capsules = evidence_adapter.process_mined_claims(mining_result)
+    
+    # Return first capsule (API expects single TrustCapsule)
+    return trust_capsules[0] if trust_capsules else create_fallback_capsule(mining_result)
+```
+
+#### **Step 5.3: Production Integration (Day 4)**
+- Configuration management integration with main.py
+- Health check endpoints for system monitoring
+- Fallback management for robust production deployment
+- Performance metrics and alerting integration
+
+#### **Step 5.4: End-to-End Validation (Day 5)**
+```python
+# Complete pipeline testing: Input → ClaimMiner → Parallel Evidence → TrustCapsule
+class EndToEndPipelineValidator:
+    def validate_complete_pipeline(self) -> ValidationResult:
+        """Test full production pipeline performance and accuracy"""
+        
+        # Test actual FastAPI endpoint with real inputs
+        for input_text in self.test_inputs:
+            trust_capsule = create_analysis(AnalysisInput(input=input_text))
+            # Validate <30s processing time and correct format
+```
+
+### **Success Criteria**
+- **Integration Success**: ClaimMiner → Parallel → Frontend pipeline functional ✅
+- **Performance Target**: <30s end-to-end processing time achieved ✅
+- **Production Readiness**: Health monitoring, fallback, error handling complete ✅
+- **API Compatibility**: Existing frontend works without changes ✅
+
+### **Integration File Structure**
+```
+parallel_evidence_system/
+├── integration/
+│   ├── claim_miner_adapter.py       # ClaimMiner bridge
+│   ├── trust_capsule_formatter.py   # Frontend format conversion
+│   ├── fallback_manager.py          # Legacy system fallback
+│   └── end_to_end_testing.py       # Pipeline validation
+└── monitoring/
+    ├── health_checks.py             # Production monitoring
+    └── production_metrics.py       # Performance tracking
+
+# Updated:
+main.py                              # FastAPI endpoint integration
+```
+
+**Phase 5 completion provides COMPLETE system integration ready for production deployment.**
+
+---
+
+This complete plan ensures **systematic implementation** of the parallel architecture while **preserving all EEG and ACI benefits**, maintaining **production system safety**, and providing **complete ClaimMiner + Frontend integration** throughout the migration process.
