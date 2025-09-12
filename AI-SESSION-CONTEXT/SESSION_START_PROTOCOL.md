@@ -9,6 +9,7 @@
 - [ ] **Read `NEXT_SESSION_OBJECTIVES.md`** - Know exactly what to do this session  
 - [ ] **Review `IMPLEMENTATION_PROGRESS.md`** - Check completion status and blocking issues
 - [ ] **Check `ARCHITECTURE_DECISIONS.md`** - Understand key architectural choices made
+- [ ] **Read `../RDT_v2.md`** - Understand enhanced methodology standards and compliance requirements
 
 #### 2. Git State Validation (2 minutes)
 - [ ] **Check current branch**: `git status`

@@ -31,22 +31,25 @@ Please start by reading the following context files to understand our current st
 1. AI-SESSION-CONTEXT/CURRENT_SESSION_STATE.md
 2. AI-SESSION-CONTEXT/NEXT_SESSION_OBJECTIVES.md  
 3. AI-SESSION-CONTEXT/SESSION_START_PROTOCOL.md
+4. ../RDT_v2.md (Enhanced development methodology standards)
 
 After reading these files, please confirm your understanding by telling me:
 - What phase of implementation we're currently in
 - What specific objectives you understand for this session
 - What the current performance issue is and our target
 - Any blocking issues from the previous session
+- Confirmation you understand RDT v2.0 compliance requirements
 
-Once you confirm understanding, we'll proceed with implementation following the established patterns.
+Once you confirm understanding, we'll proceed with implementation following the established patterns and RDT v2.0 standards.
 ```
 
 ### **Step 4: AI Understanding Validation**
 **Wait for AI to read context files and provide summary**
-- [ ] **AI confirms current phase** (Phase 1, 2, 3, or 4)
+- [ ] **AI confirms current phase** (Phase 1, 2, 3, 4, or 5)
 - [ ] **AI states session objectives** (should match your expectations)  
 - [ ] **AI identifies current performance gap** (396s → 30s target)
 - [ ] **AI mentions any blocking issues** from previous session
+- [ ] **AI confirms RDT v2.0 understanding** (new methodology standards)
 
 **If AI understanding is incorrect or unclear:**
 - Stop and clarify: "The context isn't clear. Let me clarify our current state: [explain current situation]"
