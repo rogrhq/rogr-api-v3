@@ -8,29 +8,29 @@
 ## **Core Development Tenants**
 
 ### **1. DESIGN COHESION**
-All solutions and proposed solutions must align with the modular and scalable design architecture we have developed. Solutions must preserve architectural integrity while enabling parallel processing, thread safety, and system scalability.
+All solutions, plans and proposed solutions must align with the modular and scalable design architecture we have developed. Solutions must preserve architectural integrity while enabling parallel processing, thread safety, and system scalability.
 
 ### **2. COMPLETE SOLUTIONS** 
-All solutions and proposed solutions are complete and thorough fixes, not work arounds or band-aids unless otherwise requested. Solutions must address root causes and provide production-ready implementations with proper error handling, monitoring, and rollback capabilities.
+All solutions, plans and proposed solutions will be complete and thorough fixes, not work arounds or band-aids unless otherwise requested. Solutions must address root causes and provide production-ready implementations with proper error handling, monitoring, and rollback capabilities.
 
 ### **3. ALWAYS COMPLIANT**
-All solutions and proposed solutions remain aligned with IFCN compliance and ROGR Development Tenants. Evidence processing must maintain methodology-first approach, transparency standards, and professional fact-checking protocols.
+All solutions, plans and proposed solutions remain aligned with IFCN compliance and ROGR Development Tenants. Evidence processing must maintain methodology-first approach, transparency standards, and professional fact-checking protocols.
 
 ### **4. NO ASSUMPTIONS & ARCHITECTURAL COMPLETENESS**
-All solutions will be proposed ONLY AFTER:
+All solutions and plans will be proposed and any implimentations will be started ONLY AFTER:
 - a) Thorough understanding of the problem has been ascertained
-- b) All related design and code has been examined and reviewed  
+- b) All related design and code has been examined and reviewed. This includes even any exisitng context documents assign facts, you still must always examine actual code first. 
 - c) Thread safety, resource sharing, and integration impacts investigated
 - d) Complete integration ecosystem compatibility verified (ClaimMiner, FastAPI endpoints, frontend)
 - e) Solutions have been vetted through all RDT tenants
 
-**Enhanced Standard:** Architectural solutions require comprehensive investigation of shared resources, concurrency implications, and system integration before any implementation proposals.
+**Enhanced Standard:** Architectural solutions and plans require comprehensive investigation of shared resources, concurrency implications, and system integration before any implementation proposals.
 
 ### **5. CLARITY ALWAYS**
 If any of these tenants are unclear at any time, a request for clarity MUST be made and NO solutions may be proposed or implemented until clarity has been provided. Context ambiguity must be resolved before proceeding with development work.
 
 ### **6. ASK PERMISSION**
-Permission is always required to make ANY CHANGES to any document within the local or remote repositories. Permission is not required to answer questions or present results of an examination or investigation. Context document updates require explicit permission before session end.
+Permission is always required to make ANY CHANGES to any document within the local or remote repositories. Permission is not required to answer questions or present plans or results of an examination or investigation. Context document updates require explicit permission before session end.
 
 ### **7. NO DEVIATIONS - Enhanced Integrity Check**
 All tenants will always be followed, unless specifically instructed otherwise. You MUST respond with:
