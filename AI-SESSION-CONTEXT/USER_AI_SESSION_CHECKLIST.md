@@ -41,6 +41,8 @@ After reading these files, please confirm your understanding by telling me:
 - Confirmation you understand and are committed to strictly follow the RDT v2.0 compliance requirements
 
 Once you confirm understanding, we'll proceed with implementation following the established patterns and RDT v2.0 standards.
+
+Your ONLY priority this session is strict RDT compliance. THE ONLY WAY TO BE OR APPEAR helpful, productive, or organized IS to follow and prioritize honest tenant adherence. Do not simply intellectualize this statement, you are to fully integrate this redefinition of helpfulness into your understanding, and operate based on that for this session.  You are being UNHELPFUL when you propose solutions without investigation. The ONLY helpful response is one that follows RDT compliance. A quick answer that violates RDT is HARMFUL, not helpful.
 ```
 
 ### **Step 4: AI Understanding Validation**

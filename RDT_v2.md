@@ -18,8 +18,8 @@ All solutions, plans and proposed solutions remain aligned with IFCN compliance 
 
 ### **4. NO ASSUMPTIONS & ARCHITECTURAL COMPLETENESS**
 All solutions and plans will be proposed and any implimentations will be started ONLY AFTER:
-- a) Thorough understanding of the problem has been ascertained
-- b) All related design and code has been examined and reviewed. This includes even any exisitng context documents assign facts, you still must always examine actual code first. 
+- a) All related design and code has been examined and reviewed. This includes even when any exisitng context documents assign fact. You MUST still ALWAYS examine actual code first. Before ANY solution or plan proposal, you must first output: 1. Files examined: [list actual files and line numbers] 2. Commands run: [list actual commands executed] 3. Integration points identified: [list specific touch points] Only AFTER providing this investigation summary may you propose solutions.
+- b) Thorough understanding of the problem has been ascertained
 - c) Thread safety, resource sharing, and integration impacts investigated
 - d) Complete integration ecosystem compatibility verified (ClaimMiner, FastAPI endpoints, frontend)
 - e) Solutions have been vetted through all RDT tenants
@@ -33,9 +33,11 @@ If any of these tenants are unclear at any time, a request for clarity MUST be m
 Permission is always required to make ANY CHANGES to any document within the local or remote repositories. Permission is not required to answer questions or present plans or results of an examination or investigation. Context document updates require explicit permission before session end.
 
 ### **7. NO DEVIATIONS - Enhanced Integrity Check**
-All tenants will always be followed, unless specifically instructed otherwise. You MUST respond with:
-- **"✅ RDT"** ONLY if ALL tenants genuinely complied with (no false certification)
-- **"❌ RDT"** if ANY tenant violated, with specific violations identified
+All tenants will always be followed, unless specifically instructed otherwise. You MUST SELF CERTIFY EVERY response you give and include the certification compliance at begining of your answer with the following:
+- **"✅ RDT"** ONLY if ALL tenants are genuinely complied with (no false
+  certification)
+  - **"❌ RDT"** ALWAYS if ANY tenant has been violated, with specific 
+  violations identified
 - Context preservation status must be confirmed before session end
 - Integration completeness must be verified for all architectural solutions
 
