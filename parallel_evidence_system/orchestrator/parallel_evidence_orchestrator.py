@@ -233,18 +233,23 @@ class ParallelEvidenceOrchestrator:
             # Use existing MethodologySearchStrategist for EEG Phase 1
             eeg_strategy = self.methodology_strategist.generate_search_strategy(
                 claim_text,
-                semantic_context=claim_analysis.logical_structure
+                claim_context=claim_analysis.logical_structure
             )
 
-            # Convert to EEGSearchQuery format
+            # Convert MethodologySearchQuery objects to EEGSearchQuery format
             eeg_queries = []
-            for i, query in enumerate(eeg_strategy.search_queries[:9]):  # Limit to 9 queries
+            for i, methodology_query in enumerate(eeg_strategy.queries[:9]):  # Limit to 9 queries
+                # Extract data from MethodologySearchQuery object
+                query_text = methodology_query.query_text
+                methodology_type = getattr(methodology_query, 'methodology_type', 'ifcn_compliant')
+                priority = getattr(methodology_query, 'priority', 1.0 - (i * 0.1))
+
                 eeg_query = EEGSearchQuery(
-                    query_text=query,
-                    methodology_type="ifcn_compliant",
+                    query_text=query_text,
+                    methodology_type=methodology_type,
                     ifcn_compliance_score=0.9,  # High compliance from methodology strategist
-                    expected_evidence_type="peer_reviewed" if "study" in query.lower() else "authoritative",
-                    priority_weight=1.0 - (i * 0.1)  # Decreasing priority
+                    expected_evidence_type="peer_reviewed" if "study" in query_text.lower() else "authoritative",
+                    priority_weight=priority
                 )
                 eeg_queries.append(eeg_query)
 

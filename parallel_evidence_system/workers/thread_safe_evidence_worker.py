@@ -106,6 +106,7 @@ class ThreadSafeEvidenceWorker(ThreadSafeComponent):
         self._local.worker_id = f"worker_{threading.current_thread().ident}"
 
         # Initialize evidence processing components with isolated resources
+        # Pass the HTTP session to services that need it
         self._local.web_search = WebSearchService()
         self._local.content_extractor = WebContentExtractor()
         self._local.quality_assessor = EvidenceQualityAssessor()
