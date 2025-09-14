@@ -9,15 +9,19 @@ import threading
 class WebContentExtractor:
     """Extract and clean content from web pages for evidence analysis"""
     
-    def __init__(self):
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Connection': 'keep-alive'
-        })
+    def __init__(self, session=None):
+        # Use provided session or create new one (for backward compatibility)
+        self.session = session if session is not None else requests.Session()
+
+        # Configure session headers if not already configured
+        if not self.session.headers.get('User-Agent'):
+            self.session.headers.update({
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive'
+            })
         # Balanced timeout - not too fast, not too slow
         self.timeout = 8  # Increased from 5 to 8 seconds for reliability
         self.max_workers = 6  # Parallel processing limit
