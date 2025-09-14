@@ -219,8 +219,11 @@ class ThreadSafeEvidenceWorker(ThreadSafeComponent):
         except Exception as e:
             raise ROGRException(f"Web search failed for query: {task.search_query.query_text}", context, e)
 
-        # Step 2: Extract and process content from search results
-        for i, search_result in enumerate(search_results[:5]):  # Limit to top 5 results
+        # Step 2: Extract and process content from search results with retry logic
+        max_results_to_try = min(15, len(search_results))  # Try up to 15 results instead of 5
+        target_evidence_count = 3  # Target minimum evidence pieces
+
+        for i, search_result in enumerate(search_results[:max_results_to_try]):
             try:
                 evidence = self._process_single_result(
                     search_result,
@@ -231,12 +234,17 @@ class ThreadSafeEvidenceWorker(ThreadSafeComponent):
                 if evidence:
                     evidence_list.append(evidence)
 
+                    # Stop if we have sufficient evidence
+                    if len(evidence_list) >= target_evidence_count:
+                        break
+
             except Exception as e:
                 self.logger.warning(f"Failed to process search result {i}", extra={
                     'task_id': task.task_id,
                     'result_url': search_result.get('url', 'unknown'),
                     'error': str(e)
                 })
+                # Continue processing remaining results instead of giving up
                 continue
 
         return evidence_list
