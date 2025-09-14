@@ -170,6 +170,12 @@ class ThreadSafeEvidenceWorker(ThreadSafeComponent):
                 'duration_seconds': processing_time
             })
 
+            # PHASE 3 DEBUG: Print error details directly to ensure visibility
+            print(f"WORKER ERROR DETAILS - Task: {task.task_id}, Worker: {self.worker_id}")
+            print(f"ERROR TYPE: {type(e).__name__}")
+            print(f"ERROR MESSAGE: {error_message}")
+            print(f"DURATION: {processing_time}s")
+
             return WorkerResult(
                 task_id=task.task_id,
                 worker_id=self.worker_id,
