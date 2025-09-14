@@ -4,8 +4,8 @@ import asyncio
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 import requests
-from evidence_shepherd import EvidenceShepherd, SearchStrategy, EvidenceCandidate, ProcessedEvidence, ClaimType
-from claude_evidence_shepherd import ClaudeEvidenceShepherd
+from .evidence_shepherd import EvidenceShepherd, SearchStrategy, EvidenceCandidate, ProcessedEvidence, ClaimType
+from .claude_evidence_shepherd import ClaudeEvidenceShepherd
 from evidence_quality_assessor import EvidenceQualityAssessor, EvidenceQualityMetrics
 
 @dataclass

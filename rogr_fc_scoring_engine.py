@@ -1,7 +1,7 @@
 import re
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
-from evidence_shepherd import ProcessedEvidence
+from legacy_evidence_system.evidence_shepherd import ProcessedEvidence
 
 @dataclass
 class ROGRScoringResult:

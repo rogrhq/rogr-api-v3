@@ -5,8 +5,8 @@ import time
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 import requests
-from evidence_shepherd import EvidenceShepherd, SearchStrategy, EvidenceCandidate, ProcessedEvidence, ClaimType
-from rogr_evidence_shepherd import ROGREvidenceShepherd
+from .evidence_shepherd import EvidenceShepherd, SearchStrategy, EvidenceCandidate, ProcessedEvidence, ClaimType
+from .rogr_evidence_shepherd import ROGREvidenceShepherd
 from evidence_quality_assessor import EvidenceQualityAssessor, EvidenceQualityMetrics
 from evidence_gathering.search_strategy.methodology_strategist import MethodologySearchStrategist
 from performance_testing import performance_tester

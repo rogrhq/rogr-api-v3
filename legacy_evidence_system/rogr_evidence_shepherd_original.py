@@ -6,7 +6,7 @@ from typing import List, Dict, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from evidence_gathering.interfaces.search_strategy_interface import SearchStrategyResult
 import requests
-from evidence_shepherd import EvidenceShepherd, SearchStrategy, EvidenceCandidate, ProcessedEvidence, ClaimType, MultiDomainClaimAnalysis
+from .evidence_shepherd import EvidenceShepherd, SearchStrategy, EvidenceCandidate, ProcessedEvidence, ClaimType, MultiDomainClaimAnalysis
 from web_search_service import WebSearchService
 from web_content_extractor import WebContentExtractor
 
