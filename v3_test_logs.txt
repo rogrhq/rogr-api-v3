@@ -1,42 +1,14 @@
-Traceback (most recent call last):
-  File "/home/runner/workspace/.pythonlibs/bin/uvicorn", line 8, in <module>
-    sys.exit(main())
-  File "/home/runner/workspace/.pythonlibs/lib/python3.10/site-packages/click/core.py", line 1442, in __call__
-    return self.main(*args, **kwargs)
-  File "/home/runner/workspace/.pythonlibs/lib/python3.10/site-packages/click/core.py", line 1363, in main
-    rv = self.invoke(ctx)
-  File "/home/runner/workspace/.pythonlibs/lib/python3.10/site-packages/click/core.py", line 1226, in invoke
-    return ctx.invoke(self.callback, **ctx.params)
-  File "/home/runner/workspace/.pythonlibs/lib/python3.10/site-packages/click/core.py", line 794, in invoke
-    return callback(*args, **kwargs)
-  File "/home/runner/workspace/.pythonlibs/lib/python3.10/site-packages/uvicorn/main.py", line 416, in main
-    run(
-  File "/home/runner/workspace/.pythonlibs/lib/python3.10/site-packages/uvicorn/main.py", line 587, in run
-    server.run()
-  File "/home/runner/workspace/.pythonlibs/lib/python3.10/site-packages/uvicorn/server.py", line 61, in run
-    return asyncio.run(self.serve(sockets=sockets))
-  File "/nix/store/jyvjawqnhnqhwrsinpvx1av7q2p2fcym-python3-3.10.18/lib/python3.10/asyncio/runners.py", line 44, in run
-    return loop.run_until_complete(main)
-  File "/nix/store/jyvjawqnhnqhwrsinpvx1av7q2p2fcym-python3-3.10.18/lib/python3.10/asyncio/base_events.py", line 649, in run_until_complete
-    return future.result()
-  File "/home/runner/workspace/.pythonlibs/lib/python3.10/site-packages/uvicorn/server.py", line 68, in serve
-    config.load()
-  File "/home/runner/workspace/.pythonlibs/lib/python3.10/site-packages/uvicorn/config.py", line 467, in load
-    self.loaded_app = import_from_string(self.app)
-  File "/home/runner/workspace/.pythonlibs/lib/python3.10/site-packages/uvicorn/importer.py", line 24, in import_from_string
-    raise exc from None
-  File "/home/runner/workspace/.pythonlibs/lib/python3.10/site-packages/uvicorn/importer.py", line 21, in import_from_string
-    module = importlib.import_module(module_str)
-  File "/nix/store/jyvjawqnhnqhwrsinpvx1av7q2p2fcym-python3-3.10.18/lib/python3.10/importlib/__init__.py", line 126, in import_module
-    return _bootstrap._gcd_import(name[level:], package, level)
-  File "<frozen importlib._bootstrap>", line 1050, in _gcd_import
-  File "<frozen importlib._bootstrap>", line 1027, in _find_and_load
-  File "<frozen importlib._bootstrap>", line 1006, in _find_and_load_unlocked
-  File "<frozen importlib._bootstrap>", line 688, in _load_unlocked
-  File "<frozen importlib._bootstrap_external>", line 883, in exec_module
-  File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
-  File "/home/runner/workspace/main.py", line 10, in <module>
-    from wikipedia_service import WikipediaService
-  File "/home/runner/workspace/wikipedia_service.py", line 7, in <module>
-    from evidence_shepherd import EvidenceShepherd, NoOpEvidenceShepherd, EvidenceCandidate
-ModuleNotFoundError: No module named 'evidence_shepherd'
+🔧 USE_PARALLEL_EVIDENCE = True
+Google Cloud Vision client initialized successfully
+ClaimMiner initialized - Claude API: True
+✅ Using Parallel Evidence System
+❌ Evidence system failed to initialize: 'ParallelEvidenceOrchestrator' object has no attribute 'is_enabled'
+INFO:     Started server process [1598]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     172.31.77.162:55438 - "GET / HTTP/1.1" 404 Not Found
+INFO:     172.31.77.162:38044 - "GET /health HTTP/1.1" 200 OK
+AI evidence search error: name 'ai_shepherd' is not defined
+INFO:     172.31.77.162:54490 - "GET /evidence?q=COVID-19%20vaccines%20reduce%20severe%20illness HTTP/1.1" 500 Internal Server Error
+INFO:     172.31.77.162:37102 - "GET /debug/performance-testing HTTP/1.1" 200 OK

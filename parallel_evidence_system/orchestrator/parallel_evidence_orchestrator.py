@@ -279,6 +279,19 @@ class ParallelEvidenceOrchestrator:
         with self._lock:
             return self.session_metrics.get(session_id)
 
+    def is_enabled(self) -> bool:
+        """Check if parallel evidence orchestrator is enabled and functional"""
+        try:
+            # Verify core components are initialized
+            return (
+                self.orchestrator_id is not None and
+                self.resource_pool is not None and
+                self.consensus_engine is not None and
+                self.methodology_strategist is not None
+            )
+        except Exception:
+            return False
+
     def get_orchestrator_status(self) -> Dict[str, Any]:
         """Get current orchestrator status and metrics"""
         with self._lock:
@@ -287,6 +300,7 @@ class ParallelEvidenceOrchestrator:
                 'resource_pool_id': self.resource_pool.pool_id,
                 'total_sessions': len(self.session_metrics),
                 'active_threads': threading.active_count(),
+                'enabled': self.is_enabled(),
                 'last_activity': max(
                     [metrics['recorded_at'] for metrics in self.session_metrics.values()],
                     default=None

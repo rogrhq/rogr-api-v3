@@ -146,7 +146,11 @@ def generate_evidence_statements(claim_text: str, trust_score: int) -> tuple[Lis
         print(f"DEBUG: Using REAL WEB SEARCH AI Evidence Shepherd for claim: '{claim_text}'")
         
         # AI performs real web search and content analysis
-        real_evidence = ai_shepherd.search_real_evidence(claim_text)
+        if evidence_system and hasattr(evidence_system, 'search_real_evidence'):
+            real_evidence = evidence_system.search_real_evidence(claim_text)
+        else:
+            print(f"DEBUG: search_real_evidence not available in current evidence system")
+            real_evidence = []
         print(f"DEBUG: Real web search found {len(real_evidence)} evidence items")
         
         if real_evidence:
@@ -1167,8 +1171,12 @@ async def get_evidence(q: str):
         raise HTTPException(status_code=400, detail="Query parameter 'q' must be at least 10 characters")
     
     try:
-        # Use AI Evidence Shepherd to analyze claim and find sources
-        search_strategy = ai_shepherd.analyze_claim(q.strip())
+        # Use evidence system factory to analyze claim and find sources
+        if evidence_system and hasattr(evidence_system, 'analyze_claim'):
+            search_strategy = evidence_system.analyze_claim(q.strip())
+        else:
+            # Fallback for parallel system or if analyze_claim not available
+            raise HTTPException(status_code=503, detail="Evidence analysis not available in current system configuration")
         
         # Simulate AI finding evidence (in full implementation, AI would actually search web)
         evidence_items = []
