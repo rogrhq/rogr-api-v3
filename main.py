@@ -750,7 +750,11 @@ async def create_analysis(analysis: AnalysisInput):
         print(f"DEBUG: ClaimMiner found no claims - fallback to direct text: '{claims[0][:100] if claims else 'None'}'...")
     
     # Score individual claims - toggle between Evidence Shepherd integration and old scoring
-    use_evidence_shepherd = os.getenv('USE_EVIDENCE_SHEPHERD', 'true').lower() == 'true'
+    # CRITICAL FIX: Disable legacy Evidence Shepherd when parallel system is active
+    use_evidence_shepherd = (
+        os.getenv('USE_EVIDENCE_SHEPHERD', 'true').lower() == 'true'
+        and not USE_PARALLEL_EVIDENCE
+    )
     use_eeg_phase_1 = os.getenv('USE_EEG_PHASE_1', 'false').lower() == 'true'
     print(f"DEBUG: USE_EVIDENCE_SHEPHERD = {use_evidence_shepherd}")
     print(f"DEBUG: USE_EEG_PHASE_1 = {use_eeg_phase_1}")
