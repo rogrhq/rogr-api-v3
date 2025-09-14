@@ -617,7 +617,12 @@ def score_individual_claim(claim_text: str) -> ClaimAnalysis:
         confidence = "Low"
     
     # Generate actual evidence statements
-    supporting_evidence, contradicting_evidence, neutral_evidence = generate_evidence_statements(claim_text, trust_score)
+    evidence_result = generate_evidence_statements(claim_text, trust_score)
+    if len(evidence_result) == 4:
+        supporting_evidence, contradicting_evidence, neutral_evidence, consensus_quality_score = evidence_result
+    else:
+        supporting_evidence, contradicting_evidence, neutral_evidence = evidence_result
+        consensus_quality_score = None
     
     # Generate evidence summary
     evidence_summary = []
