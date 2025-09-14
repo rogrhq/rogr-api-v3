@@ -649,6 +649,76 @@ def score_individual_claim(claim_text: str) -> ClaimAnalysis:
         neutral_evidence=neutral_evidence
     )
 
+def convert_parallel_to_claim_analyses(consensus_results: List[Dict]) -> List[ClaimAnalysis]:
+    """Convert parallel system consensus results to ClaimAnalysis format for TrustCapsule compatibility"""
+    claim_analyses = []
+
+    for result in consensus_results:
+        # Convert consensus_score (float 0-1) to trust_score (int 0-100)
+        trust_score = min(100, max(0, int(result['consensus_score'] * 100)))
+
+        # Convert confidence_level (float) to confidence string
+        confidence_level = result.get('confidence_level', 0.5)
+        if confidence_level >= 0.8:
+            confidence = "High"
+        elif confidence_level >= 0.6:
+            confidence = "Medium"
+        else:
+            confidence = "Low"
+
+        # Convert trust_score to evidence_grade
+        if trust_score >= 90:
+            evidence_grade = "A+"
+        elif trust_score >= 87:
+            evidence_grade = "A"
+        elif trust_score >= 83:
+            evidence_grade = "A-"
+        elif trust_score >= 80:
+            evidence_grade = "B+"
+        elif trust_score >= 77:
+            evidence_grade = "B"
+        elif trust_score >= 73:
+            evidence_grade = "B-"
+        elif trust_score >= 70:
+            evidence_grade = "C+"
+        elif trust_score >= 67:
+            evidence_grade = "C"
+        elif trust_score >= 60:
+            evidence_grade = "C-"
+        elif trust_score >= 50:
+            evidence_grade = "D+"
+        elif trust_score >= 40:
+            evidence_grade = "D"
+        else:
+            evidence_grade = "F"
+
+        # Create evidence summary from parallel results
+        evidence_summary = []
+        evidence_count = result.get('evidence_count', 0)
+        if evidence_count > 0:
+            evidence_summary.append(f"Found {evidence_count} pieces of evidence")
+            evidence_summary.append(f"Consensus score: {result['consensus_score']:.2f}")
+
+        # Create empty evidence statements (parallel system doesn't provide detailed evidence breakdown)
+        supporting_evidence = []
+        contradicting_evidence = []
+        neutral_evidence = []
+
+        claim_analysis = ClaimAnalysis(
+            claim_text=result['claim_text'],
+            trust_score=trust_score,
+            evidence_grade=evidence_grade,
+            confidence=confidence,
+            evidence_summary=evidence_summary,
+            sources_count=evidence_count,
+            supporting_evidence=supporting_evidence,
+            contradicting_evidence=contradicting_evidence,
+            neutral_evidence=neutral_evidence
+        )
+        claim_analyses.append(claim_analysis)
+
+    return claim_analyses
+
 def calculate_cumulative_score(claims: List[ClaimAnalysis]) -> tuple[int, str, str]:
     """Calculate overall score, grade, and assessment from individual claims"""
     if not claims:
@@ -802,8 +872,21 @@ async def create_analysis(analysis: AnalysisInput):
                     claim_analyses.append(fallback_analysis)
                     print(f"DEBUG: Claim {i+1}/{len(claims)} ES fallback - Score: {fallback_analysis.trust_score}, Grade: {fallback_analysis.evidence_grade}")
         
+        elif USE_PARALLEL_EVIDENCE:
+            # PARALLEL: Direct parallel evidence system integration (NO FALLBACKS)
+            print(f"DEBUG: Using parallel evidence system for {len(claims)} claims")
+            try:
+                parallel_results = evidence_system.process_claims_parallel(claims)
+                claim_analyses = convert_parallel_to_claim_analyses(parallel_results['consensus_results'])
+                print(f"DEBUG: Parallel processing completed - {len(claim_analyses)} claims processed")
+                for i, claim_analysis in enumerate(claim_analyses):
+                    print(f"DEBUG: Claim {i+1}/{len(claims)} parallel processed - Score: {claim_analysis.trust_score}, Grade: {claim_analysis.evidence_grade}")
+            except Exception as e:
+                print(f"CRITICAL ERROR: Parallel evidence system failed: {e}")
+                raise RuntimeError(f"Parallel evidence processing failed - no fallback allowed: {e}")
+
         else:
-            # OLD: Legacy Scoring Path (preserved for testing/rollback)
+            # LEGACY: Legacy Scoring Path (only when parallel system explicitly disabled)
             print(f"DEBUG: Using legacy scoring for {len(claims)} claims")
             claim_analyses = [score_individual_claim(claim) for claim in claims]
             for i, claim_analysis in enumerate(claim_analyses):
