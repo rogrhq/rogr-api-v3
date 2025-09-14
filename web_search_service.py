@@ -209,6 +209,25 @@ class WebSearchService:
         
         return unique_results
     
+    def search(self, query: str, max_results: int = 10) -> List[Dict]:
+        """
+        Alias for search_web() to maintain compatibility with parallel evidence workers
+        Returns results as dictionaries for worker compatibility
+        """
+        search_results = self.search_web(query, max_results)
+
+        # Convert SearchResult objects to dictionaries for worker compatibility
+        dict_results = []
+        for result in search_results:
+            dict_results.append({
+                'title': result.title,
+                'url': result.url,
+                'snippet': result.snippet,
+                'source_domain': result.source_domain
+            })
+
+        return dict_results
+
     def is_enabled(self) -> bool:
         """Check if web search is available"""
         return bool(self.google_api_key or self.bing_api_key)  # DuckDuckGo always available as fallback
