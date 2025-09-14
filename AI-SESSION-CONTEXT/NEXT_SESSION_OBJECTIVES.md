@@ -1,36 +1,29 @@
-# Next AI Session Objectives: Architecture Migration Launch
+# Next AI Session Objectives: Phase 2 - ParallelEvidenceOrchestrator Implementation
 
-## Session Priority: Phase 1 Implementation Start
+## ✅ PHASE 1 COMPLETE: Legacy Preservation + Parallel Foundation
+**Status:** Validated on backend (33.7s processing, 200 status)
+**Commit:** 2e4f9c3 - All import paths fixed, feature flag working
+**Backend:** https://69780239-96f5-4ce3-b826-d3453286c75d-00-2q5k9aqq28xtu.picard.replit.dev/
 
-### Hour 1 Objectives (Critical Foundation)
-1. **Legacy System Preservation (20 min)**
-   - Create `legacy_evidence_system/` directory
-   - Move 13 shepherd files from root to legacy directory  
-   - Update imports in main.py to maintain functionality
-   - Test legacy system still works: `curl -X POST "BACKEND_URL/analyses" -H "Content-Type: application/json" -d '{"input": "test claim", "type": "text"}'`
+## 🎯 SESSION PRIORITY: Phase 2 Implementation (90 min)
 
-2. **Parallel System Foundation (25 min)**
-   - Create `parallel_evidence_system/` directory structure:
-     ```
-     parallel_evidence_system/
-     ├── orchestrator/
-     ├── workers/ 
-     ├── resources/
-     └── tests/
-     ```
-   - Implement basic `ThreadSafeResourcePool` class with thread-local storage pattern
-   - Create `WorkerResourceBundle` for resource isolation
+### Hour 1.5 Objectives (Core Parallel System)
+1. **ThreadSafeEvidenceWorker Implementation (35 min)**
+   - Stateless worker using ThreadSafeResourcePool
+   - Evidence processing with isolated AI clients and HTTP sessions
+   - Error handling with OperationContext pattern from CODE_PATTERNS.md
+   - Worker thread safety validation
 
-3. **Integration Framework (15 min)**
-   - Implement `EvidenceSystemFactory` in main.py with feature flag support
-   - Add `USE_PARALLEL_EVIDENCE` environment variable handling
-   - Create basic A/B testing capability
+2. **ParallelConsensusEngine Implementation (40 min)**
+   - Claim-level parallelization (process 4 claims simultaneously)
+   - AI-level parallelization within each claim worker (Claude + OpenAI concurrent)
+   - Quality-weighted consensus integration using existing EvidenceQualityAssessor
+   - Performance logging and monitoring
 
-### If Extra Time Available
-4. **Worker Architecture Start (15-30 min)**
-   - Implement `ThreadSafeEvidenceWorker` interface
-   - Add basic `execute_strategy()` method signature
-   - Create worker thread safety validation tests
+3. **Integration Testing & Deployment (15 min)**
+   - Backend deployment with USE_PARALLEL_EVIDENCE=true
+   - Performance validation: target <30s total processing time
+   - A/B comparison test between legacy and parallel systems
 
 ## Success Criteria for Next Session
 - [ ] Legacy system preserved and functional
