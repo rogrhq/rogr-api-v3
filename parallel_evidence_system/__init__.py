@@ -1,0 +1,1 @@
+"""Parallel Evidence System - Thread-safe architecture for <30s processing"""

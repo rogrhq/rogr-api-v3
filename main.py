@@ -8,15 +8,40 @@ from pydantic import BaseModel
 from ocr_service import OCRService
 from claim_miner import ClaimMiner, ClaimMiningResult, MinedClaim
 from wikipedia_service import WikipediaService
-from ai_evidence_shepherd import OpenAIEvidenceShepherd
-from claude_evidence_shepherd import ClaudeEvidenceShepherd
-from evidence_shepherd import NoOpEvidenceShepherd
+from legacy_evidence_system.ai_evidence_shepherd import OpenAIEvidenceShepherd
+from legacy_evidence_system.claude_evidence_shepherd import ClaudeEvidenceShepherd
+from legacy_evidence_system.evidence_shepherd import NoOpEvidenceShepherd
 from progressive_analysis_service import ProgressiveAnalysisService
 from rogr_fc_scoring_engine_zero_start import ROGRFCScoringEngineZeroStart
-from rogr_dual_evidence_shepherd import ROGRDualEvidenceShepherd
+from legacy_evidence_system.rogr_dual_evidence_shepherd import ROGRDualEvidenceShepherd
 from evidence_gathering.interfaces.search_strategy_interface import FeatureFlaggedSearchStrategy
 from evidence_gathering.search_strategy.methodology_strategist import MethodologySearchStrategist
 from performance_testing import performance_tester
+
+# Feature flag logging for visibility
+USE_PARALLEL_EVIDENCE = os.getenv('USE_PARALLEL_EVIDENCE', 'false').lower() == 'true'
+print(f"🔧 USE_PARALLEL_EVIDENCE = {USE_PARALLEL_EVIDENCE}")
+
+
+def create_evidence_system(use_parallel: bool = False):
+    """Factory for evidence system selection with feature flag support"""
+    use_parallel_flag = os.getenv('USE_PARALLEL_EVIDENCE', 'false').lower() == 'true'
+
+    if use_parallel or use_parallel_flag:
+        # Import parallel system (will be implemented in Phase 2)
+        try:
+            from parallel_evidence_system.orchestrator.parallel_evidence_orchestrator import ParallelEvidenceOrchestrator
+            print("✅ Using Parallel Evidence System")
+            return ParallelEvidenceOrchestrator()
+        except ImportError:
+            print("⚠️ Parallel system not available, falling back to legacy")
+
+    # Legacy system (current behavior preserved)
+    from legacy_evidence_system.rogr_dual_evidence_shepherd import ROGRDualEvidenceShepherd
+    use_eeg_phase_1 = os.getenv('USE_EEG_PHASE_1', 'false').lower() == 'true'
+    print("✅ Using Legacy Evidence System")
+    return ROGRDualEvidenceShepherd(use_eeg_phase_1=use_eeg_phase_1)
+
 
 # Test comment - verifying git push workflows
 
@@ -93,19 +118,21 @@ analyses_claims_db = {}  # Store extracted claims for focus analysis
 ocr_service = OCRService()
 claim_miner = ClaimMiner()
 
-# Initialize NEW ROGR Dual Evidence Shepherd at startup for reuse across requests
-rogr_dual_shepherd = None
+# Initialize Evidence System with Factory Pattern at startup for reuse across requests
+evidence_system = None
 try:
-    use_eeg_phase_1 = os.getenv('USE_EEG_PHASE_1', 'false').lower() == 'true'
-    rogr_dual_shepherd = ROGRDualEvidenceShepherd(use_eeg_phase_1=use_eeg_phase_1)
-    if rogr_dual_shepherd.is_enabled():
-        print("✅ NEW ROGR Dual Evidence Shepherd enabled at startup")
+    evidence_system = create_evidence_system()
+    if evidence_system and evidence_system.is_enabled():
+        print("✅ Evidence system enabled at startup")
     else:
-        print("❌ NEW ROGR Dual Evidence Shepherd disabled - no shepherds available")
-        rogr_dual_shepherd = None
+        print("❌ Evidence system disabled - no shepherds available")
+        evidence_system = None
 except Exception as e:
-    print(f"❌ NEW ROGR Dual Evidence Shepherd failed to initialize: {e}")
-    rogr_dual_shepherd = None
+    print(f"❌ Evidence system failed to initialize: {e}")
+    evidence_system = None
+
+# Maintain backward compatibility
+rogr_dual_shepherd = evidence_system
 
 # Claim scoring functions
 def generate_evidence_statements(claim_text: str, trust_score: int) -> tuple[List[EvidenceStatement], List[EvidenceStatement], List[EvidenceStatement]]:
@@ -196,7 +223,7 @@ async def score_claim_with_evidence_shepherd(claim_text: str, claim_context: dic
     
     try:
         if use_multi_ai:
-            from rogr_dual_evidence_shepherd import ROGRDualEvidenceShepherd
+            from legacy_evidence_system.rogr_dual_evidence_shepherd import ROGRDualEvidenceShepherd
             evidence_shepherd = rogr_dual_shepherd
             print(f"DEBUG: Using ROGR Dual Evidence Shepherd (NEW) for claim: {claim_text[:50]}...")
         else:
