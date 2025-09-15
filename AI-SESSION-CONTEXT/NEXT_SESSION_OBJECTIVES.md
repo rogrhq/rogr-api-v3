@@ -7,29 +7,33 @@
 **Validation**: ✅ L1 gate passed - implementation authorized
 **Sources**: ✅ ES_ACI_PLAN.md and ES_EEG_PLAN_v2.md provide complete authoritative specifications
 
-## 🎯 NEXT SESSION PRIORITIES: Phase 1 Foundation & Legacy Preservation (60 min)
+## 🎯 NEXT SESSION PRIORITIES: Phase 1.2 Restart with Proper RDT Compliance (60 min)
 
-### **PHASE 1: Foundation & Legacy Preservation (60 min)**
-**Per COMPLETE_ARCHITECTURE_PLAN.md**: Preserve current working system + create thread-safe foundation
-**Priority**: MUST be completed before Phase 2 (Core Parallel Architecture)
+### **CRITICAL FAILURE ANALYSIS**
+**Previous Session Failure**: AI violated RDT #4 by attempting Phase 1.2 implementation without reading critical authoritative documents
+**Trust Issue**: AI demonstrated unreliable RDT compliance methodology
+**Required Fix**: Complete authoritative document examination BEFORE any implementation
 
-#### **Phase 1.1: Legacy System Preservation (20 min)**
-1. **Create legacy_evidence_system/ directory**: Preserve current working system for rollback
-2. **Move all 12 shepherd files to legacy/**: Maintain working legacy system
-3. **Update imports in main.py**: Point to legacy directory structure
-4. **Test legacy system functionality**: Verify preservation successful
+### **PHASE 1.1: Foundation & Legacy Preservation ✅ COMPLETED**
+- ✅ **Legacy directory created**: legacy_evidence_system/ with proper structure
+- ✅ **11 shepherd files migrated**: All files moved with git mv preserving history
+- ✅ **Main.py imports updated**: All 6 import statements corrected to legacy prefix
+- ✅ **Legacy system functional**: Base imports tested and working
 
-#### **Phase 1.2: Parallel System Foundation Structure (20 min)**
-1. **Create parallel_evidence_system/ directory**: New parallel architecture foundation
-2. **Create ThreadSafeResourcePool foundation**: Using corrected WorkerResourceBundle specification
-3. **Create directory structure**: orchestrator/, workers/, resources/, tests/
-4. **Implement WorkerResourceBundle**: With EvidenceRelevanceValidator (not EvidenceScorer)
+### **PHASE 1.2: Parallel System Foundation Structure (60 min) - MUST RESTART**
+**MANDATORY FIRST STEP**: Complete examination of ALL critical authoritative documents:
 
-#### **Phase 1.3: Feature Flag Integration & Validation (20 min)**
-1. **Create feature flag switching**: Enable toggle between legacy and parallel systems
-2. **Integration framework setup**: Dual-system architecture preparation
-3. **L2 Validation**: Verify legacy preservation and parallel foundation
-4. **Phase 1 completion**: Ready for Phase 2 (Core Parallel Architecture)
+#### **Required Document Examination (20 min)**
+1. **Read ES_ACI_PLAN.md COMPLETELY**: EvidenceRelevanceValidator specification (lines 154-169)
+2. **Read ES_EEG_PLAN_v2.md COMPLETELY**: Component specifications and integration patterns
+3. **Read COMPLETE_ARCHITECTURE_PLAN.md COMPLETELY**: ThreadSafeResourcePool specification
+4. **Read CODE_PATTERNS.md**: Required implementation patterns
+
+#### **Implementation Only After Complete Document Review (40 min)**
+1. **Create parallel_evidence_system/ directory structure**: Based on complete specifications
+2. **Implement ThreadSafeResourcePool**: Per complete architectural specifications
+3. **Create WorkerResourceBundle**: With EvidenceRelevanceValidator per ES_ACI_PLAN.md
+4. **Test parallel foundation**: Verify structure and basic functionality
 
 ### **SEQUENTIAL ARCHITECTURE**: Each phase builds on previous
 **Phase 1**: Foundation & Legacy Preservation (preserve + setup)
