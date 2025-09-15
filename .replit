@@ -1,5 +1,5 @@
 modules = ["python-3.10"]
-run = "USE_PARALLEL_EVIDENCE=false uvicorn main:app --host 0.0.0.0 --port 8000"
+run = "USE_PARALLEL_EVIDENCE=true USE_EVIDENCE_SHEPHERD=false uvicorn main:app --host 0.0.0.0 --port 8000"
 
 [nix]
 channel = "stable-25_05"
