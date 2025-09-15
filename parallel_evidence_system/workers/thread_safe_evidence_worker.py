@@ -220,11 +220,17 @@ class ThreadSafeEvidenceWorker(ThreadSafeComponent):
         except Exception as e:
             raise ROGRException(f"Web search failed for query: {task.search_query.query_text}", context, e)
 
-        # Step 2: Extract and process content from search results with retry logic
+        # Step 2: Extract and process content from search results with best-effort approach
         max_results_to_try = min(15, len(search_results))  # Try up to 15 results instead of 5
         target_evidence_count = 3  # Target minimum evidence pieces
 
+        self.logger.info(f"PARALLEL EXTRACTION: Processing {max_results_to_try} URLs for task {task.task_id}")
+
+        successful_extractions = 0
+        failed_extractions = 0
+
         for i, search_result in enumerate(search_results[:max_results_to_try]):
+            url = search_result.get('url', 'unknown')
             try:
                 evidence = self._process_single_result(
                     search_result,
@@ -234,19 +240,26 @@ class ThreadSafeEvidenceWorker(ThreadSafeComponent):
                 )
                 if evidence:
                     evidence_list.append(evidence)
+                    successful_extractions += 1
+                    self.logger.info(f"✅ Extracted: {self._extract_domain_from_url(url)} "
+                                   f"({evidence.processing_metadata.get('content_length', 0)} chars)")
 
                     # Stop if we have sufficient evidence
                     if len(evidence_list) >= target_evidence_count:
                         break
+                else:
+                    failed_extractions += 1
+                    self.logger.info(f"❌ Failed: {self._extract_domain_from_url(url)} - No usable content extracted")
 
             except Exception as e:
-                self.logger.warning(f"Failed to process search result {i}", extra={
-                    'task_id': task.task_id,
-                    'result_url': search_result.get('url', 'unknown'),
-                    'error': str(e)
-                })
-                # Continue processing remaining results instead of giving up
+                failed_extractions += 1
+                self.logger.warning(f"❌ Exception: {self._extract_domain_from_url(url)} - {str(e)}")
+                # Continue processing remaining results instead of giving up - this is the key "best-effort" fix
                 continue
+
+        # Log extraction summary like legacy system
+        total_attempted = successful_extractions + failed_extractions
+        self.logger.info(f"Parallel extraction complete: {successful_extractions}/{total_attempted} successful")
 
         return evidence_list
 
@@ -281,12 +294,24 @@ class ThreadSafeEvidenceWorker(ThreadSafeComponent):
             # Extract content using thread-local content extractor
             content_data = resources.content_extractor.extract_content(search_result['url'])
 
-            if not content_data or not content_data.get('cleaned_content'):
+            # Check if content extraction was successful (matching legacy system pattern)
+            if not content_data or not content_data.get('success') or not content_data.get('content'):
+                self.logger.debug(f"Content extraction failed for {search_result['url']}: "
+                                f"success={content_data.get('success') if content_data else None}, "
+                                f"word_count={content_data.get('word_count') if content_data else None}")
+                return None
+
+            # Use raw content field (matching legacy system)
+            content_text = content_data['content']
+
+            # Ensure minimum content quality threshold (matching legacy system)
+            if content_data.get('word_count', 0) < 50:
+                self.logger.debug(f"Content too short for {search_result['url']}: {content_data.get('word_count')} words")
                 return None
 
             # Calculate quality scores using thread-local quality assessor
             quality_scores = resources.quality_assessor.assess_evidence_quality(
-                content_data['cleaned_content'],
+                content_text,
                 task.claim_context.claim_text
             )
 
@@ -294,7 +319,7 @@ class ThreadSafeEvidenceWorker(ThreadSafeComponent):
             evidence = ProcessedEvidence(
                 evidence_id=evidence_id,
                 source_url=search_result['url'],
-                content_extract=content_data['cleaned_content'][:1000],  # First 1000 chars
+                content_extract=content_text[:1000],  # First 1000 chars
                 relevance_score=quality_scores.get('relevance_score', 0.0),
                 quality_score=quality_scores.get('overall_quality', 0.0),
                 methodology_compliance=quality_scores.get('methodology_score', 0.0),
@@ -304,7 +329,7 @@ class ThreadSafeEvidenceWorker(ThreadSafeComponent):
                     'search_query': task.search_query.query_text,
                     'ai_provider': task.ai_provider,
                     'processed_at': time.time(),
-                    'content_length': len(content_data['cleaned_content'])
+                    'content_length': len(content_text)
                 }
             )
 
@@ -313,6 +338,18 @@ class ThreadSafeEvidenceWorker(ThreadSafeComponent):
         except Exception as e:
             self.logger.warning(f"Failed to process evidence from {search_result.get('url', 'unknown')}: {str(e)}")
             return None
+
+    def _extract_domain_from_url(self, url: str) -> str:
+        """Extract domain from URL for logging"""
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            domain = parsed.netloc.lower()
+            if domain.startswith('www.'):
+                domain = domain[4:]
+            return domain
+        except:
+            return "unknown"
 
     def get_worker_status(self) -> Dict[str, Any]:
         """Get current worker status and metrics"""
