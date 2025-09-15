@@ -2,7 +2,7 @@ import json
 import re
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
-from evidence_shepherd import EvidenceShepherd, SearchStrategy, EvidenceCandidate, ProcessedEvidence, ClaimType
+from .evidence_shepherd import EvidenceShepherd, SearchStrategy, EvidenceCandidate, ProcessedEvidence, ClaimType
 from ai_provider import AIProvider, AIResponse
 from web_search_service import WebSearchService
 from web_content_extractor import WebContentExtractor

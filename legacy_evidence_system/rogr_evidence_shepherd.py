@@ -3,7 +3,7 @@ import json
 import re
 import requests
 from typing import List, Dict, Optional, TYPE_CHECKING
-from evidence_shepherd import EvidenceShepherd, SearchStrategy, EvidenceCandidate, ProcessedEvidence, ClaimType
+from .evidence_shepherd import EvidenceShepherd, SearchStrategy, EvidenceCandidate, ProcessedEvidence, ClaimType
 from web_search_service import WebSearchService
 from web_content_extractor import WebContentExtractor
 

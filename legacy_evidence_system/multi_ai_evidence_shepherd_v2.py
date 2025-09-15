@@ -3,7 +3,7 @@ from typing import List, Dict, Optional
 from evidence_shepherd_v2 import EvidenceShepherdV2
 from claude_provider_v2 import ClaudeProviderV2
 from openai_provider_v2 import OpenAIProviderV2
-from evidence_shepherd import ProcessedEvidence, EvidenceCandidate
+from .evidence_shepherd import ProcessedEvidence, EvidenceCandidate
 from web_search_service import WebSearchService
 from web_content_extractor import WebContentExtractor
 
