@@ -61,7 +61,7 @@ Your ONLY priority this session is strict RDT compliance. THE ONLY WAY TO BE OR 
 **Tell AI your available time:**
 
 ```
-I have approximately [X] minutes available for this session. Based on the objectives in NEXT_SESSION_OBJECTIVES.md, what should we prioritize to make the best progress?
+I have approximately 30 minutes available for this session. Based on the objectives in NEXT_SESSION_OBJECTIVES.md, what should we prioritize to make the best progress?
 ```
 
 **AI should adjust objectives to fit available time**
