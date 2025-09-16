@@ -138,7 +138,7 @@ class ThreadSafeResourcePool(ThreadSafeComponent):
             # TRACEABILITY: Circular import prevention pattern
             from .web_search_service import WebSearchService
             from .web_content_extractor import WebContentExtractor
-            from .evidence_relevance_validator import EvidenceRelevanceValidator
+            from ..analysis.evidence_validator import EvidenceRelevanceValidator
 
             # TRACEABILITY: COMPLETE_COMPONENT_SPECIFICATIONS.md lines 415-420
             self._local.resources = WorkerResourceBundle(
