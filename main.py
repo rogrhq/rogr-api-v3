@@ -93,19 +93,76 @@ analyses_claims_db = {}  # Store extracted claims for focus analysis
 ocr_service = OCRService()
 claim_miner = ClaimMiner()
 
-# Initialize NEW ROGR Dual Evidence Shepherd at startup for reuse across requests
-rogr_dual_shepherd = None
-try:
-    use_eeg_phase_1 = os.getenv('USE_EEG_PHASE_1', 'false').lower() == 'true'
-    rogr_dual_shepherd = ROGRDualEvidenceShepherd(use_eeg_phase_1=use_eeg_phase_1)
-    if rogr_dual_shepherd.is_enabled():
-        print("✅ NEW ROGR Dual Evidence Shepherd enabled at startup")
-    else:
-        print("❌ NEW ROGR Dual Evidence Shepherd disabled - no shepherds available")
-        rogr_dual_shepherd = None
-except Exception as e:
-    print(f"❌ NEW ROGR Dual Evidence Shepherd failed to initialize: {e}")
+# EvidenceSystemFactory per COMPLETE_ARCHITECTURE_PLAN.md lines 69-84
+class EvidenceSystemFactory:
+    """Factory for creating evidence systems with feature flag support per ADR-004"""
+
+    @staticmethod
+    def create_evidence_system(use_parallel: bool = None):
+        """
+        Create evidence system based on USE_PARALLEL_EVIDENCE environment variable
+
+        Args:
+            use_parallel: Override for environment variable. If None, reads from env
+
+        Returns:
+            Evidence system instance (legacy or parallel) or None if creation fails
+        """
+        if use_parallel is None:
+            use_parallel = os.getenv('USE_PARALLEL_EVIDENCE', 'false').lower() == 'true'
+
+        if use_parallel:
+            try:
+                # Only attempt import if we're trying to use parallel system
+                from parallel_evidence_system.orchestrator.parallel_evidence_orchestrator import ParallelEvidenceOrchestrator
+                print("✅ Creating Parallel Evidence System")
+                return ParallelEvidenceOrchestrator()
+            except ImportError as e:
+                print(f"❌ Parallel Evidence System not available: {e}")
+                return None
+            except Exception as e:
+                print(f"❌ Parallel Evidence System failed to initialize: {e}")
+                return None
+        else:
+            # Legacy system path
+            try:
+                use_eeg_phase_1 = os.getenv('USE_EEG_PHASE_1', 'false').lower() == 'true'
+                system = ROGRDualEvidenceShepherd(use_eeg_phase_1=use_eeg_phase_1)
+                if system.is_enabled():
+                    print(f"✅ Legacy Evidence System created (EEG Phase 1: {use_eeg_phase_1})")
+                    return system
+                else:
+                    print("❌ Legacy Evidence System disabled - no shepherds available")
+                    return None
+            except Exception as e:
+                print(f"❌ Legacy Evidence System failed to initialize: {e}")
+                return None
+
+# Initialize evidence system with feature flag support
+use_parallel_evidence = os.getenv('USE_PARALLEL_EVIDENCE', 'false').lower() == 'true'
+
+if use_parallel_evidence:
+    # Use factory for parallel system
+    print("🔄 USE_PARALLEL_EVIDENCE=true - attempting parallel system")
+    rogr_dual_shepherd = EvidenceSystemFactory.create_evidence_system(use_parallel=True)
+    if rogr_dual_shepherd is None:
+        print("⚠️ Parallel system failed, falling back to legacy system")
+        use_parallel_evidence = False
+
+if not use_parallel_evidence:
+    # Original legacy system initialization (preserved exactly)
     rogr_dual_shepherd = None
+    try:
+        use_eeg_phase_1 = os.getenv('USE_EEG_PHASE_1', 'false').lower() == 'true'
+        rogr_dual_shepherd = ROGRDualEvidenceShepherd(use_eeg_phase_1=use_eeg_phase_1)
+        if rogr_dual_shepherd.is_enabled():
+            print("✅ NEW ROGR Dual Evidence Shepherd enabled at startup")
+        else:
+            print("❌ NEW ROGR Dual Evidence Shepherd disabled - no shepherds available")
+            rogr_dual_shepherd = None
+    except Exception as e:
+        print(f"❌ NEW ROGR Dual Evidence Shepherd failed to initialize: {e}")
+        rogr_dual_shepherd = None
 
 # Claim scoring functions
 def generate_evidence_statements(claim_text: str, trust_score: int) -> tuple[List[EvidenceStatement], List[EvidenceStatement], List[EvidenceStatement]]:
