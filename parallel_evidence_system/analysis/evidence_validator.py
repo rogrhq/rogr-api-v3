@@ -9,7 +9,6 @@ semantic matching, logical relevance, scope alignment, and quality assessment.
 from dataclasses import dataclass
 from typing import Optional
 import anthropic
-from .claim_analysis_engine import ClaimAnalysisResult
 
 
 @dataclass
