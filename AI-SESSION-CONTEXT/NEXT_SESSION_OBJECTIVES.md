@@ -1,4 +1,4 @@
-# Next AI Session Objectives: PHASE 2 CORE PARALLEL ARCHITECTURE (90 min)
+# Next AI Session Objectives: PHASE 2 TESTING & VALIDATION (90 min)
 
 ## ✅ CURRENT STATUS: PHASE 1 COMPLETE
 
@@ -8,26 +8,26 @@
 **Testing**: ✅ Both legacy and parallel fallback scenarios validated on remote backend
 **Methodology**: ✅ Flawless Implementation with L1, L2, L3 validation maintained
 
-## 🎯 NEXT SESSION PRIORITIES: Phase 2 Core Parallel Architecture (90 min)
+## 🎯 NEXT SESSION PRIORITIES: Phase 2 Testing & Validation (90 min)
 
 ### **PHASE 1 SUCCESS SUMMARY**
 **Phase 1.3 Achievement**: EvidenceSystemFactory with USE_PARALLEL_EVIDENCE successfully implemented
 **Testing Results**: Both legacy (false) and parallel fallback (true) scenarios validated
 **Production Ready**: Feature flag integration working with real claim processing
 
-### **PHASE 2 IMPLEMENTATION FOCUS: Core Parallel Architecture**
+### **PHASE 2 TESTING FOCUS: Validate Complete Implementation**
 
-#### **Phase 2.1: ThreadSafeEvidenceWorker (45 min)**
-1. **Create ThreadSafeEvidenceWorker class**: Per COMPLETE_ARCHITECTURE_PLAN.md lines 110-152
-2. **Implement execute_strategy() method**: Pure execution worker with no strategy generation
-3. **Integrate with existing ThreadSafeResourcePool**: Use WorkerResourceBundle pattern
-4. **Add thread-safe evidence processing**: Parallel web search, content extraction, AI scoring
+#### **Phase 2.1: Backend Testing (45 min)**
+1. **Test parallel system startup**: Verify USE_PARALLEL_EVIDENCE=true loads ParallelEvidenceOrchestrator
+2. **Test ACI pipeline integration**: Validate claim analysis components work correctly
+3. **Test worker coordination**: Ensure ThreadSafeEvidenceWorkers execute properly
+4. **Debug any import/runtime errors**: Fix issues discovered during backend testing
 
-#### **Phase 2.2: ParallelEvidenceOrchestrator (45 min)**
-1. **Create ParallelEvidenceOrchestrator class**: Per COMPLETE_ARCHITECTURE_PLAN.md lines 155-193
-2. **Integrate EEG + ACI pipeline**: Methodology-first strategy generation with claim analysis
-3. **Implement worker coordination**: Distribute strategies to multiple ThreadSafeEvidenceWorkers
-4. **Add consensus processing**: Aggregate results from parallel workers for final scoring
+#### **Phase 2.2: Performance Validation (45 min)**
+1. **Test claim processing speed**: Validate <30s target achievement vs 396s baseline
+2. **Test parallel execution**: Confirm multiple workers operate correctly
+3. **Test consensus generation**: Verify evidence aggregation and trust scoring
+4. **Optimize performance**: Tune worker counts and timeouts based on results
 
 ### **SEQUENTIAL ARCHITECTURE**: Each phase builds on previous
 **Phase 1**: Foundation & Legacy Preservation (preserve + setup)
