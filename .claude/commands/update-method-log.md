@@ -1,5 +1,5 @@
 ---
-description: Update methodology_log.md with rich partnership insights and collaborative decision-making analysis
+description: Update /Users/txtk/Documents/ROGR/github/rogr-api/METHODOLOGY_LOG.md with rich partnership insights and collaborative decision-making analysis
 allowed-tools: Read,Write,Edit,Bash,Grep,Glob
 ---
 

@@ -1,0 +1,161 @@
+Google Cloud Vision client initialized successfully
+ClaimMiner initialized - Claude API: True
+🔄 USE_PARALLEL_EVIDENCE=true - attempting parallel system
+❌ Parallel Evidence System not available: No module named 'parallel_evidence_system.orchestrator.parallel_evidence_orchestrator'
+⚠️ Parallel system failed, falling back to legacy system
+✅ EEG Phase 1 MethodologySearchStrategist initialized
+WebSearchService initialized - Google: True, Bing: False
+✅ Primary ROGR Evidence Shepherd enabled
+WebSearchService initialized - Google: True, Bing: False
+✅ Secondary ROGR Evidence Shepherd enabled
+Evidence Quality Assessor initialized - focusing on intrinsic evidence quality
+🔍 Dual-AI Evidence Shepherd initialized with 2 AI shepherds
+✅ NEW ROGR Dual Evidence Shepherd enabled at startup
+INFO:     Started server process [1066]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     172.31.93.130:57916 - "GET / HTTP/1.1" 404 Not Found
+ClaimMiner: Claude response received, length: 1505
+ClaimMiner: Raw response: Here is my analysis of the factual claims in the given content:
+
+{
+  "primary_claims": [
+    {
+      "text": "Climate change policies will help the economy",
+      "relevance_score": 90,
+      "specificity_score": 80,
+      "consequence_score": 90,
+      "factual_assertion": true,
+      "claim_type": "policy",
+      "context_reasoning": "This is the central claim and focus of the content"
+    }
+  ],
+  "secondary_claims": [],
+  "tertiary_claims": [],
+  "analysis_meta": {
+    "total_claims_found":...
+ClaimMiner: JSON extraction - start: 65, end: 708
+ClaimMiner: Extracted JSON: {
+  "primary_claims": [
+    {
+      "text": "Climate change policies will help the economy",
+      "relevance_score": 90,
+      "specificity_score": 80,
+      "consequence_score": 90,
+      "factual_a...
+ClaimMiner: Successfully parsed JSON with 4 top-level keys
+DEBUG: ClaimMiner found 1 primary claims for text input
+DEBUG: Using 1 primary claims from ClaimMiner: ['Climate change policies will help the economy']
+DEBUG: USE_EVIDENCE_SHEPHERD = True
+DEBUG: USE_EEG_PHASE_1 = True
+DEBUG: Using Evidence Shepherd integration for 1 claims
+DEBUG: Using ROGR Dual Evidence Shepherd (NEW) for claim: Climate change policies will help the economy...
+🧪 Started performance test: 20250916_165330_000 (EEG: True)
+🔍 Starting dual AI evidence gathering for: Climate change policies will help the economy...
+🧠 EEG Phase 1: Generating methodology-first search strategy...
+✅ EEG Phase 1: Generated 9 IFCN-compliant queries
+📊 EEG Phase 1: Strategy time: 0.00s, Estimated total: 36s
+🔍 ROGR Primary: Searching for evidence...
+Executing EEG_Phase_1: 9 queries
+Searching web for: 'Climate change policies will help the economy government analysis'
+Google search found 8 results for 'Climate change policies will help the economy government analysis'
+Found 8 results for 'Climate change policies will help the economy government analysis'
+Searching web for: 'Climate change policies will help the economy official report'
+Google search found 8 results for 'Climate change policies will help the economy official report'
+Found 8 results for 'Climate change policies will help the economy official report'
+Searching web for: 'Climate change policies will help the economy regulatory assessment'
+Google search found 8 results for 'Climate change policies will help the economy regulatory assessment'
+Found 8 results for 'Climate change policies will help the economy regulatory assessment'
+Searching web for: 'Climate change policies will help the economy peer reviewed study'
+Google search found 8 results for 'Climate change policies will help the economy peer reviewed study'
+Found 8 results for 'Climate change policies will help the economy peer reviewed study'
+Searching web for: 'Climate change policies will help the economy academic research'
+Google search found 8 results for 'Climate change policies will help the economy academic research'
+Found 8 results for 'Climate change policies will help the economy academic research'
+Searching web for: 'Climate change policies will help the economy journal article'
+Google search found 8 results for 'Climate change policies will help the economy journal article'
+Found 8 results for 'Climate change policies will help the economy journal article'
+Searching web for: 'Climate change policies will help the economy systematic review'
+Google search found 8 results for 'Climate change policies will help the economy systematic review'
+Found 8 results for 'Climate change policies will help the economy systematic review'
+Searching web for: 'Climate change policies will help the economy meta-analysis'
+Google search found 8 results for 'Climate change policies will help the economy meta-analysis'
+Found 8 results for 'Climate change policies will help the economy meta-analysis'
+Searching web for: 'Climate change policies will help the economy literature review'
+Google search found 8 results for 'Climate change policies will help the economy literature review'
+Found 8 results for 'Climate change policies will help the economy literature review'
+CLAUDE PARALLEL EXTRACTION: Processing 10 URLs simultaneously
+Extracting content from 10 URLs in parallel (max_workers=6)
+✅ Extracted: rff.org (0 words)
+✅ Extracted: pewresearch.org (0 words)
+❌ Failed: iea.org - 403 Client Error: Forbidden for url: https://www.iea.org/reports/global-ev-outlook-2021/policies-to-promote-electric-vehicle-deployment
+✅ Extracted: ers.usda.gov (730 words)
+✅ Extracted: pewresearch.org (0 words)
+✅ Extracted: gov.uk (0 words)
+❌ Failed: sciencedirect.com - 403 Client Error: Forbidden for url: https://www.sciencedirect.com/unsupported_browser
+❌ Failed: imf.org - HTTPSConnectionPool(host='www.imf.org', port=443): Read timed out. (read timeout=8)
+❌ Failed: transportation.gov - HTTPSConnectionPool(host='www.transportation.gov', port=443): Read timed out. (read timeout=8)
+❌ Failed: imf.org - HTTPSConnectionPool(host='www.imf.org', port=443): Read timed out. (read timeout=8)
+Parallel extraction complete: 5/10 successful
+Claude web search found 10 evidence candidates from 72 total results
+✅ ROGR Primary: Found 5 evidence pieces
+🔍 ROGR Secondary: Searching for evidence...
+Executing EEG_Phase_1: 9 queries
+Searching web for: 'Climate change policies will help the economy government analysis'
+Google search found 8 results for 'Climate change policies will help the economy government analysis'
+Found 8 results for 'Climate change policies will help the economy government analysis'
+Searching web for: 'Climate change policies will help the economy official report'
+Google search found 8 results for 'Climate change policies will help the economy official report'
+Found 8 results for 'Climate change policies will help the economy official report'
+Searching web for: 'Climate change policies will help the economy regulatory assessment'
+Google search found 8 results for 'Climate change policies will help the economy regulatory assessment'
+Found 8 results for 'Climate change policies will help the economy regulatory assessment'
+Searching web for: 'Climate change policies will help the economy peer reviewed study'
+Google search found 8 results for 'Climate change policies will help the economy peer reviewed study'
+Found 8 results for 'Climate change policies will help the economy peer reviewed study'
+Searching web for: 'Climate change policies will help the economy academic research'
+Google search found 8 results for 'Climate change policies will help the economy academic research'
+Found 8 results for 'Climate change policies will help the economy academic research'
+Searching web for: 'Climate change policies will help the economy journal article'
+Google search found 8 results for 'Climate change policies will help the economy journal article'
+Found 8 results for 'Climate change policies will help the economy journal article'
+Searching web for: 'Climate change policies will help the economy systematic review'
+Google search found 8 results for 'Climate change policies will help the economy systematic review'
+Found 8 results for 'Climate change policies will help the economy systematic review'
+Searching web for: 'Climate change policies will help the economy meta-analysis'
+Google search found 8 results for 'Climate change policies will help the economy meta-analysis'
+Found 8 results for 'Climate change policies will help the economy meta-analysis'
+Searching web for: 'Climate change policies will help the economy literature review'
+Google search found 8 results for 'Climate change policies will help the economy literature review'
+Found 8 results for 'Climate change policies will help the economy literature review'
+CLAUDE PARALLEL EXTRACTION: Processing 10 URLs simultaneously
+Extracting content from 10 URLs in parallel (max_workers=6)
+✅ Extracted: rff.org (0 words)
+✅ Extracted: pewresearch.org (0 words)
+❌ Failed: sciencedirect.com - 403 Client Error: Forbidden for url: https://www.sciencedirect.com/unsupported_browser
+❌ Failed: iea.org - 403 Client Error: Forbidden for url: https://www.iea.org/reports/global-ev-outlook-2021/policies-to-promote-electric-vehicle-deployment
+✅ Extracted: pewresearch.org (0 words)
+✅ Extracted: ers.usda.gov (730 words)
+✅ Extracted: gov.uk (0 words)
+❌ Failed: transportation.gov - HTTPSConnectionPool(host='www.transportation.gov', port=443): Read timed out. (read timeout=8)
+❌ Failed: imf.org - HTTPSConnectionPool(host='www.imf.org', port=443): Read timed out. (read timeout=8)
+❌ Failed: imf.org - HTTPSConnectionPool(host='www.imf.org', port=443): Read timed out. (read timeout=8)
+Parallel extraction complete: 5/10 successful
+Claude web search found 10 evidence candidates from 72 total results
+✅ ROGR Secondary: Found 5 evidence pieces
+🎯 Dual AI consensus complete:
+  - Consensus score: 79.5
+  - Disagreement level: 1.0
+  - Quality weighted score: 79.5
+🎯 Consensus metrics recorded for 20250916_165330_000: 79.5 score
+✅ Test 20250916_165330_000 complete: 44.8s total
+DEBUG: Evidence Shepherd found 10 pieces of evidence
+DEBUG: Found MDEQ consensus quality score: 79.5
+DEBUG: Using NEW ES consensus score: 79.5
+DEBUG: MDEQ system active - using quality-based score 79.5, skipping emergency caps
+DEBUG: Advanced scoring - Base: 79.5, Adjusted: 79.5, Quality: 50.0
+DEBUG: ES scoring complete - Score: 79.5, Grade: B, Sources: 10
+DEBUG: Claim 1/1 ES processed - Score: 79, Grade: B
+DEBUG: Generated 6 real citations from Evidence Shepherd results
+INFO:     172.31.93.130:41274 - "POST /analyses HTTP/1.1" 200 OK
