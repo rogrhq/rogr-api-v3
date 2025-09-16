@@ -49,7 +49,59 @@ class ThreadSafeEvidenceWorker(ThreadSafeComponent):
 
 ---
 
-## **2. Resource Cleanup Context Manager Pattern**
+## **2. Evidence System Factory Pattern (Phase 1.3)**
+**Usage**: Feature flag integration for toggling between evidence systems
+```python
+class EvidenceSystemFactory:
+    """Factory for creating evidence systems with feature flag support per ADR-004"""
+
+    @staticmethod
+    def create_evidence_system(use_parallel: bool = None):
+        """Create evidence system based on USE_PARALLEL_EVIDENCE environment variable"""
+        if use_parallel is None:
+            use_parallel = os.getenv('USE_PARALLEL_EVIDENCE', 'false').lower() == 'true'
+
+        if use_parallel:
+            try:
+                from parallel_evidence_system.orchestrator.parallel_evidence_orchestrator import ParallelEvidenceOrchestrator
+                print("✅ Creating Parallel Evidence System")
+                return ParallelEvidenceOrchestrator()
+            except ImportError as e:
+                print(f"❌ Parallel Evidence System not available: {e}")
+                return None
+        else:
+            # Legacy system path with preserved functionality
+            try:
+                use_eeg_phase_1 = os.getenv('USE_EEG_PHASE_1', 'false').lower() == 'true'
+                system = ROGRDualEvidenceShepherd(use_eeg_phase_1=use_eeg_phase_1)
+                if system.is_enabled():
+                    return system
+                return None
+            except Exception as e:
+                print(f"❌ Legacy Evidence System failed: {e}")
+                return None
+```
+
+**Integration Pattern in main.py:**
+```python
+# Feature flag integration with graceful fallback
+use_parallel_evidence = os.getenv('USE_PARALLEL_EVIDENCE', 'false').lower() == 'true'
+
+if use_parallel_evidence:
+    print("🔄 USE_PARALLEL_EVIDENCE=true - attempting parallel system")
+    evidence_system = EvidenceSystemFactory.create_evidence_system(use_parallel=True)
+    if evidence_system is None:
+        print("⚠️ Parallel system failed, falling back to legacy system")
+        use_parallel_evidence = False
+
+if not use_parallel_evidence:
+    # Original legacy initialization preserved exactly
+    evidence_system = EvidenceSystemFactory.create_evidence_system(use_parallel=False)
+```
+
+---
+
+## **3. Resource Cleanup Context Manager Pattern**
 **Usage**: All resource-using operations must use context managers
 ```python
 from contextlib import contextmanager
