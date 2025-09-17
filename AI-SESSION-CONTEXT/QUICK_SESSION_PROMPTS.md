@@ -9,7 +9,7 @@ Please start by reading the following context files to understand our current st
 1. AI-SESSION-CONTEXT/CURRENT_SESSION_STATE.md
 2. AI-SESSION-CONTEXT/NEXT_SESSION_OBJECTIVES.md  
 3. AI-SESSION-CONTEXT/SESSION_START_PROTOCOL.md
-4. ../RDT_v2.md (Enhanced development methodology standards)
+4. RDT_v2.md (Enhanced development methodology standards)
 
 After reading these files, please confirm your understanding by telling me:
 - What phase of implementation we're currently in

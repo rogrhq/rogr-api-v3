@@ -153,7 +153,7 @@ if not use_parallel_evidence:
     # Original legacy system initialization (preserved exactly)
     rogr_dual_shepherd = None
     try:
-        use_eeg_phase_1 = os.getenv('USE_EEG_PHASE_1', 'false').lower() == 'true'
+        use_eeg_phase_1 = os.getenv('USE_EEG_PHASE_1', 'true').lower() == 'true'  # Enable EEG by default
         rogr_dual_shepherd = ROGRDualEvidenceShepherd(use_eeg_phase_1=use_eeg_phase_1)
         if rogr_dual_shepherd.is_enabled():
             print("✅ NEW ROGR Dual Evidence Shepherd enabled at startup")

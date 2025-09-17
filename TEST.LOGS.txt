@@ -1,18 +1,146 @@
 Google Cloud Vision client initialized successfully
 ClaimMiner initialized - Claude API: True
 🔄 USE_PARALLEL_EVIDENCE=true - attempting parallel system
-❌ Parallel Evidence System not available: cannot import name 'EvidenceRelevanceValidator' from partially initialized module 'parallel_evidence_system.analysis.evidence_validator' (most likely due to a circular import) (/home/runner/workspace/parallel_evidence_system/analysis/evidence_validator.py)
-⚠️ Parallel system failed, falling back to legacy system
-✅ EEG Phase 1 MethodologySearchStrategist initialized
-WebSearchService initialized - Google: True, Bing: False
-✅ Primary ROGR Evidence Shepherd enabled
-WebSearchService initialized - Google: True, Bing: False
-✅ Secondary ROGR Evidence Shepherd enabled
-Evidence Quality Assessor initialized - focusing on intrinsic evidence quality
-🔍 Dual-AI Evidence Shepherd initialized with 2 AI shepherds
-✅ NEW ROGR Dual Evidence Shepherd enabled at startup
-INFO:     Started server process [849]
+✅ Creating Parallel Evidence System
+INFO:     Started server process [1505]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     172.31.93.34:57100 - "GET / HTTP/1.1" 404 Not Found
+INFO:     172.31.93.34:48316 - "GET / HTTP/1.1" 404 Not Found
+INFO:     172.31.93.34:45034 - "GET /health HTTP/1.1" 200 OK
+ClaimMiner: Claude response received, length: 992
+ClaimMiner: Raw response: Here is my analysis of the factual claims in the given content:
+
+{
+  "primary_claims": [
+    {
+      "text": "COVID-19 vaccines are safe",
+      "relevance_score": 95,
+      "specificity_score": 90,
+      "consequence_score": 90,
+      "factual_assertion": true,
+      "claim_type": "scientific",
+      "context_reasoning": "Central claim about vaccine safety"
+    },
+    {
+      "text": "COVID-19 vaccines are effective for preventing severe illness",
+      "relevance_score": 95,
+      "specificity...
+ClaimMiner: JSON extraction - start: 65, end: 992
+ClaimMiner: Extracted JSON: {
+  "primary_claims": [
+    {
+      "text": "COVID-19 vaccines are safe",
+      "relevance_score": 95,
+      "specificity_score": 90,
+      "consequence_score": 90,
+      "factual_assertion": true,
+  ...
+ClaimMiner: Successfully parsed JSON with 4 top-level keys
+DEBUG: ClaimMiner found 2 primary claims for text input
+DEBUG: Using 2 primary claims from ClaimMiner: ['COVID-19 vaccines are safe', 'COVID-19 vaccines are effective for preventing sev...']
+DEBUG: USE_EVIDENCE_SHEPHERD = True
+DEBUG: USE_EEG_PHASE_1 = True
+DEBUG: Using Evidence Shepherd integration for 2 claims
+DEBUG: Using ROGR Dual Evidence Shepherd (NEW) for claim: COVID-19 vaccines are safe...
+FATAL: NEW Evidence Shepherd processing failed for claim 'COVID-19 vaccines are safe...': 'ParallelEvidenceOrchestrator' object has no attribute 'search_real_evidence'
+ERROR: Failed to process claim 1 with ES integration: NEW Evidence Shepherd system failure: 'ParallelEvidenceOrchestrator' object has no attribute 'search_real_evidence'
+DEBUG: Using REAL WEB SEARCH AI Evidence Shepherd for claim: 'COVID-19 vaccines are safe'
+ERROR: AI Evidence Shepherd failed for 'COVID-19 vaccines are safe': name 'ai_shepherd' is not defined
+DEBUG: Falling back to minimal generic evidence
+DEBUG: Claim 1/2 ES fallback - Score: 86, Grade: A-
+DEBUG: Using ROGR Dual Evidence Shepherd (NEW) for claim: COVID-19 vaccines are effective for preventing sev...
+FATAL: NEW Evidence Shepherd processing failed for claim 'COVID-19 vaccines are effective for preventing sev...': 'ParallelEvidenceOrchestrator' object has no attribute 'search_real_evidence'
+ERROR: Failed to process claim 2 with ES integration: NEW Evidence Shepherd system failure: 'ParallelEvidenceOrchestrator' object has no attribute 'search_real_evidence'
+DEBUG: Using REAL WEB SEARCH AI Evidence Shepherd for claim: 'COVID-19 vaccines are effective for preventing severe illness'
+ERROR: AI Evidence Shepherd failed for 'COVID-19 vaccines are effective for preventing severe illness': name 'ai_shepherd' is not defined
+DEBUG: Falling back to minimal generic evidence
+DEBUG: Claim 2/2 ES fallback - Score: 85, Grade: A-
+DEBUG: Generated 1 real citations from Evidence Shepherd results
+INFO:     172.31.93.34:34626 - "POST /analyses HTTP/1.1" 200 OK
+ClaimMiner: Claude response received, length: 1343
+ClaimMiner: Raw response: Here is my analysis of the factual claims in the given content:
+
+{
+  "primary_claims": [
+    {
+      "text": "Climate change policies will destroy the economy",
+      "relevance_score": 90,
+      "specificity_score": 70,
+      "consequence_score": 90,
+      "factual_assertion": true,
+      "claim_type": "policy",
+      "context_reasoning": "This is the central claim and focus of the content"
+    }
+  ],
+  "secondary_claims": [],
+  "tertiary_claims": [],
+  "analysis_meta": {
+    "total_claims_foun...
+ClaimMiner: JSON extraction - start: 65, end: 712
+ClaimMiner: Extracted JSON: {
+  "primary_claims": [
+    {
+      "text": "Climate change policies will destroy the economy",
+      "relevance_score": 90,
+      "specificity_score": 70,
+      "consequence_score": 90,
+      "factua...
+ClaimMiner: Successfully parsed JSON with 4 top-level keys
+DEBUG: ClaimMiner found 1 primary claims for text input
+DEBUG: Using 1 primary claims from ClaimMiner: ['Climate change policies will destroy the economy']
+DEBUG: USE_EVIDENCE_SHEPHERD = True
+DEBUG: USE_EEG_PHASE_1 = True
+DEBUG: Using Evidence Shepherd integration for 1 claims
+DEBUG: Using ROGR Dual Evidence Shepherd (NEW) for claim: Climate change policies will destroy the economy...
+FATAL: NEW Evidence Shepherd processing failed for claim 'Climate change policies will destroy the economy...': 'ParallelEvidenceOrchestrator' object has no attribute 'search_real_evidence'
+ERROR: Failed to process claim 1 with ES integration: NEW Evidence Shepherd system failure: 'ParallelEvidenceOrchestrator' object has no attribute 'search_real_evidence'
+DEBUG: Using REAL WEB SEARCH AI Evidence Shepherd for claim: 'Climate change policies will destroy the economy'
+ERROR: AI Evidence Shepherd failed for 'Climate change policies will destroy the economy': name 'ai_shepherd' is not defined
+DEBUG: Falling back to minimal generic evidence
+DEBUG: Claim 1/1 ES fallback - Score: 60, Grade: D+
+DEBUG: Generated 1 real citations from Evidence Shepherd results
+INFO:     172.31.93.34:39890 - "POST /analyses HTTP/1.1" 200 OK
+ClaimMiner: Claude response received, length: 1221
+ClaimMiner: Raw response: Here is my analysis of the factual claims in the provided content:
+
+{
+  "primary_claims": [
+    {
+      "text": "Social media algorithms promote political polarization",
+      "relevance_score": 95,
+      "specificity_score": 90,
+      "consequence_score": 90,
+      "factual_assertion": true,
+      "claim_type": "factual",
+      "context_reasoning": "This is the central claim and focus of the content"
+    }
+  ],
+  "secondary_claims": [],
+  "tertiary_claims": [],
+  "analysis_meta": {
+    "total_c...
+ClaimMiner: JSON extraction - start: 68, end: 796
+ClaimMiner: Extracted JSON: {
+  "primary_claims": [
+    {
+      "text": "Social media algorithms promote political polarization",
+      "relevance_score": 95,
+      "specificity_score": 90,
+      "consequence_score": 90,
+      "...
+ClaimMiner: Successfully parsed JSON with 4 top-level keys
+DEBUG: ClaimMiner found 1 primary claims for text input
+DEBUG: Using 1 primary claims from ClaimMiner: ['Social media algorithms promote political polariza...']
+DEBUG: USE_EVIDENCE_SHEPHERD = True
+DEBUG: USE_EEG_PHASE_1 = True
+DEBUG: Using Evidence Shepherd integration for 1 claims
+DEBUG: Using ROGR Dual Evidence Shepherd (NEW) for claim: Social media algorithms promote political polariza...
+FATAL: NEW Evidence Shepherd processing failed for claim 'Social media algorithms promote political polariza...': 'ParallelEvidenceOrchestrator' object has no attribute 'search_real_evidence'
+ERROR: Failed to process claim 1 with ES integration: NEW Evidence Shepherd system failure: 'ParallelEvidenceOrchestrator' object has no attribute 'search_real_evidence'
+DEBUG: Using REAL WEB SEARCH AI Evidence Shepherd for claim: 'Social media algorithms promote political polarization'
+ERROR: AI Evidence Shepherd failed for 'Social media algorithms promote political polarization': name 'ai_shepherd' is not defined
+DEBUG: Falling back to minimal generic evidence
+DEBUG: Claim 1/1 ES fallback - Score: 70, Grade: C+
+DEBUG: Generated 1 real citations from Evidence Shepherd results
+INFO:     172.31.93.34:40670 - "POST /analyses HTTP/1.1" 200 OK
