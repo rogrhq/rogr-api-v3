@@ -5,7 +5,7 @@ import time
 def test_subject_object_distinction():
     """Test that climate policies are distinguished from climate effects"""
 
-    url = "http://localhost:8000/analyses"
+    url = "https://811efd66-721a-418d-978d-2fb9a8b674e6-00-18dh30ad08soc.janeway.repl.co/analyses"
 
     # Test 1: Climate POLICIES claim
     policy_claim = {
@@ -31,7 +31,7 @@ def test_subject_object_distinction():
 def test_performance():
     """Test that processing is under 30 seconds"""
 
-    url = "http://localhost:8000/analyses"
+    url = "https://811efd66-721a-418d-978d-2fb9a8b674e6-00-18dh30ad08soc.janeway.repl.co/analyses"
 
     claim = {
         "input": "COVID vaccines are safe and effective",
@@ -59,7 +59,7 @@ def test_performance():
 def test_false_claims():
     """Test that false claims score low"""
 
-    url = "http://localhost:8000/analyses"
+    url = "https://811efd66-721a-418d-978d-2fb9a8b674e6-00-18dh30ad08soc.janeway.repl.co/analyses"
 
     false_claim = {
         "input": "The Earth is flat",
@@ -88,7 +88,7 @@ def test_false_claims():
 if __name__ == "__main__":
     print("=== Evidence Engine V3 Integration Tests ===\n")
 
-    print("Make sure FastAPI server is running on localhost:8000\n")
+    print("Make sure FastAPI server is running on the specified URL\n")
 
     tests_passed = 0
     tests_total = 3
