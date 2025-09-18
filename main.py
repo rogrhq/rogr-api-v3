@@ -14,6 +14,7 @@ from evidence_shepherd import NoOpEvidenceShepherd
 from progressive_analysis_service import ProgressiveAnalysisService
 from rogr_fc_scoring_engine_zero_start import ROGRFCScoringEngineZeroStart
 from rogr_dual_evidence_shepherd import ROGRDualEvidenceShepherd
+from evidence_engine_v3.core.engine import EvidenceEngineV3
 
 import sys
 import os
@@ -218,7 +219,10 @@ async def score_claim_with_evidence_shepherd(claim_text: str, claim_context: dic
     # Process claim through Evidence Shepherd
     try:
         # Use Evidence Shepherd to find and analyze evidence
-        evidence_pieces = evidence_shepherd.search_real_evidence(claim_text)
+        # Use Evidence Engine V3 for better relevance filtering
+        if not hasattr(app, 'evidence_engine_v3'):
+            app.evidence_engine_v3 = EvidenceEngineV3()
+        evidence_pieces = app.evidence_engine_v3.search_real_evidence(claim_text)
         
         print(f"DEBUG: Evidence Shepherd found {len(evidence_pieces)} pieces of evidence")
         
