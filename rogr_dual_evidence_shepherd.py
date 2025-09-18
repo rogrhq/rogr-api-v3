@@ -163,21 +163,45 @@ class ROGRDualEvidenceShepherd(EvidenceShepherd):
             disagreement_level = 0.0
             consensus_score = scores[0] if scores else 50.0
         
-        # Determine consensus stance
-        if len(set(ai_stances)) == 1:
-            consensus_stance = ai_stances[0]
+        # Count actual evidence stances
+        all_supporting = 0
+        all_contradicting = 0
+        for evidence_list in all_evidence.values():
+            for ev in evidence_list:
+                if hasattr(ev, 'ai_stance'):
+                    if ev.ai_stance == 'supporting':
+                        all_supporting += 1
+                    elif ev.ai_stance == 'contradicting':
+                        all_contradicting += 1
+
+        # Determine consensus stance based on evidence
+        if all_contradicting > all_supporting:
+            consensus_stance = 'contradicting'
+        elif all_supporting > all_contradicting:
+            consensus_stance = 'supporting'
         else:
-            consensus_stance = 'uncertain'
+            consensus_stance = 'neutral'
         
         # Calculate quality-weighted score
         all_evidence_pieces = []
         for evidence_list in all_evidence.values():
             all_evidence_pieces.extend(evidence_list)
-        
+
         if all_evidence_pieces:
             quality_weighted_score = consensus_score
         else:
             quality_weighted_score = 0.0
+
+        # Adjust score based on stance
+        if consensus_stance == 'contradicting':
+            # Evidence contradicts claim - LOW trust score
+            consensus_score = min(30, consensus_score * 0.3)
+            quality_weighted_score = min(30, quality_weighted_score * 0.3)
+        elif consensus_stance == 'neutral' or consensus_stance == 'uncertain':
+            # Unclear evidence - MEDIUM trust score
+            consensus_score = min(50, consensus_score * 0.6)
+            quality_weighted_score = min(50, quality_weighted_score * 0.6)
+        # 'supporting' stance keeps original high score
         
         # Identify uncertainty indicators
         uncertainty_indicators = []
