@@ -15,6 +15,11 @@ from progressive_analysis_service import ProgressiveAnalysisService
 from rogr_fc_scoring_engine_zero_start import ROGRFCScoringEngineZeroStart
 from rogr_dual_evidence_shepherd import ROGRDualEvidenceShepherd
 
+import sys
+import os
+# Add project root to Python path for evidence_engine_v3
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 # Test comment - verifying git push workflows
 
 app = FastAPI()
