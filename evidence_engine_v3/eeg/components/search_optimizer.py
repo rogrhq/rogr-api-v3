@@ -67,6 +67,13 @@ class SearchOptimizer:
             f"{claim_clean} false claims fact check",
             f"{claim_clean} evidence against"
         ]
+
+        # Add these counter-evidence patterns
+        queries.counter_queries.extend([
+            f"{claim_clean} benefits positive",
+            f"evidence against {claim_clean}",
+            f"{claim_clean} myth debunked"
+        ])
         # Ensure these are NEVER trimmed
 
         # ENFORCE HARD LIMIT
