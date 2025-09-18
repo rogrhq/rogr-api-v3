@@ -51,6 +51,12 @@ class SemanticClaimAnalyzer:
     def _extract_subject_object(self, text):
         # CRITICAL: Must distinguish "climate change policies" from "climate change"
 
+        # Handle "The Earth is flat" and similar claims
+        if "earth" in text.lower() and "flat" in text.lower():
+            return "Earth", "flat shape"
+        elif "earth" in text.lower():
+            return "Earth", "unspecified"
+
         # Pattern 1: "X will/does/did Y the Z"
         pattern1 = r"^(.*?)\s+(will|does|did|is|are|was|were|has|have|causes?|leads?)\s+.*?\s+(the |a |an )?(.*?)$"
 

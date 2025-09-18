@@ -98,7 +98,7 @@ class EvidenceEngineV3:
             )
 
             # Only keep highly relevant evidence
-            if relevance_result.final_relevance_score > 50:
+            if relevance_result.final_relevance_score > 70:
                 filtered_evidence.append(evidence)
                 print(f"  ✓ Kept evidence (score: {relevance_result.final_relevance_score:.1f})")
             else:
