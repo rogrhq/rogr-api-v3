@@ -13,7 +13,7 @@ class ClaudeEvidenceShepherd(EvidenceShepherd):
     def __init__(self):
         self.api_key = os.getenv('ANTHROPIC_API_KEY')
         self.base_url = "https://api.anthropic.com/v1/messages"
-        self.model = "claude-3-haiku-20240307"  # Use faster Haiku model for speed
+        self.model = "claude-3-sonnet-20240229"
         
         # Initialize web search and content extraction services
         self.web_search = WebSearchService()
