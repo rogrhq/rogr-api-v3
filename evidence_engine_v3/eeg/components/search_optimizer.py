@@ -61,11 +61,13 @@ class SearchOptimizer:
                 f"{claim_clean} {term}"
             )
 
-        # 3. Counter-evidence queries (4 max)
-        for i, term in enumerate(self.counter_terms[:4]):
-            queries.counter_queries.append(
-                f"{claim_clean} {term}"
-            )
+        # 3. Counter-evidence queries (MANDATORY 3 minimum for IFCN)
+        queries.counter_queries = [
+            f"{claim_clean} debunked",
+            f"{claim_clean} false claims fact check",
+            f"{claim_clean} evidence against"
+        ]
+        # Ensure these are NEVER trimmed
 
         # ENFORCE HARD LIMIT
         total = (len(queries.primary_queries) +
@@ -76,11 +78,8 @@ class SearchOptimizer:
             # Trim excess queries
             excess = total - self.max_queries
 
-            # Trim from counter queries first
-            if len(queries.counter_queries) > 2:
-                trim = min(excess, len(queries.counter_queries) - 2)
-                queries.counter_queries = queries.counter_queries[:-trim]
-                excess -= trim
+            # NEVER trim counter queries - they are mandatory for IFCN compliance
+            # Skip counter query trimming entirely
 
             # Then from methodology queries
             if excess > 0 and len(queries.methodology_queries) > 2:

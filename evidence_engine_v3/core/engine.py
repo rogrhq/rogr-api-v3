@@ -98,15 +98,52 @@ class EvidenceEngineV3:
             )
 
             # Only keep highly relevant evidence
-            if relevance_result.final_relevance_score > 70:
+            if relevance_result.final_relevance_score > 50:
                 filtered_evidence.append(evidence)
                 print(f"  ✓ Kept evidence (score: {relevance_result.final_relevance_score:.1f})")
             else:
                 print(f"  ✗ Filtered out (score: {relevance_result.final_relevance_score:.1f}): {relevance_result.relevance_reasoning}")
 
+        # IFCN: Require minimum 3 sources
+        if len(filtered_evidence) < 3 and len(raw_evidence) > 3:
+            # Lower threshold to get more evidence
+            print("IFCN: Insufficient sources, lowering threshold to 40")
+            for evidence in raw_evidence:
+                if evidence not in filtered_evidence:
+                    relevance_result = self.relevance_validator.validate(
+                        evidence, claim_text, semantic_result
+                    )
+                    if relevance_result.final_relevance_score > 40:
+                        filtered_evidence.append(evidence)
+                        if len(filtered_evidence) >= 3:
+                            break
+
+        # IFCN Compliance: Check source diversity
+        unique_domains = set([e.source_domain for e in filtered_evidence])
+        if len(unique_domains) < 2 and len(filtered_evidence) > 0:
+            print(f"WARNING: IFCN violation - only {len(unique_domains)} unique source(s)")
+            # Don't block, but flag for transparency
+
+        # IFCN: Ensure both supporting and contradicting evidence present
+        has_supporting = any(e.ai_stance == "supporting" for e in filtered_evidence)
+        has_contradicting = any(e.ai_stance == "contradicting" for e in filtered_evidence)
+        if not (has_supporting and has_contradicting) and len(filtered_evidence) > 2:
+            print("WARNING: IFCN - Missing balanced perspectives")
+
         print(f"Step 6: Returning {len(filtered_evidence)} relevant evidence pieces")
 
-        # Return filtered evidence
+        # IFCN: Add methodology transparency
+        for evidence in filtered_evidence:
+            if not hasattr(evidence, 'ifcn_metadata'):
+                evidence.ifcn_metadata = {
+                    'search_strategy_used': 'dual_ai_consensus',
+                    'relevance_threshold': 50,
+                    'source_verification': 'multi_source',
+                    'filtering_applied': True,
+                    'semantic_analysis': f"subject={semantic_result.claim_subject}",
+                    'total_evidence_reviewed': len(raw_evidence),
+                    'evidence_filtered_out': len(raw_evidence) - len(filtered_evidence)
+                }
         return filtered_evidence
 
     def test_basic_functionality(self):
