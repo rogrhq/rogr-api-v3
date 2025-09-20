@@ -686,6 +686,34 @@ async def test_database():
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+@app.get("/feed")
+async def get_trustfeed(limit: int = 20, offset: int = 0, search: str = None):
+    """Get recent fact-checks from the trustfeed"""
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            if search:
+                query = """SELECT * FROM trustfeed_entries
+                          WHERE claim_summary LIKE ?
+                          ORDER BY created_at DESC LIMIT ? OFFSET ?"""
+                cursor.execute(query, (f'%{search}%', limit, offset))
+            else:
+                query = """SELECT * FROM trustfeed_entries
+                          ORDER BY created_at DESC LIMIT ? OFFSET ?"""
+                cursor.execute(query, (limit, offset))
+
+            entries = cursor.fetchall()
+
+            # Convert to list of dicts
+            result = []
+            for entry in entries:
+                result.append(dict(entry))
+
+            return {"entries": result, "count": len(result)}
+    except Exception as e:
+        return {"error": str(e), "entries": []}
+
 @app.post("/analyses", response_model=TrustCapsule)
 async def create_analysis(analysis: AnalysisInput):
     analysis_id = str(uuid.uuid4())
