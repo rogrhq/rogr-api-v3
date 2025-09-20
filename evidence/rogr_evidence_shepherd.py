@@ -3,9 +3,9 @@ import json
 import re
 from typing import List, Dict, Optional
 import requests
-from .evidence_shepherd import EvidenceShepherd, SearchStrategy, EvidenceCandidate, ProcessedEvidence, ClaimType, MultiDomainClaimAnalysis
-from ..services.web_search_service import WebSearchService
-from ..services.web_content_extractor import WebContentExtractor
+from evidence.evidence_shepherd import EvidenceShepherd, SearchStrategy, EvidenceCandidate, ProcessedEvidence, ClaimType, MultiDomainClaimAnalysis
+from services.web_search_service import WebSearchService
+from services.web_content_extractor import WebContentExtractor
 
 class ROGREvidenceShepherd(EvidenceShepherd):
     """ROGR evidence shepherd for professional fact-checking with AI-powered analysis"""
