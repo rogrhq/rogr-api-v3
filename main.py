@@ -15,6 +15,8 @@ from services.progressive_analysis_service import ProgressiveAnalysisService
 from scoring.rogr_fc_scoring_engine_zero_start import ROGRFCScoringEngineZeroStart
 from evidence.rogr_dual_evidence_shepherd import ROGRDualEvidenceShepherd
 from evidence_engine_v3.core.engine import EvidenceEngineV3
+from database.connection import get_db_connection, init_database
+from trustfeed.services import save_fact_check_to_trustfeed
 
 import sys
 import os
@@ -24,6 +26,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # Test comment - verifying git push workflows
 
 app = FastAPI()
+
+# Initialize database on startup
+@app.on_event("startup")
+async def startup_event():
+    init_database()
+    print("Database initialized")
 
 # Simple CORS headers
 @app.middleware("http")
@@ -667,6 +675,16 @@ def calculate_cumulative_score(claims: List[ClaimAnalysis]) -> tuple[int, str, s
 def health_check():
     return {"ok": True}
 
+@app.get("/db-test")
+async def test_database():
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM trustfeed_entries")
+            count = cursor.fetchone()[0]
+            return {"status": "success", "entries_count": count}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 @app.post("/analyses", response_model=TrustCapsule)
 async def create_analysis(analysis: AnalysisInput):
