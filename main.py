@@ -959,7 +959,6 @@ async def create_analysis(analysis: AnalysisInput):
             trust_score=trust_score,
             grade=overall_grade,
             source_url=source_url,
-            source_domain=source_domain,
             claims_analyzed=len(claims),
             scan_mode=analysis.mode,
             full_capsule_data=trust_capsule.dict()
