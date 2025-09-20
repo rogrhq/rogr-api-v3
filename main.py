@@ -886,12 +886,7 @@ async def create_analysis(analysis: AnalysisInput):
     # Auto-save to trustfeed
     try:
         # Create a summary of the main claims
-        claim_summary = f"Analysis of {len(claims)} claims from {analysis.type} input"
-        if claims:
-            # Use the first significant claim as summary
-            main_claims = [c.claim_text for c in claims if c.claim_text and len(c.claim_text) > 20]
-            if main_claims:
-                claim_summary = main_claims[0][:200] + ("..." if len(main_claims[0]) > 200 else "")
+        claim_summary = f"Analyzed {len(claims)} claims with average score {overall_score}"
 
         # Extract source URL if available
         source_url = analysis.input if analysis.type == "url" else None
