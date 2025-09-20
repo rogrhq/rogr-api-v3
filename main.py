@@ -947,7 +947,7 @@ async def test_v2_analysis(analysis: AnalysisInput):
     return trust_capsule
 
 @app.post("/extract_claims")
-async def extract_claims_only(request: AnalysisRequest):
+async def extract_claims_only(request: AnalysisInput):
     """Fast claim extraction without analysis"""
     try:
         # Use existing content extraction logic
