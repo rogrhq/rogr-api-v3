@@ -958,7 +958,7 @@ async def extract_claims_only(request: AnalysisInput):
             content = request.input
 
         # Only run ClaimMiner
-        mining_result = claim_miner.extract_claims(content)
+        mining_result = claim_miner.mine_claims(content)
 
         # Return categorized claims
         return {
