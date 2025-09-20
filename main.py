@@ -5,15 +5,15 @@ import asyncio
 import os
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from ocr_service import OCRService
-from claim_miner import ClaimMiner, ClaimMiningResult, MinedClaim
-from wikipedia_service import WikipediaService
-from ai_evidence_shepherd import OpenAIEvidenceShepherd
-from claude_evidence_shepherd import ClaudeEvidenceShepherd
-from evidence_shepherd import NoOpEvidenceShepherd
-from progressive_analysis_service import ProgressiveAnalysisService
-from rogr_fc_scoring_engine_zero_start import ROGRFCScoringEngineZeroStart
-from rogr_dual_evidence_shepherd import ROGRDualEvidenceShepherd
+from core.ocr_service import OCRService
+from core.claim_miner import ClaimMiner, ClaimMiningResult, MinedClaim
+from services.wikipedia_service import WikipediaService
+from evidence.ai_evidence_shepherd import OpenAIEvidenceShepherd
+from evidence.claude_evidence_shepherd import ClaudeEvidenceShepherd
+from evidence.evidence_shepherd import NoOpEvidenceShepherd
+from services.progressive_analysis_service import ProgressiveAnalysisService
+from scoring.rogr_fc_scoring_engine_zero_start import ROGRFCScoringEngineZeroStart
+from evidence.rogr_dual_evidence_shepherd import ROGRDualEvidenceShepherd
 from evidence_engine_v3.core.engine import EvidenceEngineV3
 
 import sys
@@ -198,7 +198,7 @@ async def score_claim_with_evidence_shepherd(claim_text: str, claim_context: dic
     
     try:
         if use_multi_ai:
-            from rogr_dual_evidence_shepherd import ROGRDualEvidenceShepherd
+            from evidence.rogr_dual_evidence_shepherd import ROGRDualEvidenceShepherd
             evidence_shepherd = rogr_dual_shepherd
             print(f"DEBUG: Using ROGR Dual Evidence Shepherd (NEW) for claim: {claim_text[:50]}...")
         else:
@@ -1292,7 +1292,7 @@ async def get_evidence(q: str):
 async def debug_claude_single_test(request: dict):
     """Debug endpoint: Test Single Claude Evidence Shepherd"""
     import time
-    from claude_evidence_shepherd import ClaudeEvidenceShepherd
+    from evidence.claude_evidence_shepherd import ClaudeEvidenceShepherd
     
     claim_text = request.get("claim", "")
     if not claim_text:
