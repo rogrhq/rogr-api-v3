@@ -946,6 +946,13 @@ async def create_analysis(analysis: AnalysisInput):
         }
         trust_score = trust_score_mapping.get(overall_grade, overall_score / 100.0)
 
+        # Add debug logging
+        print(f"DEBUG TRUSTFEED: About to save to trustfeed")
+        print(f"DEBUG TRUSTFEED: claims list = {claims[:2] if claims else 'None'}")  # Show first 2 claims
+        print(f"DEBUG TRUSTFEED: claim_summary = {claim_summary[:100]}")  # First 100 chars
+        print(f"DEBUG TRUSTFEED: overall_score = {overall_score}")
+        print(f"DEBUG TRUSTFEED: overall_grade = {overall_grade}")
+
         # Save to trustfeed
         save_fact_check_to_trustfeed(
             claim_summary=claim_summary,
@@ -957,9 +964,11 @@ async def create_analysis(analysis: AnalysisInput):
             scan_mode=analysis.mode,
             full_capsule_data=trust_capsule.dict()
         )
-        print("✅ Saved to trustfeed")
+        print("✅ Saved to trustfeed successfully")
     except Exception as e:
         print(f"❌ Failed to save to trustfeed: {e}")
+        import traceback
+        traceback.print_exc()  # Show full error details
         # Don't break the analysis if saving fails
 
     return trust_capsule
