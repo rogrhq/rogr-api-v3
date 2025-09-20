@@ -1,0 +1,142 @@
+~/workspace$ python -c "from evidence_engine_v3.core.engine import EvidenceEngineV3; engine = EvidenceEngineV3(); results = engine.search_real_evidence('Climate change policies will destroy the economy'); print(f'Sources: {len(set([r.source_domain for r in results]))} unique domains')"
+Initializing Evidence Engine V3...
+WebSearchService initialized - Google: True, Bing: False
+Claude Evidence Shepherd initialized with real web search: True
+✅ Primary ROGR Evidence Shepherd enabled
+WebSearchService initialized - Google: True, Bing: False
+Claude Evidence Shepherd initialized with real web search: True
+✅ Secondary ROGR Evidence Shepherd enabled
+Evidence Quality Assessor initialized - focusing on intrinsic evidence quality
+🔍 Dual-AI Evidence Shepherd initialized with 2 AI shepherds
+✓ ROGRDualEvidenceShepherd initialized
+Evidence Engine V3 ready
+
+EvidenceEngineV3 processing: Climate change policies will destroy the economy...
+Step 1: Analyzing claim semantics...
+  Subject: climate change policies
+  Object: economy
+  Temporal: future
+Step 2: Analyzing logical structure...
+  Assertion type: descriptive
+  Scope: particular
+Step 3: Optimizing search strategy...
+  Generated 12 optimized queries
+Step 4: Gathering evidence using dual shepherd...
+🔍 Starting dual AI evidence gathering for: Climate change policies will destroy the economy...
+🔍 ROGR Primary: Searching for evidence...
+🔍 Analyzing claim domains: Climate change policies will destroy the economy
+📊 Multi-domain detected: PRIMARY ['economic', 'policy'], SECONDARY ['scientific']
+Claude Search Strategy: factual with 6 queries
+Searching web for: 'economic impact of climate policies'
+Google search found 8 results for 'economic impact of climate policies'
+Found 8 results for 'economic impact of climate policies'
+Searching web for: 'economic forecasts climate policies'
+Google search found 8 results for 'economic forecasts climate policies'
+Found 8 results for 'economic forecasts climate policies'
+Searching web for: 'government climate change policies'
+Google search found 8 results for 'government climate change policies'
+Found 8 results for 'government climate change policies'
+CLAUDE PARALLEL EXTRACTION: Processing 10 URLs simultaneously
+Extracting content from 10 URLs in parallel (max_workers=6)
+✅ Extracted: epic.uchicago.edu (0 words)
+✅ Extracted: news.climate.columbia.edu (0 words)
+✅ Extracted: ngfs.net (102 words)
+❌ Failed: congress.gov - 403 Client Error: Forbidden for url: https://www.congress.gov/crs-product/R47063
+❌ Failed: tandfonline.com - 403 Client Error: Forbidden for url: https://www.tandfonline.com/doi/abs/10.1080/14693062.2020.1781047
+✅ Extracted: pewresearch.org (0 words)
+✅ Extracted: aeaweb.org (438 words)
+✅ Extracted: aeaweb.org (349 words)
+❌ Failed: imf.org - HTTPSConnectionPool(host='www.imf.org', port=443): Read timed out. (read timeout=8)
+❌ Failed: imf.org - HTTPSConnectionPool(host='www.imf.org', port=443): Read timed out. (read timeout=8)
+Parallel extraction complete: 6/10 successful
+Claude web search found 10 evidence candidates from 24 total results
+CLAUDE BATCH: Sending 10 evidence items to Claude
+CLAUDE BATCH: Total content length: 3364 chars
+CLAUDE BATCH: Response received, length: 2336
+CLAUDE BATCH: Attempting to parse JSON response: Here is the JSON array with the evidence scored:
+
+[
+  {
+    "evidence_index": 0,
+    "relevance_score": 80,
+    "stance": "supporting",
+    "confidence": 0.85,
+    "key_excerpt": "Taken together, thes...
+ROGR BATCH: Extracted JSON: [
+  {
+    "evidence_index": 0,
+    "relevance_score": 80,
+    "stance": "supporting",
+    "confidenc...
+CLAUDE BATCH: Successfully parsed 10 evidence scores
+ROGR FILTER: 4 processed → 4 passed threshold
+  ROGR Evidence 1: score=80.0, confidence=0.85
+  ROGR Evidence 2: score=80.0, confidence=0.85
+  ROGR Evidence 3: score=80.0, confidence=0.85
+✅ ROGR Primary: Found 4 evidence pieces
+🔍 ROGR Secondary: Searching for evidence...
+🔍 Analyzing claim domains: Climate change policies will destroy the economy
+📊 Multi-domain detected: PRIMARY ['economic', 'policy'], SECONDARY ['scientific']
+Claude Search Strategy: factual with 6 queries
+Searching web for: 'economic impact of climate policies'
+Google search found 8 results for 'economic impact of climate policies'
+Found 8 results for 'economic impact of climate policies'
+Searching web for: 'financial implications of environmental regulations'
+Google search found 8 results for 'financial implications of environmental regulations'
+Found 8 results for 'financial implications of environmental regulations'
+Searching web for: 'government climate change policies'
+Google search found 8 results for 'government climate change policies'
+Found 8 results for 'government climate change policies'
+CLAUDE PARALLEL EXTRACTION: Processing 10 URLs simultaneously
+Extracting content from 10 URLs in parallel (max_workers=6)
+❌ Failed: congress.gov - 403 Client Error: Forbidden for url: https://www.congress.gov/crs-product/R47063
+✅ Extracted: epic.uchicago.edu (0 words)
+✅ Extracted: news.climate.columbia.edu (0 words)
+✅ Extracted: ngfs.net (102 words)
+✅ Extracted: pewresearch.org (0 words)
+❌ Failed: tandfonline.com - 403 Client Error: Forbidden for url: https://www.tandfonline.com/doi/abs/10.1080/14693062.2020.1781047
+❌ Failed: journals.uchicago.edu - 403 Client Error: Forbidden for url: https://www.journals.uchicago.edu/doi/10.1093/reep/rex013
+❌ Failed: sciencedirect.com - 403 Client Error: Forbidden for url: https://www.sciencedirect.com/unsupported_browser
+✅ Extracted: aeaweb.org (438 words)
+❌ Failed: imf.org - HTTPSConnectionPool(host='www.imf.org', port=443): Read timed out. (read timeout=8)
+Parallel extraction complete: 5/10 successful
+Claude web search found 10 evidence candidates from 24 total results
+CLAUDE BATCH: Sending 10 evidence items to Claude
+CLAUDE BATCH: Total content length: 3090 chars
+CLAUDE BATCH: Response received, length: 2328
+CLAUDE BATCH: Attempting to parse JSON response: Here is the JSON array with the evidence scored based on the claim "Climate change policies will destroy the economy":
+
+[
+  {
+    "evidence_index": 0,
+    "relevance_score": 75,
+    "stance": "support...
+ROGR BATCH: Extracted JSON: [
+  {
+    "evidence_index": 0,
+    "relevance_score": 75,
+    "stance": "supporting",
+    "confidenc...
+CLAUDE BATCH: Successfully parsed 10 evidence scores
+ROGR FILTER: 4 processed → 4 passed threshold
+  ROGR Evidence 1: score=85.0, confidence=0.9
+  ROGR Evidence 2: score=80.0, confidence=0.8
+  ROGR Evidence 3: score=80.0, confidence=0.8
+✅ ROGR Secondary: Found 4 evidence pieces
+🎯 Dual AI consensus complete:
+  - Consensus score: 47.6
+  - Disagreement level: 1.2
+  - Quality weighted score: 47.6
+  Retrieved 8 evidence pieces
+Step 5: Filtering evidence by relevance...
+  ✗ Filtered out (score: 47.0): Poor subject match - evidence about wrong topic; High-quality source
+  ✓ Kept evidence (score: 67.0)
+  ✓ Kept evidence (score: 51.0)
+  ✓ Kept evidence (score: 71.0)
+  ✓ Kept evidence (score: 67.0)
+  ✓ Kept evidence (score: 67.0)
+  ✓ Kept evidence (score: 51.0)
+  ✗ Filtered out (score: 47.0): Poor subject match - evidence about wrong topic; High-quality source
+WARNING: IFCN - Missing balanced perspectives
+Step 6: Returning 6 relevant evidence pieces
+Sources: 3 unique domains
