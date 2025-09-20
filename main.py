@@ -913,11 +913,29 @@ async def create_analysis(analysis: AnalysisInput):
 
     # Auto-save to trustfeed
     try:
-        # Create a summary of the main claims
-        claim_summary = f"Analyzed {len(claims)} claims with average score {overall_score}"
+        # Create a meaningful summary from actual claims
+        if claims and len(claims) > 0:
+            # Use the first claim as the summary, truncated
+            first_claim = claims[0][:150] + "..." if len(claims[0]) > 150 else claims[0]
+            if len(claims) > 1:
+                claim_summary = f"{first_claim} (+{len(claims)-1} more)"
+            else:
+                claim_summary = first_claim
+        else:
+            claim_summary = f"Content analyzed with score {overall_score}"
 
         # Extract source URL if available
         source_url = analysis.input if analysis.type == "url" else None
+
+        # Extract source domain if URL is available
+        source_domain = None
+        if source_url:
+            from urllib.parse import urlparse
+            try:
+                parsed = urlparse(source_url)
+                source_domain = parsed.netloc.replace('www.', '')
+            except:
+                source_domain = None
 
         # Convert evidence grade to trust score (approximate)
         trust_score_mapping = {
@@ -934,6 +952,7 @@ async def create_analysis(analysis: AnalysisInput):
             trust_score=trust_score,
             grade=overall_grade,
             source_url=source_url,
+            source_domain=source_domain,
             claims_analyzed=len(claims),
             scan_mode=analysis.mode,
             full_capsule_data=trust_capsule.dict()
