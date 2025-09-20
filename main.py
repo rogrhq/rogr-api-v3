@@ -946,6 +946,39 @@ async def test_v2_analysis(analysis: AnalysisInput):
     
     return trust_capsule
 
+@app.post("/extract_claims")
+async def extract_claims_only(request: AnalysisRequest):
+    """Fast claim extraction without analysis"""
+    try:
+        # Use existing content extraction logic
+        if request.type == "url":
+            article_content = await scrape_article(request.input)
+            content = article_content.get('content', '')
+        else:
+            content = request.input
+
+        # Only run ClaimMiner
+        mining_result = claim_miner.extract_claims(content)
+
+        # Return categorized claims
+        return {
+            "primary_claims": [
+                {"id": i, "text": claim.text}
+                for i, claim in enumerate(mining_result.primary_claims or [])
+            ],
+            "secondary_claims": [
+                {"id": i+100, "text": claim.text}
+                for i, claim in enumerate(mining_result.secondary_claims or [])
+            ],
+            "tertiary_claims": [
+                {"id": i+200, "text": claim.text}
+                for i, claim in enumerate(mining_result.tertiary_claims or [])
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error extracting claims: {str(e)}")
+        return {"error": str(e), "primary_claims": [], "secondary_claims": [], "tertiary_claims": []}
+
 @app.get("/analyses/{id}")
 def get_analysis(id: str):
     if id not in analyses_db:
