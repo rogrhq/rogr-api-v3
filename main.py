@@ -882,7 +882,44 @@ async def create_analysis(analysis: AnalysisInput):
     analyses_db[analysis_id] = trust_capsule
     analyses_input_db[analysis_id] = analysis.input
     analyses_claims_db[analysis_id] = claims
-    
+
+    # Auto-save to trustfeed
+    try:
+        # Create a summary of the main claims
+        claim_summary = f"Analysis of {len(claims)} claims from {analysis.type} input"
+        if claims:
+            # Use the first significant claim as summary
+            main_claims = [c.claim_text for c in claims if c.claim_text and len(c.claim_text) > 20]
+            if main_claims:
+                claim_summary = main_claims[0][:200] + ("..." if len(main_claims[0]) > 200 else "")
+
+        # Extract source URL if available
+        source_url = analysis.input if analysis.type == "url" else None
+
+        # Convert evidence grade to trust score (approximate)
+        trust_score_mapping = {
+            'A+': 0.98, 'A': 0.95, 'A-': 0.92,
+            'B+': 0.88, 'B': 0.85, 'B-': 0.82,
+            'C+': 0.78, 'C': 0.75, 'C-': 0.72,
+            'D+': 0.68, 'D': 0.65, 'F': 0.50
+        }
+        trust_score = trust_score_mapping.get(overall_grade, overall_score / 100.0)
+
+        # Save to trustfeed
+        save_fact_check_to_trustfeed(
+            claim_summary=claim_summary,
+            trust_score=trust_score,
+            grade=overall_grade,
+            source_url=source_url,
+            claims_analyzed=len(claims),
+            scan_mode=analysis.mode,
+            full_capsule_data=trust_capsule.dict()
+        )
+        print("✅ Saved to trustfeed")
+    except Exception as e:
+        print(f"❌ Failed to save to trustfeed: {e}")
+        # Don't break the analysis if saving fails
+
     return trust_capsule
 
 @app.post("/test-v2", response_model=TrustCapsule)
