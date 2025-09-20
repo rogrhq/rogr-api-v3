@@ -952,8 +952,8 @@ async def extract_claims_only(request: AnalysisInput):
     try:
         # Use existing content extraction logic
         if request.type == "url":
-            article_content = await scrape_article(request.input)
-            content = article_content.get('content', '')
+            url_data = claim_miner.extract_url_metadata_and_text(request.input)
+            content = claim_miner.merge_text_sources(url_data)
         else:
             content = request.input
 
