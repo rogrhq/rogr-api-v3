@@ -964,19 +964,19 @@ async def extract_claims_only(request: AnalysisInput):
         return {
             "primary_claims": [
                 {"id": i, "text": claim.text}
-                for i, claim in enumerate(mining_result.primary_claims or [])
+                for i, claim in enumerate(mining_result.primary_claims if mining_result.primary_claims else [])
             ],
             "secondary_claims": [
                 {"id": i+100, "text": claim.text}
-                for i, claim in enumerate(mining_result.secondary_claims or [])
+                for i, claim in enumerate(mining_result.secondary_claims if mining_result.secondary_claims else [])
             ],
             "tertiary_claims": [
                 {"id": i+200, "text": claim.text}
-                for i, claim in enumerate(mining_result.tertiary_claims or [])
+                for i, claim in enumerate(mining_result.tertiary_claims if mining_result.tertiary_claims else [])
             ]
         }
     except Exception as e:
-        logger.error(f"Error extracting claims: {str(e)}")
+        print(f"Error extracting claims: {str(e)}")
         return {"error": str(e), "primary_claims": [], "secondary_claims": [], "tertiary_claims": []}
 
 @app.get("/analyses/{id}")
