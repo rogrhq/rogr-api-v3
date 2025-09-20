@@ -15,7 +15,7 @@ from evidence_engine_v3.eeg.components.search_optimizer import SearchOptimizer
 
 # Import existing dual shepherd if available
 try:
-    from rogr_dual_evidence_shepherd import ROGRDualEvidenceShepherd
+    from evidence.rogr_dual_evidence_shepherd import ROGRDualEvidenceShepherd
     DUAL_SHEPHERD_AVAILABLE = True
 except ImportError:
     DUAL_SHEPHERD_AVAILABLE = False

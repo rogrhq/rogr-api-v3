@@ -4,7 +4,7 @@ from typing import List, Dict, Optional, Tuple
 from urllib.parse import urlparse, unquote
 from bs4 import BeautifulSoup
 import json
-from evidence_shepherd import EvidenceShepherd, NoOpEvidenceShepherd, EvidenceCandidate
+from evidence.evidence_shepherd import EvidenceShepherd, NoOpEvidenceShepherd, EvidenceCandidate
 
 class WikipediaService:
     """Service to search Wikipedia and extract outbound citations for evidence collection"""
