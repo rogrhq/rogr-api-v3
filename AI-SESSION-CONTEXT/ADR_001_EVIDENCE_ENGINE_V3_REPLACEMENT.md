@@ -1,4 +1,4 @@
-# ADR-001: Evidence Engine V3 Complete Replacement Architecture
+# ADR-001 Evidence Engine V3 Complete Replacement Architecture
 
 **Status**: Proposed
 **Date**: 2024-12-17
