@@ -1,0 +1,146 @@
+<POLICY>
+YOU ARE IN STRICT FILE-WRITE MODE.
+Workspace:
+- Current directory: rogrv2-backend/
+- All paths are relative to this folder. Do NOT touch rogr-app/.
+Rules:
+1) Write ONLY the [[file]] / [[patch]] / [[chmod]] blocks below.
+2) No extras, no refactors, idempotent.
+3) Do not execute commands in this message. Output ONLY blocks. No prose.
+</POLICY>
+
+# PACKET START — paste the packet’s blocks from the plan here
+# requirements.txt (append)
+[[patch:requirements.txt]]
++ python-multipart>=0.0.9
++ itsdangerous>=2.2
+[[end]]
+
+# infrastructure/auth/deps.py
+[[file:infrastructure/auth/deps.py]]
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from infrastructure.auth.jwt import verify_token
+
+bearer = HTTPBearer()
+
+def require_user(creds: HTTPAuthorizationCredentials = Depends(bearer)) -> dict:
+    try:
+        payload = verify_token(creds.credentials)
+        return payload
+    except Exception:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+[[end]]
+
+# api/auth.py
+[[file:api/auth.py]]
+from fastapi import APIRouter
+from pydantic import BaseModel, EmailStr
+from infrastructure.auth.jwt import create_access_token, create_refresh_token, verify_token
+
+router = APIRouter()
+
+class RegisterBody(BaseModel):
+    email: EmailStr
+
+@router.post("/auth/register")
+def register(body: RegisterBody):
+    user_id = body.email.lower()  # MVP: use email as subject
+    return {
+        "access_token": create_access_token(user_id, {"role":"user"}),
+        "refresh_token": create_refresh_token(user_id)
+    }
+
+class RefreshBody(BaseModel):
+    refresh_token: str
+
+@router.post("/auth/refresh")
+def refresh(body: RefreshBody):
+    payload = verify_token(body.refresh_token)
+    if payload.get("typ") != "refresh":
+        return {"error":"invalid token"}
+    user_id = payload["sub"]
+    return {"access_token": create_access_token(user_id, {"role":"user"})}
+[[end]]
+
+# api/secure_health.py (protected example)
+[[file:api/secure_health.py]]
+from fastapi import APIRouter, Depends
+from infrastructure.auth.deps import require_user
+router = APIRouter()
+@router.get("/analyses/healthcheck")
+def check(_user=Depends(require_user)):
+    return {"ok": True}
+[[end]]
+
+# main.py (wire routes)
+[[patch:main.py]]
+@@
+-from api.health import router as health_router
++from api.health import router as health_router
++from api.auth import router as auth_router
++from api.secure_health import router as secure_router
+@@
+ app = FastAPI(title="ROGR API", version="1.0")
+ app.include_router(health_router)
++app.include_router(auth_router)
++app.include_router(secure_router)
+[[end]]
+
+# scripts/test_packet2.sh
+[[file:scripts/test_packet2.sh]]
+#!/usr/bin/env bash
+set -euo pipefail
+ACCESS=$(curl -s -X POST http://localhost:8000/auth/register -H 'Content-Type: application/json' -d '{"email":"me@example.com"}' | python - <<'PY'
+import sys, json; print(json.load(sys.stdin)["access_token"])
+PY
+)
+curl -s http://localhost:8000/analyses/healthcheck -H "Authorization: Bearer $ACCESS" | grep '"ok": true' >/dev/null && echo PASS || (echo FAIL; exit 1)
+[[end]]
+
+# Make test script executable
+[[chmod:scripts/test_packet2.sh:0755]]
+# PACKET END
+
+# Ensure EmailStr support (safe to re-apply)
+[[patch:requirements.txt]]
+@@
+ pydantic>=2.8
++email-validator>=2.1
+[[end]]
+
+# Set the test command for THIS packet (the runner will use your 3.11/venv automatically)
+[[patch:RUN_THIS_AFTER_WRITES.sh]]
+@@
+-TEST_CMD="bash scripts/test_packet2.sh"
++export TEST_CMD="bash scripts/test_packet2.sh"
+[[end]]
+
+
+
+
+
+### Second Command - DO NOT INCLUDE in 1st PROMPT ###
+
+
+Run: bash RUN_THIS_AFTER_WRITES.sh
+
+
+### Test Command Mapping per Packet ###
+
+Packet 1 → python3 scripts/test_packet1.py
+
+Packet 2 → bash scripts/test_packet2.sh
+
+Packet 3 → python3 scripts/test_packet3.py
+
+Packet 4 → python3 scripts/test_packet4.py
+
+Packet 5 → python3 scripts/test_packet5.py
+
+Packet 6 → python3 scripts/test_packet6.py
+
+Packet 7 → bash scripts/test_packet7_e2e.sh
+
+If a packet’s doc doesn’t include a test file yet, ask for a single small patch: add the test file and tell me the one test command.
+
