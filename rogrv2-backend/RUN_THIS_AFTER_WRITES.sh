@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
-export TEST_CMD="python3 scripts/test_packet3.py"
+export TEST_CMD="bash scripts/test_packet7.sh"
 bash scripts/_orchestrate.sh
