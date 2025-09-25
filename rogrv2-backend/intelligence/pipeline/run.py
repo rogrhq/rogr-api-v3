@@ -1,9 +1,12 @@
 from typing import Dict, List, Tuple, Optional
+import asyncio
 from intelligence.claims.extract import extract_claims
 from intelligence.strategy.plan import build_search_plans
 from intelligence.gather.pipeline import build_evidence_for_claim
 from intelligence.consensus.aggregate import consensus_metrics
 from intelligence.score.scoring import claim_score, overall_score
+from intelligence.gather.online import run as live_run
+from infrastructure.audit.log import start as audit_start, event as audit_event, finalize_capsule, provider_set_from_env
 
 def _synth_candidates(claim_text: str, arm: str) -> List[Dict]:
     base_kw = " ".join(claim_text.split()[:6])
@@ -38,16 +41,22 @@ def run_preview(text: str, *, test_mode: bool = True) -> Dict:
       'overall': {'score': int, 'label': str}
     }
     """
+    audit_start({"test_mode": test_mode})
     claims = extract_claims(text or "")
+    audit_event("extract_done", claims=len(claims))
     plans = build_search_plans(claims)
-
     # group plans by claim text + arm
     by_claim: Dict[str, Dict[str, List[str]]] = {}
     for p in plans:
         ctext = p["claim_text"]
         by_claim.setdefault(ctext, {})[p["arm"]] = p["queries"]
 
+    # summarize strategies per claim (counts only for capsule)
+    strat_counts = {c.text: {k: len(v) for k, v in by_claim.get(c.text, {}).items()} for c in claims}
+    audit_event("plan_done", strategy_counts=strat_counts)
+
     results: List[Dict] = []
+    gather_counts = {}
     for c in claims:
         strategies = by_claim.get(c.text, {})
         # Build evidence for both arms.
@@ -55,16 +64,21 @@ def run_preview(text: str, *, test_mode: bool = True) -> Dict:
             candA = _synth_candidates(c.text, "A")
             candB = _synth_candidates(c.text, "B")
         else:
-            # In v1 we stay offline/deterministic by default; network providers will be wired later.
-            candA = _synth_candidates(c.text, "A")
-            candB = _synth_candidates(c.text, "B")
+            # Live mode: call providers, snapshot HTML; same normalized shape
+            candA = asyncio.run(live_run(c.text, max_per_arm=3))
+            candB = asyncio.run(live_run(c.text, max_per_arm=3))
+        gather_counts[c.text] = {"A": len(candA), "B": len(candB)}
 
         armA = build_evidence_for_claim(c.text, candA)
         armB = build_evidence_for_claim(c.text, candB)
+        audit_event("gather_done", claim=c.text, counts=gather_counts[c.text], evA=len(armA), evB=len(armB))
+
         cons = consensus_metrics(armA, armB)
+        audit_event("consensus_done", claim=c.text, metrics=cons)
 
         # Score using all evidence (A+B)
         score, label, expl = claim_score(armA + armB)
+        audit_event("score_done", claim=c.text, score=score, label=label)
 
         results.append({
             "text": c.text,
@@ -80,4 +94,22 @@ def run_preview(text: str, *, test_mode: bool = True) -> Dict:
 
     # overall (tier-weighted)
     overall_num, overall_lbl = overall_score([{"tier": r["tier"], "score": r["score_numeric"]} for r in results])
-    return {"claims": results, "overall": {"score": overall_num, "label": overall_lbl}}
+    audit_event("finalize", overall={"score": overall_num, "label": overall_lbl})
+    # Build methodology capsule
+    provider_set = provider_set_from_env(test_mode)
+    # summarize consensus (averages over claims)
+    if results:
+        ov_cons = {
+            "avg_overlap": round(sum(r["consensus"]["overlap_ratio"] for r in results)/len(results), 3),
+            "avg_conflict": round(sum(r["consensus"]["conflict_score"] for r in results)/len(results), 3),
+            "avg_stability": round(sum(r["consensus"]["stability"] for r in results)/len(results), 3),
+        }
+    else:
+        ov_cons = {"avg_overlap": 0.0, "avg_conflict": 0.0, "avg_stability": 0.0}
+    capsule = finalize_capsule({
+        "test_mode": test_mode,
+        "provider_set": provider_set,
+        "counts": {"claims": len(results)},
+        "consensus_summary": ov_cons,
+    })
+    return {"claims": results, "overall": {"score": overall_num, "label": overall_lbl}, "methodology": capsule}

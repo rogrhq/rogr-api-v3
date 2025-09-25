@@ -1,0 +1,14 @@
+{
+  "items": [
+    {
+      "id": "post-1",
+      "analysis_id": "analysis-1",
+      "author_handle": "user123",
+      "visibility": "public",
+      "created_at": "2024-01-01T00:00:00Z",
+      "headline": "City budget increased by 8%",
+      "overall": { "score": 72, "label": "Mostly True" }
+    }
+  ],
+  "next_cursor": null
+}

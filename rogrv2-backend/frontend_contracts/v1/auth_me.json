@@ -1,0 +1,5 @@
+{
+  "sub": "user@example.com",
+  "roles": ["user"],
+  "exp": 1735689600
+}

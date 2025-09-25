@@ -1,0 +1,15 @@
+{
+  "query": "budget",
+  "filters": { "tags": [], "date_from": null, "date_to": null },
+  "results": [
+    {
+      "analysis_id": "analysis-1",
+      "created_at": "2024-01-01T00:00:00Z",
+      "claims": [
+        { "text": "Austin increased its 2024 city budget by 8%.", "tier": "primary", "score_numeric": 72, "label": "Mostly True" }
+      ],
+      "overall": { "score": 72, "label": "Mostly True" }
+    }
+  ],
+  "next_cursor": null
+}

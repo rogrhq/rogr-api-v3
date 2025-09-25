@@ -1,0 +1,32 @@
+{
+  "claims": [
+    {
+      "text": "Austin increased its 2024 city budget by 8%.",
+      "tier": "primary",
+      "priority": 0,
+      "strategies": { "A": ["exact", "named entities"], "B": ["broad", "counter-terms"] },
+      "evidence": {
+        "A": [
+          { "stance": "support", "confidence": 0.8, "quality_letter": "B", "source": { "url": "https://example.com", "title": "Example", "snapshot": { "sha256": "…", "path": "storage/snapshots/…html" } } }
+        ],
+        "B": []
+      },
+      "consensus": { "overlap_ratio": 0.5, "conflict_score": 0.2, "stability": 0.8, "totals": { "support": 3, "refute": 1 } },
+      "score_numeric": 72,
+      "label": "Mostly True",
+      "explanation": "support:3 refute:1 quality:avg=B"
+    }
+  ],
+  "overall": { "score": 72, "label": "Mostly True" },
+  "methodology": {
+    "version": "1.0",
+    "provider_set": ["offline-synth"],
+    "strategy": "A/B",
+    "test_mode": true,
+    "counts": { "claims": 1 },
+    "consensus_summary": { "avg_overlap": 0.5, "avg_conflict": 0.2, "avg_stability": 0.8 },
+    "events": [
+      { "ts": "2024-01-01T00:00:00Z", "stage": "start" }
+    ]
+  }
+}
