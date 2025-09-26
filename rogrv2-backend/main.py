@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware import Middleware
+from infrastructure.http.security import EnforceJsonAndSizeMiddleware
 import os
 from workers import queue as _job_queue
 from api.health import router as health_router
@@ -33,6 +34,9 @@ _middleware = [
 ]
 
 app = FastAPI(title="ROGR API", version="1.0", middleware=_middleware)
+
+# Add JSON & request-size enforcement middleware
+app.add_middleware(EnforceJsonAndSizeMiddleware)
 
 app.include_router(health_router)
 app.include_router(auth_router)
