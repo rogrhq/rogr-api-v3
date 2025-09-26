@@ -5,7 +5,8 @@ from sqlalchemy import event
 from sqlalchemy.exc import OperationalError
 import sqlite3
 
-DATABASE_URL = os.environ["DATABASE_URL"]
+# Be tolerant if the environment didn't set DATABASE_URL yet (e.g., migrate_cli pre-run).
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///rogr_dev.sqlite3")
 
 if DATABASE_URL.startswith("sqlite+aiosqlite"):
     # HARDENED SQLITE CONFIG FOR TESTS:
