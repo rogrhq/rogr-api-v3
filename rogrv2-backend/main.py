@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware import Middleware
 import os
-from infrastructure.http.cors_force import ForceCORSMiddleware
 from workers import queue as _job_queue
 from api.health import router as health_router
 from api.analyses import router as analyses_router
@@ -13,20 +13,27 @@ from api.archive import router as archive_router
 from api.analyses_read import router as analyses_read_router
 from api.contracts import router as contracts_router
 from api.jobs import router as jobs_router
-app = FastAPI(title="ROGR API", version="1.0")
 
-# CORS: allow mobile/web dev origins; credentials enabled for Authorization header scenarios
-_cors_env = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:19006,http://localhost:3000")
-_origins = [o.strip() for o in _cors_env.split(",") if o.strip()]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_origins,          # explicit list (no "*" when credentials are allowed)
-    allow_credentials=True,          # enables credentialed requests (Authorization/cookies)
-    allow_methods=["*"],
-    allow_headers=["*"],
+# CORS configuration (deterministic; outermost middleware)
+_cors_env = os.getenv(
+    "CORS_ALLOWED_ORIGINS",
+    "http://testserver,http://localhost,http://127.0.0.1,http://localhost:19006,http://localhost:3000",
 )
-# Add a forcing layer so responses *always* carry ACAO when Origin matches, and OPTIONS preflight succeeds.
-app.add_middleware(ForceCORSMiddleware, allow_origins=_origins, allow_credentials=True)
+_origins = [o.strip() for o in _cors_env.split(",") if o.strip()]
+_allow_regex = os.getenv("CORS_ALLOWED_ORIGIN_REGEX", r"^https?://(localhost|127\.0\.0\.1|testserver)(:\d+)?$")
+_middleware = [
+    Middleware(
+        CORSMiddleware,
+        allow_origins=_origins,
+        allow_origin_regex=_allow_regex,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+]
+
+app = FastAPI(title="ROGR API", version="1.0", middleware=_middleware)
+
 app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(analyses_router)
@@ -42,3 +49,5 @@ app.include_router(jobs_router)
 def _start_workers():
     # Ensure the in-proc job queue is started once per process
     _job_queue.start()
+
+# (Debug middleware removed for production-clean baseline)
