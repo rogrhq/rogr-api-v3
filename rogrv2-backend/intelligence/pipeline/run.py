@@ -7,6 +7,7 @@ from intelligence.consensus.aggregate import consensus_metrics
 from intelligence.score.scoring import claim_score, overall_score
 from intelligence.gather.online import run as live_run
 from infrastructure.audit.log import start as audit_start, event as audit_event, finalize_capsule, provider_set_from_env
+from intelligence.analyze.counterclaim import generate_counterclaims
 
 def _synth_candidates(claim_text: str, arm: str) -> List[Dict]:
     base_kw = " ".join(claim_text.split()[:6])
@@ -80,6 +81,8 @@ def run_preview(text: str, *, test_mode: bool = True) -> Dict:
         score, label, expl = claim_score(armA + armB)
         audit_event("score_done", claim=c.text, score=score, label=label)
 
+        cc = generate_counterclaims(c.text)
+        audit_event("counterclaims_done", claim=c.text, count=len(cc))
         results.append({
             "text": c.text,
             "tier": c.tier.value,
@@ -89,7 +92,8 @@ def run_preview(text: str, *, test_mode: bool = True) -> Dict:
             "consensus": cons,
             "score_numeric": score,
             "label": label,
-            "explanation": expl
+            "explanation": expl,
+            "counter_claims": cc
         })
 
     # overall (tier-weighted)
