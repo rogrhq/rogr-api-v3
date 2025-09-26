@@ -9,6 +9,7 @@ from intelligence.pipeline.run import run_preview
 from database.repo import save_analysis_with_claims, load_feed_page, load_feed_page_for_user, search_archive
 from database.users import get_or_create_user_id
 from workers import queue as Q
+from database.notify import create_notification
 
 router = APIRouter()
 
@@ -77,16 +78,23 @@ async def mobile_archive_search(
     return {"query": q or "", "results": results, "next_cursor": None}
 
 @router.get("/mobile/jobs/{job_id}")
-def mobile_job_status(job_id: str, _rl=Depends(rate_limit_dep), _user=Depends(require_user)) -> Dict[str, Any]:
+async def mobile_job_status(job_id: str, _rl=Depends(rate_limit_dep), user=Depends(require_user)) -> Dict[str, Any]:
     snap = Q.snapshot_job(job_id)
     if not snap:
         raise HTTPException(status_code=404, detail="job not found")
-    out = {
-        "id": snap.get("id", job_id),
-        "status": snap.get("status", "unknown"),
-    }
+    out = {"job_id": job_id, "status": snap.get("status","unknown")}
     if "result" in snap:
         out["result"] = snap["result"]
     if "error" in snap:
         out["error"] = snap["error"]
+    # Idempotent notification when terminal state observed (awaited to guarantee delivery)
+    status = out.get("status")
+    if status in ("completed", "failed"):
+        dedupe = f"job:{job_id}:{status}"
+        await create_notification(
+            user_id=user.get("sub",""),
+            kind="job_completed" if status == "completed" else "job_failed",
+            payload={"job_id": job_id, "status": status},
+            dedupe_key=dedupe,
+        )
     return out

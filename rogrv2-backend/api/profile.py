@@ -7,6 +7,7 @@ from infrastructure.auth.deps import require_user
 from infrastructure.http.limits import rate_limit_dep
 from database.users import get_or_create_user_id, set_handle_for_user, get_user_by_handle, get_user_by_email
 from database.repo import follow_user, unfollow_user, list_following_ids
+from database.notify import create_notification
 
 router = APIRouter()
 
@@ -51,6 +52,13 @@ async def profile_follow(body: FollowBody, _rl=Depends(rate_limit_dep), user=Dep
     if follower_uid == followee_uid:
         raise HTTPException(status_code=400, detail="cannot follow self")
     await follow_user(follower_uid, followee_uid)
+    # Notify the followee
+    await create_notification(
+        user_id=followee_uid,
+        kind="follow",
+        payload={"follower_user_id": follower_uid, "follower_sub": user.get("sub","")},
+        dedupe_key=f"follow:{follower_uid}->{followee_uid}",
+    )
     return {"ok": True}
 
 @router.post("/profile/unfollow")

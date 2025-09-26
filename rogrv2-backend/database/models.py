@@ -160,3 +160,13 @@ class Save(Base):
     user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id"), primary_key=True)
     analysis_id: Mapped[str] = mapped_column(String, ForeignKey("analyses.id"), primary_key=True)
     created_at: Mapped[datetime.datetime] = mapped_column(TIMESTAMP, default=now)
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=uuid_pk)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id"))
+    kind: Mapped[str] = mapped_column(String)  # "follow" | "job_completed" | "job_failed" | ...
+    payload_json: Mapped[dict] = mapped_column(JSON)
+    dedupe_key: Mapped[str | None] = mapped_column(String, unique=True, nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(TIMESTAMP, default=now)
+    read_at: Mapped[datetime.datetime | None] = mapped_column(TIMESTAMP, nullable=True)
