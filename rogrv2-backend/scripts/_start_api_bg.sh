@@ -7,5 +7,10 @@ set -euo pipefail
 export AUTH_JWT_SECRET
 export DATABASE_URL
 PY="$(bash scripts/_python_bin.sh)"
-# Single worker to keep in-memory job state consistent during tests
-("$PY" -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1 & echo $! > .api_pid)
+DBURL="${DATABASE_URL:-}"
+if [[ "$DBURL" == sqlite+aiosqlite* ]]; then
+  WORKERS=1
+else
+  WORKERS="${APP_WORKERS:-2}"
+fi
+("$PY" -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers "${WORKERS}" & echo $! > .api_pid)

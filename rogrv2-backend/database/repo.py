@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime, timezone
 
 from sqlalchemy import select, func, desc
@@ -9,15 +9,16 @@ from database.session import engine, Session
 from database.models import Base, Analysis, Claim, FeedPost, Follow
 from database.users import get_or_create_user_id
 
-_schema_ready = False
+_SCHEMA_READY = False
 
 async def ensure_schema() -> None:
-    global _schema_ready
-    if _schema_ready:
+    """Create tables once per process (idempotent)."""
+    global _SCHEMA_READY
+    if _SCHEMA_READY:
         return
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    _schema_ready = True
+    _SCHEMA_READY = True
 
 async def save_analysis_with_claims(
     *,
@@ -69,6 +70,59 @@ async def save_analysis_with_claims(
 
         await s.commit()
         return a.id
+
+async def persist_result_into_analysis(
+    *,
+    analysis_id: str,
+    user_id: Optional[str],
+    input_type: str,
+    original_uri: Optional[str],
+    result: Dict[str, Any],
+) -> str:
+    """
+    Persist pipeline result INTO an existing Analysis row (created earlier by upload).
+    Updates totals/methodology, replaces claims, and ensures a FeedPost exists.
+    This reduces SQLite write contention by avoiding creation of a second Analysis.
+    """
+    await ensure_schema()
+    async with Session() as s:
+        a = await s.get(Analysis, analysis_id)
+        if not a:
+            # Fallback: if missing (shouldn't happen), create new via save_analysis_with_claims
+            return await save_analysis_with_claims(
+                user_id=user_id, input_type=input_type, original_uri=original_uri, result=result
+            )
+        # Attach/ensure user id
+        resolved_uid: Optional[str] = None
+        if user_id:
+            resolved_uid = await get_or_create_user_id(user_id)
+        a.user_id = resolved_uid
+        # Update analysis fields
+        a.input_type = input_type or (a.input_type or "text")
+        a.original_uri = original_uri or a.original_uri
+        a.status = "completed"
+        a.total_grade_numeric = int(result.get("overall", {}).get("score", 0))
+        a.total_label = str(result.get("overall", {}).get("label", ""))
+        a.ifcn_methodology_json = result.get("methodology", {})
+        # Replace claims for this analysis
+        await s.execute(Claim.__table__.delete().where(Claim.analysis_id == analysis_id))
+        for c in result.get("claims", []) or []:
+            s.add(
+                Claim(
+                    analysis_id=analysis_id,
+                    text=c.get("text", ""),
+                    tier=c.get("tier", "primary"),
+                    priority=int(c.get("priority", 0) or 0),
+                    entities_json=c.get("entities_json") or c.get("entities") or None,
+                    scope_json=c.get("scope_json") or c.get("scope") or None,
+                )
+            )
+        # Ensure a single feed post exists
+        existing_post = (await s.execute(select(FeedPost).where(FeedPost.analysis_id == analysis_id))).scalars().first()
+        if not existing_post:
+            s.add(FeedPost(analysis_id=analysis_id, author_id=resolved_uid or "", visibility="public"))
+        await s.commit()
+        return analysis_id
 
 async def follow_user(follower_id: str, followee_id: str) -> None:
     await ensure_schema()
