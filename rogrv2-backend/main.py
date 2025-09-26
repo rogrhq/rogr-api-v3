@@ -17,6 +17,7 @@ from api.contracts import router as contracts_router
 from api.mobile import router as mobile_router
 from api.ifcn_export import router as ifcn_export_router
 from api.ops import router as ops_router
+from api.profile import router as profile_router
 from api.jobs import router as jobs_router
 
 # CORS configuration (deterministic; outermost middleware)
@@ -57,6 +58,7 @@ app.include_router(contracts_router)
 app.include_router(mobile_router)
 app.include_router(ifcn_export_router)
 app.include_router(ops_router)
+app.include_router(profile_router)
 app.include_router(jobs_router)
 
 @app.on_event("startup")

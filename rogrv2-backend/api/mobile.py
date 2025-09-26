@@ -6,7 +6,8 @@ from typing import Any, Dict, Optional
 from infrastructure.auth.deps import require_user
 from infrastructure.http.limits import rate_limit_dep
 from intelligence.pipeline.run import run_preview
-from database.repo import save_analysis_with_claims, load_feed_page, search_archive
+from database.repo import save_analysis_with_claims, load_feed_page, load_feed_page_for_user, search_archive
+from database.users import get_or_create_user_id
 from workers import queue as Q
 
 router = APIRouter()
@@ -56,11 +57,13 @@ async def mobile_commit(body: CommitBody, _rl=Depends(rate_limit_dep), user=Depe
 @router.get("/mobile/feed")
 async def mobile_feed(
     _rl=Depends(rate_limit_dep),
-    _user=Depends(require_user),
+    user=Depends(require_user),
     cursor: Optional[str] = Query(None),
     limit: int = Query(10, ge=1, le=50),
+    following_only: bool = Query(False),
 ) -> Dict[str, Any]:
-    items, next_cursor = await load_feed_page(cursor, limit)
+    uid = await get_or_create_user_id(user.get("sub",""))
+    items, next_cursor = await load_feed_page_for_user(uid, following_only, cursor, limit)
     return {"items": items, "next_cursor": next_cursor}
 
 @router.get("/mobile/archive/search")

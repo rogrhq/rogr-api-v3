@@ -2,11 +2,12 @@ from __future__ import annotations
 from typing import Dict, Any, List, Tuple, Optional
 from datetime import datetime, timezone
 
-from sqlalchemy import select, desc
+from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.session import engine, Session
-from database.models import Base, Analysis, Claim, FeedPost
+from database.models import Base, Analysis, Claim, FeedPost, Follow
+from database.users import get_or_create_user_id
 
 _schema_ready = False
 
@@ -31,7 +32,7 @@ async def save_analysis_with_claims(
     await ensure_schema()
     async with Session() as s:  # type: AsyncSession
         a = Analysis(
-            user_id=user_id,
+            user_id=None,  # set below after we ensure a real user row
             input_type=input_type,
             original_uri=original_uri,
             status="completed",
@@ -59,11 +60,38 @@ async def save_analysis_with_claims(
         if claims:
             s.add_all(claims)
 
-        # Create a feed post (headline derived client-side; keep minimal now)
-        s.add(FeedPost(analysis_id=a.id, author_id=user_id or "", visibility="public"))
+        # ensure a real user id (row) exists and attach to analysis/feed post
+        resolved_uid: Optional[str] = None
+        if user_id:
+            resolved_uid = await get_or_create_user_id(user_id)
+        a.user_id = resolved_uid
+        s.add(FeedPost(analysis_id=a.id, author_id=resolved_uid or "", visibility="public"))
 
         await s.commit()
         return a.id
+
+async def follow_user(follower_id: str, followee_id: str) -> None:
+    await ensure_schema()
+    async with Session() as s:
+        # upsert-like: delete if exists then insert to avoid dup primary key issues
+        await s.merge(Follow(follower_id=follower_id, followee_id=followee_id))
+        await s.commit()
+
+async def unfollow_user(follower_id: str, followee_id: str) -> None:
+    await ensure_schema()
+    async with Session() as s:
+        await s.execute(
+            Follow.__table__.delete().where(
+                (Follow.follower_id == follower_id) & (Follow.followee_id == followee_id)
+            )
+        )
+        await s.commit()
+
+async def list_following_ids(follower_id: str) -> list[str]:
+    await ensure_schema()
+    async with Session() as s:
+        rows = (await s.execute(select(Follow.followee_id).where(Follow.follower_id == follower_id))).all()
+        return [r[0] for r in rows]
 
 async def load_feed_page(cursor_iso: Optional[str], limit: int) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
@@ -108,6 +136,39 @@ async def load_feed_page(cursor_iso: Optional[str], limit: int) -> Tuple[List[Di
             last_an = rows[-1][1]
             _dt = last_an.created_at.astimezone(timezone.utc)
             next_cursor = _dt.isoformat().replace("+00:00", "Z")
+        return items, next_cursor
+
+async def load_feed_page_for_user(user_id: Optional[str], following_only: bool, cursor_iso: Optional[str], limit: int) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """
+    If following_only is True and user_id is present, return posts authored by followees.
+    Otherwise, return global feed (same as load_feed_page).
+    """
+    if not following_only or not user_id:
+        return await load_feed_page(cursor_iso, limit)
+    await ensure_schema()
+    async with Session() as s:
+        followees = await list_following_ids(user_id)
+        if not followees:
+            return [], None
+        q = select(FeedPost, Analysis).join(Analysis, FeedPost.analysis_id == Analysis.id)
+        q = q.where(FeedPost.author_id.in_(followees))
+        q = q.order_by(desc(Analysis.created_at)).limit(limit)
+        rows = (await s.execute(q)).all()
+        items = []
+        next_cursor = None
+        for fp, an in rows:
+            items.append({
+                "id": fp.id if hasattr(fp, "id") else f"post-{an.id}",
+                "analysis_id": an.id,
+                "author_handle": "",
+                "visibility": "public",
+                "created_at": an.created_at.replace(microsecond=0).isoformat() + "Z",
+                "headline": "",
+                "overall": {"score": an.total_grade_numeric or 0, "label": an.total_label or ""},
+            })
+        if rows:
+            last_an = rows[-1][1]
+            next_cursor = last_an.created_at.replace(microsecond=0).isoformat() + "Z"
         return items, next_cursor
 
 async def search_archive(q: str, limit: int = 20) -> List[Dict[str, Any]]:
