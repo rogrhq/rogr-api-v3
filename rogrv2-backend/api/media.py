@@ -10,7 +10,7 @@ from infrastructure.auth.deps import require_user
 from infrastructure.http.limits import rate_limit_dep
 from infrastructure.storage import save_upload_bytes
 from intelligence.extractors import extract_text
-from database.session import Session
+from database.session import Session, is_sqlite, write_lock, commit_with_retry
 from database.models import MediaAsset, Analysis
 from database.repo import save_analysis_with_claims, ensure_schema, persist_result_into_analysis
 
@@ -38,32 +38,55 @@ async def upload_media(
     # Extract text (deterministic stubs for non-text kinds)
     extracted = extract_text(kind, data, filename=file.filename or "", test_mode=True)
     # Attach to analysis or create one in 'uploaded' status
-    async with Session() as s:  # type: AsyncSession
-        if analysis_id:
-            an = await s.get(Analysis, analysis_id)
-            if not an:
-                raise HTTPException(status_code=404, detail="analysis not found")
-        else:
-            an = Analysis(input_type=kind, original_uri=stored["path"], status="uploaded")
-            s.add(an)
-            await s.flush()
-        ma = MediaAsset(
-            analysis_id=an.id,
-            kind=kind,
-            storage_uri=stored["path"],
-            checksum=stored["sha256"],
-            extracted_text=extracted,
-            language=None,
-        )
-        s.add(ma)
-        await s.commit()
-        return {
-            "media_id": ma.id,
-            "analysis_id": an.id,
-            "kind": kind,
-            "checksum": stored["sha256"],
-            "extracted_text_len": len(extracted or ""),
-        }
+    guard = write_lock() if is_sqlite() else None
+    if guard:
+        async with guard:
+            async with Session() as s:  # type: AsyncSession
+                if analysis_id:
+                    an = await s.get(Analysis, analysis_id)
+                    if not an:
+                        raise HTTPException(status_code=404, detail="analysis not found")
+                else:
+                    an = Analysis(input_type=kind, original_uri=stored["path"], status="uploaded")
+                    s.add(an)
+                    await s.flush()
+                ma = MediaAsset(
+                    analysis_id=an.id,
+                    kind=kind,
+                    storage_uri=stored["path"],
+                    checksum=stored["sha256"],
+                    extracted_text=extracted,
+                    language=None,
+                )
+                s.add(ma)
+                await commit_with_retry(s)
+    else:
+        async with Session() as s:  # type: AsyncSession
+            if analysis_id:
+                an = await s.get(Analysis, analysis_id)
+                if not an:
+                    raise HTTPException(status_code=404, detail="analysis not found")
+            else:
+                an = Analysis(input_type=kind, original_uri=stored["path"], status="uploaded")
+                s.add(an)
+                await s.flush()
+            ma = MediaAsset(
+                analysis_id=an.id,
+                kind=kind,
+                storage_uri=stored["path"],
+                checksum=stored["sha256"],
+                extracted_text=extracted,
+                language=None,
+            )
+            s.add(ma)
+            await commit_with_retry(s)
+    return {
+        "media_id": ma.id,
+        "analysis_id": an.id,
+        "kind": kind,
+        "checksum": stored["sha256"],
+        "extracted_text_len": len(extracted or ""),
+    }
 
 @router.post("/mobile/preview_from_media")
 async def preview_from_media(

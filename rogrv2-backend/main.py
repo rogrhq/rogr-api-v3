@@ -20,6 +20,7 @@ from api.ops import router as ops_router
 from api.profile import router as profile_router
 from api.media import router as media_router
 from api.notifications import router as notifications_router
+from api.admin import router as admin_router
 from api.jobs import router as jobs_router
 
 # CORS configuration (deterministic; outermost middleware)
@@ -63,6 +64,7 @@ app.include_router(ops_router)
 app.include_router(profile_router)
 app.include_router(media_router)
 app.include_router(notifications_router)
+app.include_router(admin_router)
 app.include_router(jobs_router)
 
 @app.on_event("startup")

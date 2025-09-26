@@ -1,6 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 from infrastructure.auth.jwt import create_access_token, create_refresh_token, verify_token
+from infrastructure.auth.deps import require_user
+from infrastructure.auth.freeze import is_frozen
+import os
 
 router = APIRouter()
 
@@ -40,3 +43,20 @@ def refresh(body: RefreshBody):
         return AccessOnly(access_token="")
     user_id = payload["sub"]
     return AccessOnly(access_token=create_access_token(user_id, {"role": "user"}))
+
+@router.get("/auth/me")
+def me(user=Depends(require_user)):
+    return {
+        "sub": user.get("sub"),
+        "role": user.get("role","user"),
+        "frozen": is_frozen(user.get("sub","")),
+    }
+
+@router.post("/auth/elevate")
+def elevate(user=Depends(require_user)):
+    if os.getenv("ALLOW_ELEVATE", "1") != "1":
+        raise HTTPException(status_code=403, detail="elevate disabled")
+    sub = user.get("sub")
+    if not sub:
+        raise HTTPException(status_code=400, detail="no subject")
+    return {"access_token": create_access_token(sub, {"role":"admin"})}
