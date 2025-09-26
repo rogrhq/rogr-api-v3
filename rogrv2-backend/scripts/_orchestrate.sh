@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 : "${TEST_CMD:?TEST_CMD not set}"
-PY="$(bash scripts/_python_bin.sh)"
+# Ensure all children use the project Python
+export PY="$(bash scripts/_python_bin.sh)"
 bash scripts/_install_deps.sh
 bash scripts/_start_api_bg.sh || true
 bash scripts/_wait_ready.sh || true

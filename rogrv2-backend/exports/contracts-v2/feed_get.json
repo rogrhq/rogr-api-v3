@@ -1,0 +1,21 @@
+{
+  "name": "feed_get",
+  "request": {
+    "method": "GET",
+    "path": "/feed",
+    "auth": "Bearer <access_token>",
+    "query": { "limit": 20 }
+  },
+  "response": {
+    "items": [
+      {
+        "post_id": "POST-UUID",
+        "analysis_id": "ANALYSIS-UUID",
+        "author_id": "USER-UUID",
+        "created_at": "2025-01-01T00:00:00Z",
+        "overall": { "score": 0, "label": "Mixed" },
+        "summary": "Claim and verdict summary text"
+      }
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "notifications_list",
+  "request": {
+    "method": "GET",
+    "path": "/notifications",
+    "auth": "Bearer <access_token>",
+    "query": { "unread_only": true, "limit": 50 }
+  },
+  "response": {
+    "items": [
+      {
+        "id": "NOTIF-UUID",
+        "kind": "follow",
+        "payload": { "follower_user_id": "USER-UUID", "follower_sub": "user@example.com" },
+        "created_at": "2025-01-01T00:00:00Z",
+        "read": false
+      }
+    ]
+  }
+}

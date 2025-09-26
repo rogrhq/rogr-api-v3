@@ -1,0 +1,1 @@
+{"requests_total":4,"status_2xx":3,"status_4xx":0,"status_5xx":0,"in_flight":1,"request_latency_ms":{"count":3,"sum_ms":18.789,"avg_ms":6.263},"jobs":{"enqueued":0,"in_progress":0,"completed":0,"failed":0}}

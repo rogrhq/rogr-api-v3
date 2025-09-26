@@ -1,0 +1,8 @@
+HTTP/1.1 200 OK
+date: Fri, 26 Sep 2025 20:26:22 GMT
+server: uvicorn
+content-length: 35
+content-type: application/json
+x-request-id: 9620f0ac-4cd4-43ea-95f2-9326f9a85f8b
+
+{"ready":true,"checks":{"db":true}}

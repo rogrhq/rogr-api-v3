@@ -1,0 +1,17 @@
+{
+  "name": "mobile_commit",
+  "request": {
+    "method": "POST",
+    "path": "/mobile/commit",
+    "auth": "Bearer <access_token>",
+    "body": {
+      "text": "Austin increased its 2024 city budget by 8%.",
+      "test_mode": true
+    }
+  },
+  "response": {
+    "analysis_id": "ANALYSIS-UUID",
+    "overall": { "score": 0, "label": "Mixed" },
+    "claims_count": 1
+  }
+}
