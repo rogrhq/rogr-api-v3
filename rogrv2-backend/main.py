@@ -22,6 +22,8 @@ from api.media import router as media_router
 from api.notifications import router as notifications_router
 from api.admin import router as admin_router
 from api.jobs import router as jobs_router
+from api.metrics import router as metrics_router
+from infrastructure.metrics import install_http_middleware
 
 # CORS configuration (deterministic; outermost middleware)
 _cors_env = os.getenv(
@@ -42,6 +44,7 @@ _middleware = [
 ]
 
 app = FastAPI(title="ROGR API", version="1.0", middleware=_middleware)
+install_http_middleware(app)
 
 # Add JSON & request-size enforcement middleware
 app.add_middleware(EnforceJsonAndSizeMiddleware)
@@ -66,6 +69,7 @@ app.include_router(media_router)
 app.include_router(notifications_router)
 app.include_router(admin_router)
 app.include_router(jobs_router)
+app.include_router(metrics_router)
 
 @app.on_event("startup")
 def _start_workers():
