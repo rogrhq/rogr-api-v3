@@ -1,0 +1,19 @@
+{
+  "name": "media_upload",
+  "request": {
+    "method": "POST",
+    "path": "/media/upload",
+    "auth": "Bearer <access_token>",
+    "multipart": {
+      "fields": { "kind": "text" },
+      "files": { "file": "sample.txt" }
+    }
+  },
+  "response": {
+    "media_id": "MEDIA-UUID",
+    "analysis_id": "ANALYSIS-UUID",
+    "kind": "text",
+    "checksum": "sha256...",
+    "extracted_text_len": 42
+  }
+}

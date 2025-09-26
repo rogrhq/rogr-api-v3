@@ -1,6 +1,7 @@
 from __future__ import annotations
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from pydantic import BaseModel
+from pydantic import ConfigDict
 from typing import Optional, Dict, Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,10 +18,12 @@ from database.repo import save_analysis_with_claims, ensure_schema, persist_resu
 router = APIRouter()
 
 class PreviewFromMediaBody(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"examples": [{"media_id": "MEDIA-UUID", "test_mode": True}]})
     media_id: str
     test_mode: bool = True
 
 class CommitFromMediaBody(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"examples": [{"media_id": "MEDIA-UUID", "test_mode": True}]})
     media_id: str
     test_mode: bool = True
 

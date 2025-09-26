@@ -1,0 +1,28 @@
+{
+  "name": "analyses_preview",
+  "request": {
+    "method": "POST",
+    "path": "/analyses/preview",
+    "body": {
+      "text": "Austin increased its 2024 city budget by 8%.",
+      "test_mode": true
+    }
+  },
+  "response": {
+    "overall": { "score": 0, "label": "Mixed" },
+    "claims": [
+      {
+        "text": "Austin increased its 2024 city budget by 8%.",
+        "tier": "primary",
+        "score_numeric": 0,
+        "label": "Mixed",
+        "evidence": { "support": [], "refute": [] }
+      }
+    ],
+    "methodology": {
+      "version": "1.0",
+      "arms": ["A","B"],
+      "ifcn": { "nonpartisanship": true, "transparency": true }
+    }
+  }
+}

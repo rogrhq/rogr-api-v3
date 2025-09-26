@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
+from pydantic import ConfigDict
 from infrastructure.auth.jwt import create_access_token, create_refresh_token, verify_token
 from infrastructure.auth.deps import require_user
 from infrastructure.auth.freeze import is_frozen
@@ -8,6 +9,7 @@ import os
 router = APIRouter()
 
 class RegisterBody(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"examples": [{"email": "me@example.com"}]})
     email: EmailStr
 
 class TokenPair(BaseModel):
@@ -30,6 +32,7 @@ def register(body: RegisterBody):
     )
 
 class RefreshBody(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"examples": [{"refresh_token": "eyJhbGciOi..."}]})
     refresh_token: str
 
 @router.post("/auth/refresh", response_model=AccessOnly)

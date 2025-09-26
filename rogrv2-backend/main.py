@@ -70,6 +70,7 @@ app.include_router(notifications_router)
 app.include_router(admin_router)
 app.include_router(jobs_router)
 app.include_router(metrics_router)
+app.include_router(contracts_router)
 
 @app.on_event("startup")
 def _start_workers():

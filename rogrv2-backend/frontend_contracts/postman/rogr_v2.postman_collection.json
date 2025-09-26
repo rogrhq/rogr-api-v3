@@ -1,0 +1,29 @@
+{
+  "info": {
+    "name": "ROGR v2",
+    "_postman_id": "11111111-2222-3333-4444-555555555555",
+    "description": "ROGR v2 mobile/contracts collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Register",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{base}}/auth/register", "host": ["{{base}}"], "path": ["auth","register"] },
+        "body": { "mode": "raw", "raw": "{\n  \"email\": \"me@example.com\"\n}" }
+      }
+    },
+    {
+      "name": "Preview",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{base}}/analyses/preview", "host": ["{{base}}"], "path": ["analyses","preview"] },
+        "body": { "mode": "raw", "raw": "{\n  \"text\": \"Austin increased its 2024 city budget by 8%.\",\n  \"test_mode\": true\n}" }
+      }
+    }
+  ],
+  "variable": [{ "key": "base", "value": "http://localhost:8000" }]
+}
