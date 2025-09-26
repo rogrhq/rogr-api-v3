@@ -13,6 +13,7 @@ from api.analyses_commit import router as commit_router
 from api.analyses_read import router as analyses_read_router
 from api.contracts import router as contracts_router
 from api.mobile import router as mobile_router
+from api.ifcn_export import router as ifcn_export_router
 from api.jobs import router as jobs_router
 
 # CORS configuration (deterministic; outermost middleware)
@@ -47,6 +48,7 @@ app.include_router(commit_router)
 app.include_router(analyses_read_router)
 app.include_router(contracts_router)
 app.include_router(mobile_router)
+app.include_router(ifcn_export_router)
 app.include_router(jobs_router)
 
 @app.on_event("startup")

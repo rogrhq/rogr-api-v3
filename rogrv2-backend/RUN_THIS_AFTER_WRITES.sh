@@ -2,9 +2,9 @@
 set -euo pipefail
 # Ensure port 8000 is free before running tests that start/expect API
 bash scripts/_stop_port_8000.sh || true
-# Packet 16 test: security hardening (JSON-only writes, body size limit, 429 rate limit)
-export TEST_CMD="python3 scripts/test_packet16.py"
-# Lower rate limit + body size for deterministic test behavior
-export RATE_LIMIT_PER_MINUTE="5"
-export MAX_BODY_BYTES="10240"   # 10 KiB
+# Packet 17 test: IFCN export bundle + checksum + persisted export
+export TEST_CMD="python3 scripts/test_packet17.py"
+# Restore friendlier defaults to avoid 429 during export tests
+export RATE_LIMIT_PER_MINUTE="${RATE_LIMIT_PER_MINUTE:-120}"
+unset MAX_BODY_BYTES || true
 bash scripts/_orchestrate.sh
