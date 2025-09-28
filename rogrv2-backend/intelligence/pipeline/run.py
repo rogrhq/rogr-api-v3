@@ -72,6 +72,11 @@ def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
                 "version": "s2p3-lex+type+rec",
                 "explain": "Score = 0.55*lexical + 0.30*type_prior + 0.15*recency (bounded). Type prior uses source *type*, not specific sites.",
             },
+            "stance": {
+                "version": "s2p5",
+                "signals": ["negation/refute cues", "support cues", "adversative tokens", "numeric/trend comparison"],
+                "notes": "Heuristic-only, deterministic; no domain hardcoding; IFCN-friendly transparency"
+            }
         },
     }
     return response
