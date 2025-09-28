@@ -1,0 +1,150 @@
+{
+  "claims": [
+    {
+      "text": "Austin increased its 2024 city budget by 8%.",
+      "tier": "primary",
+      "priority": 0,
+      "strategies": {
+        "A": [
+          "\"Austin increased its 2024 city budget by 8%.\"",
+          "\"Austin increased its 2024 city budget by 8%.\" facts data sources",
+          "Austin increased 2024 city budget timeline chronology"
+        ],
+        "B": [
+          "Austin increased 2024 city budget critique counter evidence",
+          "Austin increased 2024 city budget methodology reliability",
+          "Austin increased 2024 city budget official records report"
+        ]
+      },
+      "evidence": {
+        "A": [],
+        "B": []
+      },
+      "consensus": {
+        "overlap_ratio": 0.0,
+        "conflict_score": 0.0,
+        "stability": 0.0,
+        "totals": {
+          "support": 0,
+          "refute": 0
+        }
+      },
+      "score_numeric": 50,
+      "label": "Mixed",
+      "explanation": "No qualifying evidence; defaulting to Mixed.",
+      "counter_claims": [
+        {
+          "text": "Reported change is mis-stated; the underlying dataset shows a different magnitude or direction.",
+          "rationale": "Invert/verify direction & magnitude; check base period and comp (YoY vs MoM)."
+        },
+        {
+          "text": "Claim over-generalizes; the statement applies to a subset (time window, geography, department) not the whole.",
+          "rationale": "Enforce scope precision: who/where/when; look for definitions, exclusions, footnotes."
+        },
+        {
+          "text": "Observed change is confounded by external factors (policy timing, accounting changes, one-off items).",
+          "rationale": "Causality caution; correlate with contemporaneous events and reporting lags."
+        }
+      ]
+    }
+  ],
+  "overall": {
+    "score": 50,
+    "label": "Mixed"
+  },
+  "methodology": {
+    "version": "1.0",
+    "provider_set": [
+      "none"
+    ],
+    "strategy": "A/B",
+    "test_mode": false,
+    "counts": {
+      "claims": 1
+    },
+    "consensus_summary": {
+      "avg_overlap": 0.0,
+      "avg_conflict": 0.0,
+      "avg_stability": 0.0
+    },
+    "scoring_rules": {
+      "claim_numeric_0_100": true,
+      "evidence_letter_A_to_F": true,
+      "label_map": [
+        "True",
+        "Mostly True",
+        "Mixed",
+        "Mostly False",
+        "False"
+      ]
+    },
+    "events": [
+      {
+        "ts": "2025-09-26T22:33:54Z",
+        "stage": "start",
+        "test_mode": false
+      },
+      {
+        "ts": "2025-09-26T22:33:54Z",
+        "stage": "extract_done",
+        "claims": 1
+      },
+      {
+        "ts": "2025-09-26T22:33:54Z",
+        "stage": "plan_done",
+        "strategy_counts": {
+          "Austin increased its 2024 city budget by 8%.": {
+            "A": 3,
+            "B": 3
+          }
+        }
+      },
+      {
+        "ts": "2025-09-26T22:33:54Z",
+        "stage": "gather_done",
+        "claim": "Austin increased its 2024 city budget by 8%.",
+        "counts": {
+          "A": 0,
+          "B": 0
+        },
+        "evA": 0,
+        "evB": 0
+      },
+      {
+        "ts": "2025-09-26T22:33:54Z",
+        "stage": "consensus_done",
+        "claim": "Austin increased its 2024 city budget by 8%.",
+        "metrics": {
+          "overlap_ratio": 0.0,
+          "conflict_score": 0.0,
+          "stability": 0.0,
+          "totals": {
+            "support": 0,
+            "refute": 0
+          }
+        }
+      },
+      {
+        "ts": "2025-09-26T22:33:54Z",
+        "stage": "score_done",
+        "claim": "Austin increased its 2024 city budget by 8%.",
+        "score": 50,
+        "label": "Mixed"
+      },
+      {
+        "ts": "2025-09-26T22:33:54Z",
+        "stage": "counterclaims_done",
+        "claim": "Austin increased its 2024 city budget by 8%.",
+        "count": 3
+      },
+      {
+        "ts": "2025-09-26T22:33:54Z",
+        "stage": "finalize",
+        "overall": {
+          "score": 50,
+          "label": "Mixed"
+        }
+      }
+    ]
+  }
+}

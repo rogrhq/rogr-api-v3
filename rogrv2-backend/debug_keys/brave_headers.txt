@@ -1,0 +1,18 @@
+HTTP/2 200 
+date: Fri, 26 Sep 2025 23:28:23 GMT
+content-type: application/json
+content-length: 7597
+x-ratelimit-limit: 1, 2000
+x-ratelimit-policy: 1;w=1, 2000;w=2592000
+x-ratelimit-remaining: 0, 1996
+x-ratelimit-reset: 1, 347495
+server-timing: search-roundtrip;dur=133.302
+vary: Accept-Encoding
+vary: Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site, Sec-Fetch-User
+x-content-type-options: nosniff
+referrer-policy: strict-origin-when-cross-origin
+strict-transport-security: max-age=31536000; includeSubDomains; preload
+x-download-options: noopen
+x-frame-options: SAMEORIGIN
+x-xss-protection: 1; mode=block
+

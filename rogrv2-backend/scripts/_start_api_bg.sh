@@ -16,5 +16,17 @@ if [ -f .api_pid ] && ! ps -p "$(cat .api_pid 2>/dev/null)" >/dev/null 2>&1; the
   rm -f .api_pid
 fi
 # Start
-(uvicorn main:app --host 0.0.0.0 --port "${PORT}" --workers 2 & echo $! > .api_pid)
+: "${API_WORKERS:=1}"
+export PYTHONUNBUFFERED=1
+export PYTHONPATH="${PYTHONPATH:-.}"
+PY="$(bash scripts/_python_bin.sh)"
+UV="$(dirname "$PY")/uvicorn"
+if [ ! -x "$UV" ]; then
+  exec_cmd=( "$PY" -m uvicorn main:app --host 0.0.0.0 --port "$PORT" --workers "$API_WORKERS" )
+else
+  exec_cmd=( "$UV" main:app --host 0.0.0.0 --port "$PORT" --workers "$API_WORKERS" )
+fi
+(
+  "${exec_cmd[@]}" & echo $! > .api_pid
+)
 echo "Started API on :${PORT} (pid $(cat .api_pid))"

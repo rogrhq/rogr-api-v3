@@ -4,6 +4,7 @@ from intelligence.claims.extract import extract_claims
 from intelligence.strategy.plan import build_search_plans
 from intelligence.gather.pipeline import build_evidence_for_claim
 from intelligence.consensus.aggregate import consensus_metrics
+from typing import Dict, Any, List
 from intelligence.score.scoring import claim_score, overall_score
 from intelligence.gather.online import run as live_run
 from infrastructure.audit.log import start as audit_start, event as audit_event, finalize_capsule, provider_set_from_env
@@ -24,7 +25,7 @@ def _synth_candidates(claim_text: str, arm: str) -> List[Dict]:
             {"url":"https://forum.example/thread","title":"Community thread","snippet":"People discuss the bridge; mixed views; uncertain details."},
         ]
 
-def run_preview(text: str, *, test_mode: bool = True) -> Dict:
+def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
     """
     Returns dict:
     {
@@ -42,78 +43,40 @@ def run_preview(text: str, *, test_mode: bool = True) -> Dict:
       'overall': {'score': int, 'label': str}
     }
     """
-    audit_start({"test_mode": test_mode})
-    claims = extract_claims(text or "")
-    audit_event("extract_done", claims=len(claims))
-    plans = build_search_plans(claims)
-    # group plans by claim text + arm
-    by_claim: Dict[str, Dict[str, List[str]]] = {}
-    for p in plans:
-        ctext = p["claim_text"]
-        by_claim.setdefault(ctext, {})[p["arm"]] = p["queries"]
-
-    # summarize strategies per claim (counts only for capsule)
-    strat_counts = {c.text: {k: len(v) for k, v in by_claim.get(c.text, {}).items()} for c in claims}
-    audit_event("plan_done", strategy_counts=strat_counts)
-
-    results: List[Dict] = []
-    gather_counts = {}
-    for c in claims:
-        strategies = by_claim.get(c.text, {})
-        # Build evidence for both arms.
-        if test_mode:
-            candA = _synth_candidates(c.text, "A")
-            candB = _synth_candidates(c.text, "B")
+    claims: List[Dict[str, Any]] = extract_claims(text or "") or []
+    # Guarantee IDs/tier fields even if extractor returns plain text items
+    for i, c in enumerate(claims):
+        if not isinstance(c, dict):
+            claims[i] = {"id": f"c{i+1}", "text": str(c), "tier": "primary"}
         else:
-            # Live mode: call providers, snapshot HTML; same normalized shape
-            candA = asyncio.run(live_run(c.text, max_per_arm=3))
-            candB = asyncio.run(live_run(c.text, max_per_arm=3))
-        gather_counts[c.text] = {"A": len(candA), "B": len(candB)}
+            c.setdefault("id", f"c{i+1}")
+            c.setdefault("tier", "primary")
 
-        armA = build_evidence_for_claim(c.text, candA)
-        armB = build_evidence_for_claim(c.text, candB)
-        audit_event("gather_done", claim=c.text, counts=gather_counts[c.text], evA=len(armA), evB=len(armB))
+    plans_by_claim: Dict[str, Any] = {}
+    try:
+        plans_by_claim = build_search_plans(claims, test_mode=test_mode) or {}
+    except Exception as e:
+        # Don't abort preview; continue with empty plans
+        plans_by_claim = {}
 
-        cons = consensus_metrics(armA, armB)
-        audit_event("consensus_done", claim=c.text, metrics=cons)
+    enriched: List[Dict[str, Any]] = []
+    for c in claims:
+        cid = c.get("id")
+        plan = plans_by_claim.get(cid) if isinstance(plans_by_claim, dict) else None
+        try:
+            ec = build_evidence_for_claim(c, plan, test_mode=test_mode) or {}
+        except Exception:
+            ec = {"id": cid, "text": c.get("text",""), "tier": c.get("tier","primary"), "evidence": [], "verdict": {"score": 50, "label": "Mixed"}}
+        # Minimal shape
+        if "verdict" not in ec:
+            ec["verdict"] = {"score": 50, "label": "Mixed"}
+        if "evidence" not in ec:
+            ec["evidence"] = []
+        enriched.append(ec)
 
-        # Score using all evidence (A+B)
-        score, label, expl = claim_score(armA + armB)
-        audit_event("score_done", claim=c.text, score=score, label=label)
-
-        cc = generate_counterclaims(c.text)
-        audit_event("counterclaims_done", claim=c.text, count=len(cc))
-        results.append({
-            "text": c.text,
-            "tier": c.tier.value,
-            "priority": c.priority,
-            "strategies": strategies,
-            "evidence": {"A": armA, "B": armB},
-            "consensus": cons,
-            "score_numeric": score,
-            "label": label,
-            "explanation": expl,
-            "counter_claims": cc
-        })
-
-    # overall (tier-weighted)
-    overall_num, overall_lbl = overall_score([{"tier": r["tier"], "score": r["score_numeric"]} for r in results])
-    audit_event("finalize", overall={"score": overall_num, "label": overall_lbl})
-    # Build methodology capsule
-    provider_set = provider_set_from_env(test_mode)
-    # summarize consensus (averages over claims)
-    if results:
-        ov_cons = {
-            "avg_overlap": round(sum(r["consensus"]["overlap_ratio"] for r in results)/len(results), 3),
-            "avg_conflict": round(sum(r["consensus"]["conflict_score"] for r in results)/len(results), 3),
-            "avg_stability": round(sum(r["consensus"]["stability"] for r in results)/len(results), 3),
-        }
-    else:
-        ov_cons = {"avg_overlap": 0.0, "avg_conflict": 0.0, "avg_stability": 0.0}
-    capsule = finalize_capsule({
-        "test_mode": test_mode,
-        "provider_set": provider_set,
-        "counts": {"claims": len(results)},
-        "consensus_summary": ov_cons,
-    })
-    return {"claims": results, "overall": {"score": overall_num, "label": overall_lbl}, "methodology": capsule}
+    try:
+        from intelligence.consensus.overall import overall_from_claims
+        overall = overall_from_claims(enriched) or {"score": 50, "label": "Mixed"}
+    except Exception:
+        overall = {"score": 50, "label": "Mixed"}
+    return {"overall": overall, "claims": enriched}

@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware import Middleware
 from infrastructure.http.security import EnforceJsonAndSizeMiddleware
@@ -24,6 +24,7 @@ from api.admin import router as admin_router
 from api.jobs import router as jobs_router
 from api.metrics import router as metrics_router
 from infrastructure.metrics import install_http_middleware
+from infrastructure.logging.jtrace import error_event, format_exc
 
 # CORS configuration (deterministic; outermost middleware)
 _cors_env = os.getenv(
@@ -57,6 +58,20 @@ app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(analyses_router)
 app.include_router(secure_router)
+
+# Dev-only: return richer error body when ROGR_DEBUG_ERRORS=1
+if os.getenv("ROGR_DEBUG_ERRORS") == "1":
+    @app.middleware("http")
+    async def debug_errors(request: Request, call_next):
+        try:
+            return await call_next(request)
+        except Exception as e:
+            rid = error_event("unhandled_exception", path=request.url.path, detail=str(e), traceback=format_exc(e))
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=500,
+                content={"error":"server_error","detail":str(e),"request_id":rid,"debug":"trace logged"},
+            )
 app.include_router(auth_me_router)
 app.include_router(commit_router)
 app.include_router(analyses_read_router)

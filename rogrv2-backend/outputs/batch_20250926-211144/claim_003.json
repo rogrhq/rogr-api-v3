@@ -1,0 +1,220 @@
+{
+  "claims": [
+    {
+      "text": "Water boils at 100C at sea level.",
+      "tier": "primary",
+      "priority": 0,
+      "strategies": {
+        "A": [
+          "\"Water boils at 100C at sea level.\"",
+          "\"Water boils at 100C at sea level.\" facts data sources",
+          "Water boils 100C level. timeline chronology"
+        ],
+        "B": [
+          "Water boils 100C level. critique counter evidence",
+          "Water boils 100C level. methodology reliability",
+          "Water boils 100C level. official records report"
+        ]
+      },
+      "evidence": {
+        "A": [
+          {
+            "source": {
+              "url": "https://city.gov/reports/bridge-2027-plan",
+              "title": "City issues 2027 bridge plan",
+              "snippet": "Water boils at 100C at sea official report outlines costs and timeline 2027 with financial details.",
+              "publisher": "city.gov",
+              "dedupe_key": "9daa5336cdc04251"
+            },
+            "stance": "support",
+            "confidence": 0.5,
+            "quality_letter": "A"
+          },
+          {
+            "source": {
+              "url": "https://localnews.example/bridge-costs",
+              "title": "Bridge costs rise due to steel",
+              "snippet": "Steel prices increased; estimates adjusted; timeline remains on track for 2027 according to officials.",
+              "publisher": "localnews.example",
+              "dedupe_key": "2c983d398a3de691"
+            },
+            "stance": "neutral",
+            "confidence": 0.3,
+            "quality_letter": "C"
+          },
+          {
+            "source": {
+              "url": "https://opinion.example/blog-bridge",
+              "title": "Opinion: concerns remain",
+              "snippet": "Some residents are worried; details unclear; no figures given.",
+              "publisher": "opinion.example",
+              "dedupe_key": "b4771350011b238f"
+            },
+            "stance": "neutral",
+            "confidence": 0.3,
+            "quality_letter": "D"
+          }
+        ],
+        "B": [
+          {
+            "source": {
+              "url": "https://watchgroup.example/bridge-oversight",
+              "title": "Watch group flags issues",
+              "snippet": "Report suggests the 2027 claim may be optimistic; not confirmed by independent audit.",
+              "publisher": "watchgroup.example",
+              "dedupe_key": "ac283cb2d54ec412"
+            },
+            "stance": "neutral",
+            "confidence": 0.3,
+            "quality_letter": "C"
+          },
+          {
+            "source": {
+              "url": "https://transport.db/stats",
+              "title": "Traffic statistics 2020-2024",
+              "snippet": "Data shows traffic doubled since 2020 in corridor; numbers compiled annually 2021 2022 2023.",
+              "publisher": "transport.db",
+              "dedupe_key": "d01b1a918b706a0c"
+            },
+            "stance": "neutral",
+            "confidence": 0.3,
+            "quality_letter": "C"
+          },
+          {
+            "source": {
+              "url": "https://forum.example/thread",
+              "title": "Community thread",
+              "snippet": "People discuss the bridge; mixed views; uncertain details.",
+              "publisher": "forum.example",
+              "dedupe_key": "88fb73a3cf92b747"
+            },
+            "stance": "neutral",
+            "confidence": 0.3,
+            "quality_letter": "D"
+          }
+        ]
+      },
+      "consensus": {
+        "overlap_ratio": 0.0,
+        "conflict_score": 1.0,
+        "stability": 0.0,
+        "totals": {
+          "support": 1,
+          "refute": 0
+        }
+      },
+      "score_numeric": 100,
+      "label": "True",
+      "explanation": "Support=1.50, Refute=0.00, Raw=1.00, Score=100",
+      "counter_claims": [
+        {
+          "text": "Claim over-generalizes; the statement applies to a subset (time window, geography, department) not the whole.",
+          "rationale": "Enforce scope precision: who/where/when; look for definitions, exclusions, footnotes."
+        },
+        {
+          "text": "Observed change is confounded by external factors (policy timing, accounting changes, one-off items).",
+          "rationale": "Causality caution; correlate with contemporaneous events and reporting lags."
+        }
+      ]
+    }
+  ],
+  "overall": {
+    "score": 100,
+    "label": "True"
+  },
+  "methodology": {
+    "version": "1.0",
+    "provider_set": [
+      "offline-synth"
+    ],
+    "strategy": "A/B",
+    "test_mode": true,
+    "counts": {
+      "claims": 1
+    },
+    "consensus_summary": {
+      "avg_overlap": 0.0,
+      "avg_conflict": 1.0,
+      "avg_stability": 0.0
+    },
+    "scoring_rules": {
+      "claim_numeric_0_100": true,
+      "evidence_letter_A_to_F": true,
+      "label_map": [
+        "True",
+        "Mostly True",
+        "Mixed",
+        "Mostly False",
+        "False"
+      ]
+    },
+    "events": [
+      {
+        "ts": "2025-09-26T21:11:44Z",
+        "stage": "start",
+        "test_mode": true
+      },
+      {
+        "ts": "2025-09-26T21:11:44Z",
+        "stage": "extract_done",
+        "claims": 1
+      },
+      {
+        "ts": "2025-09-26T21:11:44Z",
+        "stage": "plan_done",
+        "strategy_counts": {
+          "Water boils at 100C at sea level.": {
+            "A": 3,
+            "B": 3
+          }
+        }
+      },
+      {
+        "ts": "2025-09-26T21:11:44Z",
+        "stage": "gather_done",
+        "claim": "Water boils at 100C at sea level.",
+        "counts": {
+          "A": 3,
+          "B": 3
+        },
+        "evA": 3,
+        "evB": 3
+      },
+      {
+        "ts": "2025-09-26T21:11:44Z",
+        "stage": "consensus_done",
+        "claim": "Water boils at 100C at sea level.",
+        "metrics": {
+          "overlap_ratio": 0.0,
+          "conflict_score": 1.0,
+          "stability": 0.0,
+          "totals": {
+            "support": 1,
+            "refute": 0
+          }
+        }
+      },
+      {
+        "ts": "2025-09-26T21:11:44Z",
+        "stage": "score_done",
+        "claim": "Water boils at 100C at sea level.",
+        "score": 100,
+        "label": "True"
+      },
+      {
+        "ts": "2025-09-26T21:11:44Z",
+        "stage": "counterclaims_done",
+        "claim": "Water boils at 100C at sea level.",
+        "count": 2
+      },
+      {
+        "ts": "2025-09-26T21:11:44Z",
+        "stage": "finalize",
+        "overall": {
+          "score": 100,
+          "label": "True"
+        }
+      }
+    ]
+  }
+}

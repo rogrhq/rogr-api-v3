@@ -1,0 +1,2 @@
+# ONLINE mode: force live gather path for preview
+FORCE_LIVE_GATHER=1
