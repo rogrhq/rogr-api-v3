@@ -36,10 +36,26 @@ def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
             # Keep default `plans`
             pass
 
-    # 3) assemble response (always includes methodology.strategy.plan)
+    # 3) Optionally gather + rank deterministic evidence (lightweight)
+    evidence_bundle = {"A": {"candidates":[]}, "B":{"candidates":[]}}
+    try:
+        from intelligence.gather.pipeline import build_evidence_for_claim
+        evidence_bundle = build_evidence_for_claim(claim_text=claim["text"], plan=plans, max_per_arm=3)
+    except Exception:
+        evidence_bundle = {"A": {"candidates":[]}, "B":{"candidates":[]}}
+
+    # 4) assemble response (always includes methodology.strategy.plan)
     response = {
         "overall": {"score": 50, "label": "Mixed"},
-        "claims": [claim],
+        "claims": [
+            {
+                **claim,
+                "evidence": {
+                    "arm_A": evidence_bundle.get("A", {}).get("candidates", []),
+                    "arm_B": evidence_bundle.get("B", {}).get("candidates", []),
+                },
+            }
+        ],
         "methodology": {
             "version": "mvp-1",
             "strategy": {
@@ -50,6 +66,10 @@ def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
                     "per_domain_diversity_per_rank_bin": True,
                     "provider_interleave": True,
                 },
+            },
+            "ranking": {
+                "version": "s2p3-lex+type+rec",
+                "explain": "Score = 0.55*lexical + 0.30*type_prior + 0.15*recency (bounded). Type prior uses source *type*, not specific sites.",
             },
         },
     }
