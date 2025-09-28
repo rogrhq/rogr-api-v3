@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Ensure port 8000 is free before running tests that start/expect API
-bash scripts/_stop_port_8000.sh || true
-# Set which test to run here (S1 intelligence baseline)
-export TEST_CMD="bash scripts/test_intel_s1.sh"
-# Restore friendlier defaults to avoid 429 during export tests
-export RATE_LIMIT_PER_MINUTE="${RATE_LIMIT_PER_MINUTE:-120}"
-unset MAX_BODY_BYTES || true
+# Ensure TEST_CMD is exported; default to S2 Packet 1 test when unset
+if [ -z "${TEST_CMD:-}" ]; then
+  export TEST_CMD="bash scripts/test_s2_packet1.sh"
+fi
 bash scripts/_orchestrate.sh

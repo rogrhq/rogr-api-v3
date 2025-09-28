@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from infrastructure.auth.deps import require_user
 from intelligence.pipeline.run import run_preview
+from intelligence.analyze.enrich import enrich_claim_obj
 from infrastructure.logging.jtrace import error_event, format_exc
 
 router = APIRouter()
@@ -29,7 +30,9 @@ def preview(body: PreviewBody, _user=Depends(require_user)):
         if not isinstance(res, dict):
             res = {}
         res.setdefault("overall", {"score": 50, "label": "Mixed"})
-        res.setdefault("claims", [])
+        # Ensure claims list exists, and enrich each claim deterministically
+        claims = res.get("claims") or []
+        res["claims"] = [enrich_claim_obj(c) for c in claims]
         res.setdefault("methodology", {"version": "S1", "notes": []})
         return res
     except Exception as e:

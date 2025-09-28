@@ -1,29 +1,23 @@
 from __future__ import annotations
-from typing import Any, Dict, List
+from typing import Dict, Any
 
-def _default_quality(stance: str | None) -> str:
-    # extremely conservative placeholder
-    if stance == "support": return "B"
-    if stance == "refute":  return "B"
-    return "C"
+from intelligence.claims.interpret import parse_claim
 
-def enrich_evidence(evidence: List[Dict[str, Any]] | None) -> List[Dict[str, Any]]:
-    """Ensure each evidence item has minimally-required fields.
-    This is a no-op shim that fills defaults so the pipeline can run.
+def enrich_claim_obj(claim: Any) -> Dict[str, Any]:
     """
-    out: List[Dict[str, Any]] = []
-    for ev in (evidence or []):
-        e = dict(ev)
-        e.setdefault("quality_letter", _default_quality(e.get("stance")))
-        e.setdefault("features_json", {})
-        e.setdefault("publisher", (e.get("publisher") or "") )
-        e.setdefault("title", (e.get("title") or "") )
-        e.setdefault("snippet", (e.get("snippet") or "") )
-        out.append(e)
-    return out
+    Accepts either a string claim or an existing claim dict with at least 'text'.
+    Returns a dict: { text, tier?, ...enrichment }
+    """
+    if isinstance(claim, str):
+        base = {"text": claim, "tier": "primary"}
+    elif isinstance(claim, dict):
+        base = {"tier": claim.get("tier","primary"), "text": claim.get("text","")}
+        # keep any existing fields but they'll be overwritten by deterministic enrichment keys where relevant
+        base.update({k:v for k,v in claim.items() if k not in ("text","tier")})
+    else:
+        base = {"text": str(claim), "tier": "primary"}
 
-def enrich(base: Dict[str, Any]) -> Dict[str, Any]:
-    """Top-level shim: attach minimally enriched evidence back onto the base dict."""
-    ev = base.get("evidence")
-    base["evidence"] = enrich_evidence(ev)
-    return base
+    enrich = parse_claim(base.get("text",""))
+    # merge: base precedence for text/tier, enrichment adds structured fields
+    out = {**enrich, "text": base.get("text",""), "tier": base.get("tier","primary")}
+    return out
