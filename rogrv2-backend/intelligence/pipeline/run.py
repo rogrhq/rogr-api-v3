@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Union, Tuple
 from intelligence.score.aggregate import overall_from_claims
 from intelligence.ifcn.labels import label_for_score, scale_spec, explanation_from_counts
+from intelligence.policy.checks import check_input
 
 def _to_json_primitive(x: Any) -> Any:
     """
@@ -30,6 +31,9 @@ def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
     Build a minimal claim, plan strategy, and return stable JSON with methodology.
     This function MUST NOT raise on planner availability; it must always return a valid shape.
     """
+    # Policy annotation (non-blocking)
+    _policy = check_input(text)
+
     # 1) make a single claim object (MVP)
     claim: Dict[str, Any] = {
         "id": "c-0",
@@ -179,7 +183,8 @@ def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
                 "per_claim": "Weighted by stance (support/refute), quality letter (A..F), and relevance.",
                 "overall":   "Robust mean of claim grades; mapped to label bands.",
                 "bands":     {"True": "90-100","Mostly True":"75-89","Mixed":"55-74","Mostly False":"35-54","False":"0-34"}
-            }
+            },
+            "policy": _policy
         },
     })
     return response
