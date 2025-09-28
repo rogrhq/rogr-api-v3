@@ -246,6 +246,22 @@ def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
         except Exception:
             pass
 
+        # S2P13: add cross-arm contradiction signals (deterministic)
+        try:
+            from intelligence.consistency.contradict import detect_contradiction
+            ev = c.get("evidence", {})
+            armA = ev.get("arm_A") or []
+            armB = ev.get("arm_B") or []
+            contra = detect_contradiction(armA, armB)
+            guards = ev.get("guardrails") or {}
+            consistency = guards.get("consistency") or {}
+            consistency["contradiction"] = contra
+            guards["consistency"] = consistency
+            ev["guardrails"] = guards
+            c["evidence"] = ev
+        except Exception:
+            pass
+
         claims_out.append(c)
 
     # S2P9 hotfix: if no claims were extracted (edge in some modes), emit a minimal fallback claim
@@ -294,7 +310,10 @@ def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
             "version": "s2p3-lex+type+rec",
             "explain": "Score = 0.55*lexical + 0.30*type_prior + 0.15*recency (bounded). Type prior uses source *type*, not specific sites.",
         },
-        "consistency": {"agreement_metrics": ["token_overlap_jaccard", "shared_domains", "exact_url_matches"]},
+        "consistency": {
+            "agreement_metrics": ["token_overlap_jaccard", "shared_domains", "exact_url_matches"],
+            "contradiction_metrics": ["pairs_opposed", "pairs_total", "opposition_ratio"]
+        },
         "stance": {
             "version": "s2p5",
             "signals": ["negation/refute cues", "support cues", "adversative tokens", "numeric/trend comparison"],
