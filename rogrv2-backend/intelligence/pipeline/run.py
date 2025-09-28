@@ -148,6 +148,23 @@ def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
         v["label"] = v_label
         v["explanation"] = explanation
         c["verdict"] = v
+
+        # Add stance balance guardrail counts (non-failing; best-effort)
+        try:
+            from intelligence.stance.balance import summarize_balance
+            ev = c.get("evidence", {})
+            armA = ev.get("arm_A") or []
+            armB = ev.get("arm_B") or []
+            balance = summarize_balance(armA, armB)
+            # place under evidence.guardrails.balance
+            guards = ev.get("guardrails") or {}
+            guards["balance"] = balance
+            ev["guardrails"] = guards
+            c["evidence"] = ev
+        except Exception:
+            # Do not fail preview if balance computation has issues
+            pass
+
         claims_out.append(c)
 
     # S2P9 hotfix: if no claims were extracted (edge in some modes), emit a minimal fallback claim
@@ -174,41 +191,51 @@ def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
             "verdict": {"score": 50, "label": "Mixed"},
         }]
 
+    # Expose a short note that stance balance counts were computed
+    methodology_final = {
+        "version": "S2P7-1",
+        "ifcn": {
+            "version": "S2P7-1",
+            "label_scale": scale_spec(),
+        },
+        "notes": "Deterministic pipeline with A/B arms; no domain hardcoding; quality and stance aggregated.",
+        "strategy": {
+            "planner": "v2" if _planner_v2 else "v1",
+            "plan": plans,
+            "guardrails": {
+                "no_domain_tokens_in_queries": True,
+                "per_domain_diversity_per_rank_bin": True,
+                "provider_interleave": True,
+            },
+        },
+        "consensus": claim_ev.get("consensus", {"overlap_ratio":0.0,"conflict_score":0.0,"stability":1.0}),
+        "ranking": {
+            "version": "s2p3-lex+type+rec",
+            "explain": "Score = 0.55*lexical + 0.30*type_prior + 0.15*recency (bounded). Type prior uses source *type*, not specific sites.",
+        },
+        "stance": {
+            "version": "s2p5",
+            "signals": ["negation/refute cues", "support cues", "adversative tokens", "numeric/trend comparison"],
+            "notes": "Heuristic-only, deterministic; no domain hardcoding; IFCN-friendly transparency"
+        },
+        "scoring": {
+            "per_claim": "Weighted by stance (support/refute), quality letter (A..F), and relevance.",
+            "overall":   "Robust mean of claim grades; mapped to label bands.",
+            "bands":     {"True": "90-100","Mostly True":"75-89","Mixed":"55-74","Mostly False":"35-54","False":"0-34"}
+        },
+        "policy": _policy
+    }
+
+    try:
+        if any(c.get("evidence", {}).get("guardrails", {}).get("balance") for c in claims_out):
+            methodology_final.setdefault("guardrails", {})
+            methodology_final["guardrails"]["balance"] = "per-arm pro/con/neutral counts computed"
+    except Exception:
+        pass
+
     response = _to_json_primitive({
         "overall": {"score": overall_score, "label": overall_label},
         "claims": claims_out,
-        "methodology": {
-            "version": "S2P7-1",
-            "ifcn": {
-                "version": "S2P7-1",
-                "label_scale": scale_spec(),
-            },
-            "notes": "Deterministic pipeline with A/B arms; no domain hardcoding; quality and stance aggregated.",
-            "strategy": {
-                "planner": "v2" if _planner_v2 else "v1",
-                "plan": plans,
-                "guardrails": {
-                    "no_domain_tokens_in_queries": True,
-                    "per_domain_diversity_per_rank_bin": True,
-                    "provider_interleave": True,
-                },
-            },
-            "consensus": claim_ev.get("consensus", {"overlap_ratio":0.0,"conflict_score":0.0,"stability":1.0}),
-            "ranking": {
-                "version": "s2p3-lex+type+rec",
-                "explain": "Score = 0.55*lexical + 0.30*type_prior + 0.15*recency (bounded). Type prior uses source *type*, not specific sites.",
-            },
-            "stance": {
-                "version": "s2p5",
-                "signals": ["negation/refute cues", "support cues", "adversative tokens", "numeric/trend comparison"],
-                "notes": "Heuristic-only, deterministic; no domain hardcoding; IFCN-friendly transparency"
-            },
-            "scoring": {
-                "per_claim": "Weighted by stance (support/refute), quality letter (A..F), and relevance.",
-                "overall":   "Robust mean of claim grades; mapped to label bands.",
-                "bands":     {"True": "90-100","Mostly True":"75-89","Mixed":"55-74","Mostly False":"35-54","False":"0-34"}
-            },
-            "policy": _policy
-        },
+        "methodology": methodology_final,
     })
     return response
