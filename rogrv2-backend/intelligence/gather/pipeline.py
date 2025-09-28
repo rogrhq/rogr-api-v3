@@ -1,5 +1,8 @@
 from __future__ import annotations
 from typing import Any, Dict, List
+from intelligence.gather.normalize import normalize_candidates
+from intelligence.rank.select import rank_candidates
+from intelligence.consensus.metrics import compute_overlap_conflict
 
 def build_evidence_for_claim(*, claim_text: str, plan: Dict[str, Any], max_per_arm: int = 3) -> Dict[str, Any]:
     """
@@ -22,5 +25,8 @@ def build_evidence_for_claim(*, claim_text: str, plan: Dict[str, Any], max_per_a
         queries = (arm.get("queries") or [])[:3]
         # In test mode, just return empty candidates with proper structure
         out[arm_name]["candidates"] = []
-
+    # cross-arm consensus
+    a = out["A"]["candidates"]
+    b = out["B"]["candidates"]
+    out["consensus"] = compute_overlap_conflict(a, b)
     return out

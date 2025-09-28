@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Any, Dict, List, Tuple
-from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
-import hashlib
+from urllib.parse import urlparse, urlunparse
+import re, hashlib
 
 def canonical_url(raw: str) -> str:
     """
@@ -70,22 +70,60 @@ def normalize_candidates(items: List[Dict[str, Any]], *, max_per_domain: int = 3
     return out
 
 # Ensure these public helpers exist; keep signatures simple and total-order deterministic.
-from typing import List, Dict, Any
+from typing import Any, Dict, List, Tuple
 
-def normalize_candidates(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Normalize list of search candidates to {url,title,snippet} and strip obvious junk."""
+_WS = re.compile(r"\s+")
+
+def _clean_title(t: str) -> str:
+    return _WS.sub(" ", (t or "").strip())
+
+def canonical_url(url: str) -> str:
+    u = urlparse(url or "")
+    # strip fragments & queries for canonical form
+    u = u._replace(fragment="", query="")
+    # normalize scheme+host lowercasing
+    scheme = (u.scheme or "https").lower()
+    netloc = (u.netloc or "").lower()
+    clean = urlunparse((scheme, netloc, u.path or "", "", "", ""))
+    return clean
+
+def _fingerprint(title: str, url: str) -> str:
+    t = _clean_title(title).lower()
+    u = canonical_url(url)
+    return hashlib.sha1(f"{t}|{u}".encode("utf-8")).hexdigest()
+
+def _similar(a: str, b: str) -> float:
+    # very light similarity by token overlap (0..1)
+    at = set(re.findall(r"[A-Za-z0-9]+", (a or "").lower()))
+    bt = set(re.findall(r"[A-Za-z0-9]+", (b or "").lower()))
+    if not at or not bt:
+        return 0.0
+    inter = len(at & bt)
+    return inter / max(1, len(at | bt))
+
+def normalize_candidates(cands: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    1) Canonicalize URL & clean title
+    2) Drop exact dupes
+    3) Collapse near-duplicates by title similarity (≥0.8) keeping first
+    """
+    exact_seen = set()
+    kept: List[Dict[str, Any]] = []
+    for c in cands or []:
+        url = canonical_url(c.get("url",""))
+        title = _clean_title(c.get("title",""))
+        key = (url, title)
+        if key in exact_seen:
+            continue
+        exact_seen.add(key)
+        kept.append({**c, "url": url, "title": title, "fp": _fingerprint(title, url)})
+
+    # near-duplicate collapse by title similarity
     out: List[Dict[str, Any]] = []
-    for it in items or []:
-        if not isinstance(it, dict):
+    for cand in kept:
+        if any(_similar(cand["title"], x["title"]) >= 0.80 for x in out):
             continue
-        url = (it.get("url") or "").strip()
-        if not url:
-            continue
-        out.append({
-            "url": url,
-            "title": (it.get("title") or "").strip(),
-            "snippet": (it.get("snippet") or "").strip(),
-        })
+        out.append(cand)
     return out
 
 def dedupe(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

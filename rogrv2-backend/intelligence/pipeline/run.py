@@ -67,6 +67,7 @@ def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
                     "provider_interleave": True,
                 },
             },
+            "consensus": evidence_bundle.get("consensus", {"overlap_ratio":0.0,"conflict_score":0.0,"stability":1.0}),
             "ranking": {
                 "version": "s2p3-lex+type+rec",
                 "explain": "Score = 0.55*lexical + 0.30*type_prior + 0.15*recency (bounded). Type prior uses source *type*, not specific sites.",
