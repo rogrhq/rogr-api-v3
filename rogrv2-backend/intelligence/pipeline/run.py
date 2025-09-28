@@ -1,6 +1,7 @@
 from __future__ import annotations
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Union, Tuple
 from intelligence.score.aggregate import overall_from_claims
+from intelligence.ifcn.labels import label_for_score, scale_spec, explanation_from_counts
 
 def _to_json_primitive(x: Any) -> Any:
     """
@@ -110,11 +111,51 @@ def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
         }
     ]
 
+    # --- IFCN compliance additions ---
+    overall_result = overall_from_claims(claims)
+    overall_score = overall_result.get("score", 50)
+    overall_label = label_for_score(overall_score)
+
+    # Ensure each claim contains verdict with IFCN label + explanation
+    claims_out = []
+    for c in claims:
+        v = c.get("verdict") or {}
+        v_score = int(v.get("score", v.get("claim_grade_numeric", overall_score)))
+        v_label = label_for_score(v_score)
+        # Build minimal deterministic explanation using stance counts and top-ranked titles
+        ev = c.get("evidence") or {}
+        # Collect stance counts across arms if present
+        support = 0; refute = 0; neutral = 0
+        titles_publishers: List[Tuple[str,str]] = []
+        for arm_key in ("arm_A","arm_B","arm_brave","arm_bing","arm_google"):
+            items = (ev.get(arm_key) or [])
+            for it in items:
+                stance = (it.get("stance") or "").lower()
+                if stance == "support": support += 1
+                elif stance == "refute": refute += 1
+                else: neutral += 1
+                title = (it.get("title") or "")[:120]
+                publisher = (it.get("publisher") or "")[:80]
+                if title or publisher:
+                    titles_publishers.append((title, publisher))
+        counts = {"support": support, "refute": refute, "neutral": neutral}
+        explanation = explanation_from_counts(c.get("text",""), counts, titles_publishers)
+        v["score"] = v_score
+        v["label"] = v_label
+        v["explanation"] = explanation
+        c["verdict"] = v
+        claims_out.append(c)
+
     response = _to_json_primitive({
-        "overall": overall_from_claims(claims),
-        "claims": claims,
+        "overall": {"score": overall_score, "label": overall_label},
+        "claims": claims_out,
         "methodology": {
-            "version": "mvp-1",
+            "version": "S2P7-1",
+            "ifcn": {
+                "version": "S2P7-1",
+                "label_scale": scale_spec(),
+            },
+            "notes": "Deterministic pipeline with A/B arms; no domain hardcoding; quality and stance aggregated.",
             "strategy": {
                 "planner": "v2" if _planner_v2 else "v1",
                 "plan": plans,

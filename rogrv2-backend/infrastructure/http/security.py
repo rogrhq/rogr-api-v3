@@ -1,48 +1,54 @@
 from __future__ import annotations
-from typing import Iterable, Tuple
-import os
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.types import ASGIApp
 from starlette.requests import Request
-from starlette.responses import JSONResponse, PlainTextResponse
+from starlette.responses import Response, PlainTextResponse
+from typing import Optional
 
-_WRITE_PREFIXES: Tuple[str, ...] = (
-    "/analyses", "/mobile", "/jobs", "/auth", "/contracts"  # safe set; JSON expected where POST used
-)
+JSON_CT_PREFIXES = ("application/json", "application/",)  # allow application/json and application/*+json
 
-def _max_body_bytes() -> int:
-    try:
-        return int(os.getenv("MAX_BODY_BYTES", "131072"))  # 128 KiB default
-    except Exception:
-        return 131072
+def _is_json(ct: Optional[str]) -> bool:
+    if not ct:
+        return False
+    ct = ct.split(";")[0].strip().lower()
+    if ct == "application/json":
+        return True
+    # application/*+json (e.g., application/ld+json)
+    if ct.startswith("application/") and ct.endswith("+json"):
+        return True
+    return False
 
 class EnforceJsonAndSizeMiddleware(BaseHTTPMiddleware):
-    """
-    - For POST/PUT/PATCH under selected prefixes, require Content-Type: application/json (or +json).
-    - Enforce a max body size for all requests (reads body into memory once, replays to downstream).
-    Returns 415 for wrong media type, 413 for too large.
-    """
-    def __init__(self, app, write_prefixes: Iterable[str] = _WRITE_PREFIXES):
+    def __init__(self, app: ASGIApp, max_bytes: int = 1_048_576) -> None:
         super().__init__(app)
-        self._prefixes = tuple(write_prefixes)
+        self.max_bytes = max_bytes
 
     async def dispatch(self, request: Request, call_next):
-        # Enforce size
-        body = await request.body()
-        limit = _max_body_bytes()
-        if len(body) > limit:
-            return JSONResponse({"error": "request too large"}, status_code=413)
+        # Only enforce for methods that carry bodies
+        if request.method.upper() not in ("POST", "PUT", "PATCH"):
+            return await call_next(request)
 
-        # For write methods under our prefixes, enforce JSON content-type
-        method = request.method.upper()
-        if method in ("POST", "PUT", "PATCH") and request.url.path.startswith(self._prefixes):
-            ctype = request.headers.get("content-type", "")
-            if "application/json" not in ctype and "+json" not in ctype:
-                return JSONResponse({"error": "unsupported media type; use application/json"}, status_code=415)
+        ct = request.headers.get("content-type", "")
+        # Always buffer body so we can safely pass it downstream
+        try:
+            body = await request.body()
+        except Exception:
+            body = b""
 
-        # Re-inject the body for downstream (so handlers can read it)
-        async def receive():
+        # Size check (applies to all)
+        if len(body) > self.max_bytes:
+            return PlainTextResponse("payload too large", status_code=413)
+
+        # If it's JSON, enforce that it is present and valid type header
+        if _is_json(ct):
+            # Re-inject the buffered body so downstream can read it
+            async def receive():
+                return {"type": "http.request", "body": body, "more_body": False}
+            request._receive = receive  # type: ignore[attr-defined]
+            return await call_next(request)
+
+        # Not JSON: leave as-is and pass through (your routes can still reject with 415)
+        async def receive_passthrough():
             return {"type": "http.request", "body": body, "more_body": False}
-
-        request._receive = receive  # type: ignore[attr-defined]
-
+        request._receive = receive_passthrough  # type: ignore[attr-defined]
         return await call_next(request)

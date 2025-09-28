@@ -1,16 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, EmailStr
-from pydantic import ConfigDict
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, ConfigDict
 from infrastructure.auth.jwt import create_access_token, create_refresh_token, verify_token
 from infrastructure.auth.deps import require_user
 from infrastructure.auth.freeze import is_frozen
+from email_validator import validate_email, EmailNotValidError
 import os
 
 router = APIRouter()
-
-class RegisterBody(BaseModel):
-    model_config = ConfigDict(json_schema_extra={"examples": [{"email": "me@example.com"}]})
-    email: EmailStr
 
 class TokenPair(BaseModel):
     access_token: str
@@ -20,12 +16,25 @@ class AccessOnly(BaseModel):
     access_token: str
 
 @router.post("/auth/register", response_model=TokenPair)
-def register(body: RegisterBody):
+async def register(request: Request):
     """
-    Deterministic MVP: uses email as subject (no DB yet).
-    Returns both access and refresh tokens.
+    Robust JSON-only registration:
+    - Parses JSON manually to avoid body-model validation issues.
+    - Validates email using email-validator (pydantic v2-safe).
     """
-    user_id = body.email.lower()
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(status_code=415, detail="use application/json")
+    if not isinstance(data, dict) or not data.get("email"):
+        raise HTTPException(status_code=422, detail="email is required")
+    email = str(data["email"])
+    try:
+        info = validate_email(email, check_deliverability=False)
+        email = info.normalized
+    except EmailNotValidError:
+        raise HTTPException(status_code=422, detail="invalid email")
+    user_id = email.lower()
     return TokenPair(
         access_token=create_access_token(user_id, {"role": "user"}),
         refresh_token=create_refresh_token(user_id),
@@ -51,8 +60,8 @@ def refresh(body: RefreshBody):
 def me(user=Depends(require_user)):
     return {
         "sub": user.get("sub"),
-        "role": user.get("role","user"),
-        "frozen": is_frozen(user.get("sub","")),
+        "role": user.get("role", "user"),
+        "frozen": is_frozen(user.get("sub", "")),
     }
 
 @router.post("/auth/elevate")
@@ -62,4 +71,4 @@ def elevate(user=Depends(require_user)):
     sub = user.get("sub")
     if not sub:
         raise HTTPException(status_code=400, detail="no subject")
-    return {"access_token": create_access_token(sub, {"role":"admin"})}
+    return {"access_token": create_access_token(sub, {"role": "admin"})}

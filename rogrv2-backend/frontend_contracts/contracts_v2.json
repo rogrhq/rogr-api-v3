@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ROGR Contracts v2",
+  "type": "object",
+  "properties": {
+    "AnalysesPreviewResponse": {
+      "type": "object",
+      "required": ["overall","claims","methodology"],
+      "properties": {
+        "overall": {
+          "type": "object",
+          "required": ["score","label"],
+          "properties": {
+            "score": {"type":"integer","minimum":0,"maximum":100},
+            "label": {"type":"string","enum":["True","Mostly True","Mixed","Mostly False","False"]}
+          }
+        },
+        "claims": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["text","tier","verdict"],
+            "properties": {
+              "text": {"type":"string"},
+              "tier": {"type":"string"},
+              "verdict": {
+                "type":"object",
+                "required": ["score","label","explanation"],
+                "properties": {
+                  "score": {"type":"integer","minimum":0,"maximum":100},
+                  "label": {"type":"string","enum":["True","Mostly True","Mixed","Mostly False","False"]},
+                  "explanation": {"type":"string"}
+                }
+              }
+            }
+          }
+        },
+        "methodology": {
+          "type": "object",
+          "required": ["version","ifcn"],
+          "properties": {
+            "version": {"type":"string"},
+            "ifcn": {
+              "type":"object",
+              "required": ["version","label_scale"],
+              "properties": {
+                "version": {"type":"string"},
+                "label_scale": {
+                  "type":"object",
+                  "properties": {
+                    "True":{"type":"string"},
+                    "Mostly True":{"type":"string"},
+                    "Mixed":{"type":"string"},
+                    "Mostly False":{"type":"string"},
+                    "False":{"type":"string"}
+                  },
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
