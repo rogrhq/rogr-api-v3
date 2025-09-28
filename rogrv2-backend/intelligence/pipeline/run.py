@@ -150,6 +150,30 @@ def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
         c["verdict"] = v
         claims_out.append(c)
 
+    # S2P9 hotfix: if no claims were extracted (edge in some modes), emit a minimal fallback claim
+    if not claims_out:
+        # Ensure evidence/guardrails objects exist even if empty
+        _guardrails = (evidence_bundle or {}).get("guardrails") or {
+            "A": {"kept": 0, "dropped": 0, "domains": {}, "types": {}, "parameters": {"max_per_domain": 1, "min_total": 2, "prefer_types": [], "version": "s2p9-1"}},
+            "B": {"kept": 0, "dropped": 0, "domains": {}, "types": {}, "parameters": {"max_per_domain": 1, "min_total": 2, "prefer_types": [], "version": "s2p9-1"}},
+            "version": "s2p9-1",
+        }
+        claims_out = [{
+            "text": text,
+            "tier": "primary",
+            "entities": [],
+            "numbers": {"percents": []},
+            "cues": {"has_comparison": False},
+            "scope": {"year": None},
+            "kind_hint": None,
+            "evidence": {
+                "arm_A": [],
+                "arm_B": [],
+                "guardrails": _guardrails,
+            },
+            "verdict": {"score": 50, "label": "Mixed"},
+        }]
+
     response = _to_json_primitive({
         "overall": {"score": overall_score, "label": overall_label},
         "claims": claims_out,

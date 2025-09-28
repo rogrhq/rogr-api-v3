@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 from intelligence.analyze.stance import assess_stance
 from intelligence.gather.normalize import normalize_candidates
 from typing import Dict, List
@@ -7,6 +7,7 @@ from intelligence.score.labeling import score_from_evidence
 from intelligence.score.labeling import map_score_to_label
 from intelligence.rank.select import rank_candidates
 from intelligence.consensus.metrics import compute_overlap_conflict
+from intelligence.policy.guardrails import apply_guardrails_to_arms
 
 def build_evidence_for_claim(*, claim_text: str, plan: Dict[str, Any], max_per_arm: int = 3) -> Dict[str, Any]:
     """
@@ -14,6 +15,7 @@ def build_evidence_for_claim(*, claim_text: str, plan: Dict[str, Any], max_per_a
       {
         "A": {"intent":"support","candidates":[...ranked...]},
         "B": {"intent":"challenge","candidates":[...ranked...]},
+        "guardrails": { ... },   # added in S2P9
         "debug": {...}
       }
     """
@@ -45,13 +47,17 @@ def _flatten_evidence(bundle: Dict) -> List[Dict]:
             if isinstance(it, dict): ev.append(it)
     return ev
 
+    # Apply bias guardrails (domain diversity) per arm
+    guarded, report = apply_guardrails_to_arms(out)
+    guarded["guardrails"] = report
+
     # cross-arm consensus
-    a = out["A"]["candidates"]
-    b = out["B"]["candidates"]
-    out["consensus"] = compute_overlap_conflict(a, b)
+    a = guarded["A"]["candidates"]
+    b = guarded["B"]["candidates"]
+    guarded["consensus"] = compute_overlap_conflict(a, b)
 
     # Compute per-claim score from available evidence (post-ranking pipeline populated stance/quality/relevance)
-    flat = _flatten_evidence(out)
+    flat = _flatten_evidence(guarded)
     sv = score_from_evidence(flat)
     verdict = {
         "claim_grade_numeric": sv["claim_grade_numeric"],
@@ -59,5 +65,5 @@ def _flatten_evidence(bundle: Dict) -> List[Dict]:
         "evidence_grade_letter": sv["evidence_grade_letter"],
         "rationale": "Aggregate of stance (support/refute), quality letters, and relevance.",
     }
-    out["verdict"] = verdict
-    return out
+    guarded["verdict"] = verdict
+    return guarded
