@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-: "${TEST_CMD:=bash scripts/test_intel_s2p10.sh}"
+: "${TEST_CMD:=bash scripts/test_intel_s2p11.sh}"
 : "${API_WORKERS:=1}"
 bash scripts/_install_deps.sh
 bash scripts/_start_api_bg.sh || true
