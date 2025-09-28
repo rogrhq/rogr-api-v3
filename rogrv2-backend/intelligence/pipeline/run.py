@@ -1,5 +1,27 @@
 from __future__ import annotations
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
+from intelligence.score.aggregate import overall_from_claims
+
+def _to_json_primitive(x: Any) -> Any:
+    """
+    Deeply coerce nested structures into JSON-safe primitives.
+    - dict -> dict(str -> primitive)
+    - list/tuple -> list(primitive)
+    - bool/int/float/str/None -> as-is
+    Everything else -> str(x)
+    """
+    if x is None or isinstance(x, (bool, int, float, str)):
+        return x
+    if isinstance(x, dict):
+        out = {}
+        for k, v in x.items():
+            ks = str(k)
+            out[ks] = _to_json_primitive(v)
+        return out
+    if isinstance(x, (list, tuple)):
+        return [_to_json_primitive(i) for i in x]
+    # fallback
+    return str(x)
 
 # NOTE: preview handler calls run_preview() (sync), so keep this non-async
 def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
@@ -44,18 +66,53 @@ def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
     except Exception:
         evidence_bundle = {"A": {"candidates":[]}, "B":{"candidates":[]}}
 
-    # 4) assemble response (always includes methodology.strategy.plan)
-    response = {
-        "overall": {"score": 50, "label": "Mixed"},
-        "claims": [
-            {
-                **claim,
-                "evidence": {
-                    "arm_A": evidence_bundle.get("A", {}).get("candidates", []),
-                    "arm_B": evidence_bundle.get("B", {}).get("candidates", []),
-                },
-            }
-        ],
+    # 4) Attach per-claim evidence + verdict
+    claims = []
+    claim_ev = evidence_bundle or {}
+
+    # Build evidence; provider may return None or alternate shapes.
+    arm_A: List[Any] = []
+    arm_B: List[Any] = []
+    verdict: Dict[str, Any] = {}
+
+    if isinstance(claim_ev, dict):
+        # Preferred shape: {"arm_A": [...], "arm_B": [...], "verdict": {...}}
+        if isinstance(claim_ev.get("arm_A"), list):
+            arm_A = claim_ev.get("arm_A") or []
+        if isinstance(claim_ev.get("arm_B"), list):
+            arm_B = claim_ev.get("arm_B") or []
+        if isinstance(claim_ev.get("verdict"), dict):
+            verdict = claim_ev.get("verdict") or {}
+
+        # Alternate shape: {"A": {"candidates":[...]}, "B": {"candidates":[...]}}
+        if not arm_A and isinstance(claim_ev.get("A"), dict):
+            arm_A = (claim_ev["A"].get("candidates") or []) if isinstance(claim_ev["A"].get("candidates"), list) else []
+        if not arm_B and isinstance(claim_ev.get("B"), dict):
+            arm_B = (claim_ev["B"].get("candidates") or []) if isinstance(claim_ev["B"].get("candidates"), list) else []
+
+    # Defaults if still empty
+    if not isinstance(verdict, dict) or not verdict:
+        verdict = {
+            "claim_grade_numeric": 50,
+            "label": "Mixed",
+            "evidence_grade_letter": "F",
+            "rationale": "n/a",
+        }
+
+    claims = [
+        {
+            **claim,
+            "evidence": {
+                "arm_A": _to_json_primitive(arm_A),
+                "arm_B": _to_json_primitive(arm_B),
+            },
+            "verdict": _to_json_primitive(verdict)
+        }
+    ]
+
+    response = _to_json_primitive({
+        "overall": overall_from_claims(claims),
+        "claims": claims,
         "methodology": {
             "version": "mvp-1",
             "strategy": {
@@ -67,7 +124,7 @@ def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
                     "provider_interleave": True,
                 },
             },
-            "consensus": evidence_bundle.get("consensus", {"overlap_ratio":0.0,"conflict_score":0.0,"stability":1.0}),
+            "consensus": claim_ev.get("consensus", {"overlap_ratio":0.0,"conflict_score":0.0,"stability":1.0}),
             "ranking": {
                 "version": "s2p3-lex+type+rec",
                 "explain": "Score = 0.55*lexical + 0.30*type_prior + 0.15*recency (bounded). Type prior uses source *type*, not specific sites.",
@@ -76,7 +133,12 @@ def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
                 "version": "s2p5",
                 "signals": ["negation/refute cues", "support cues", "adversative tokens", "numeric/trend comparison"],
                 "notes": "Heuristic-only, deterministic; no domain hardcoding; IFCN-friendly transparency"
+            },
+            "scoring": {
+                "per_claim": "Weighted by stance (support/refute), quality letter (A..F), and relevance.",
+                "overall":   "Robust mean of claim grades; mapped to label bands.",
+                "bands":     {"True": "90-100","Mostly True":"75-89","Mixed":"55-74","Mostly False":"35-54","False":"0-34"}
             }
         },
-    }
+    })
     return response
