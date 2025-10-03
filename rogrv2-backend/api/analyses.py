@@ -73,10 +73,10 @@ def _ensure_preview_shape(res: Dict[str, Any]) -> Dict[str, Any]:
     return res
 
 @router.post("/analyses/preview")
-def preview(body: PreviewBody, _user=Depends(require_user)):
-    # Sync for deterministic orchestration
+async def preview(body: PreviewBody, _user=Depends(require_user)):
+    # Async for async pipeline
     try:
-        raw = run_preview(text=body.text, test_mode=body.test_mode)
+        raw = await run_preview(text=body.text, test_mode=body.test_mode)
         res = _ensure_preview_shape(raw)
         return res
     except HTTPException:

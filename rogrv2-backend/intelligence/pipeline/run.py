@@ -25,8 +25,8 @@ def _to_json_primitive(x: Any) -> Any:
     # fallback
     return str(x)
 
-# NOTE: preview handler calls run_preview() (sync), so keep this non-async
-def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
+# NOTE: preview handler calls run_preview() (async), updated for async pipeline
+async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
     """
     Build a minimal claim, plan strategy, and return stable JSON with methodology.
     This function MUST NOT raise on planner availability; it must always return a valid shape.
@@ -65,10 +65,24 @@ def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
 
     # 3) Optionally gather + rank deterministic evidence (lightweight)
     evidence_bundle = {"A": {"candidates":[]}, "B":{"candidates":[]}}
+
+    from intelligence.util import diag
+    if diag.enabled():
+        arms = plans.get("arms") if isinstance(plans, dict) else None
+        arms_type = type(arms).__name__ if arms is not None else "none"
+        arm_keys = list(arms.keys()) if isinstance(arms, dict) else None
+        diag.log("plan_summary", arms_type=arms_type, arm_keys=arm_keys)
+
     try:
         from intelligence.gather.pipeline import build_evidence_for_claim
-        evidence_bundle = build_evidence_for_claim(claim_text=claim["text"], plan=plans, max_per_arm=3)
+        evidence_bundle = await build_evidence_for_claim(claim_text=claim["text"], plan=plans, max_per_arm=3)
+        if diag.enabled():
+            a = len((evidence_bundle or {}).get("arm_A") or [])
+            b = len((evidence_bundle or {}).get("arm_B") or [])
+            diag.log("evidence_counts", arm_A=a, arm_B=b)
     except Exception:
+        import logging
+        logging.getLogger(__name__).exception("preview evidence build failed")
         evidence_bundle = {"A": {"candidates":[]}, "B":{"candidates":[]}}
 
     # 4) Attach per-claim evidence + verdict

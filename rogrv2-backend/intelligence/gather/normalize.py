@@ -1,139 +1,164 @@
 from __future__ import annotations
-from typing import Any, Dict, List, Tuple
-from urllib.parse import urlparse, urlunparse
-import re, hashlib
+from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 
-def canonical_url(raw: str) -> str:
-    """
-    Conservative URL canonicalizer: normalize scheme/host, drop fragments,
-    sort query, and strip obvious tracking params.
-    """
-    if not raw:
-        return raw
-    u = urlparse(raw)
-    scheme = (u.scheme or "http").lower()
-    netloc = (u.netloc or "").lower()
-    path = u.path or "/"
-    # sort query params and drop common trackers
-    DROP = {"utm_source","utm_medium","utm_campaign","utm_term","utm_content","gclid","fbclid","yclid"}
-    q = [(k, v) for (k, v) in parse_qsl(u.query, keep_blank_values=True) if k not in DROP]
-    q.sort()
-    query = urlencode(q, doseq=True)
-    return urlunparse((scheme, netloc, path, "", query, ""))
+__all__ = ["normalize_candidates", "dedupe"]
 
-def _fingerprint(item: Dict[str, Any]) -> str:
-    """Stable dedupe key across providers using canonical URL + title/snippet."""
-    url = canonical_url(item.get("url",""))
-    title = (item.get("title") or "").strip()
-    snippet = (item.get("snippet") or "").strip()
-    h = hashlib.sha256()
-    h.update(url.encode("utf-8", errors="ignore"))
-    h.update(b"\x00")
-    h.update(title.encode("utf-8", errors="ignore"))
-    h.update(b"\x00")
-    h.update(snippet.encode("utf-8", errors="ignore"))
-    return h.hexdigest()
+# -----------------------
+# Helpers
+# -----------------------
 
-def normalize_candidates(items: List[Dict[str, Any]], *, max_per_domain: int = 3) -> List[Dict[str, Any]]:
+def _first(*vals: Optional[str]) -> Optional[str]:
+    for v in vals:
+        if v:
+            return v
+    return None
+
+
+def _normalize_url(url: Optional[str]) -> str:
     """
-    Input: list of dicts with at least {url,title,snippet}.
-    Output: deterministic, deduped, lightly enriched list:
-      - adds 'canonical_url'
-      - enforces per-domain cap to avoid flooding from one site
-      - removes exact dupes via fingerprint
+    Normalize a URL for deduping:
+      - lower-case scheme/host
+      - strip default ports
+      - drop common tracking params (utm_*, gclid, fbclid, ref)
+      - keep path and essential query parameters order-insensitively
     """
-    seen_fps = set()
-    per_domain: Dict[str, int] = {}
+    if not url:
+        return ""
+    try:
+        p = urlparse(url.strip())
+        netloc = (p.hostname or "").lower()
+        if p.port and ((p.scheme == "http" and p.port != 80) or (p.scheme == "https" and p.port != 443)):
+            netloc = f"{netloc}:{p.port}"
+        # filter query params
+        drop = {"gclid", "fbclid", "ref"}
+        qs = [(k, v) for k, v in parse_qsl(p.query, keep_blank_values=True) if not (k.startswith("utm_") or k in drop)]
+        qs.sort()
+        q = urlencode(qs)
+        norm = urlunparse((p.scheme.lower(), netloc, p.path or "/", "", q, ""))
+        return norm
+    except Exception:
+        return url.strip()
+
+
+def _domain_from_url(url: str) -> str:
+    try:
+        return (urlparse(url).hostname or "").lower()
+    except Exception:
+        return ""
+
+# -----------------------
+# Public API
+# -----------------------
+
+def normalize_candidates(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Production-safe normalizer that PRESERVES critical metadata:
+      - 'arm' (canonical 'A'/'B' if upstream stamped; otherwise left as-is)
+      - 'provider' (engine/source tag)
+      - 'query_used' (original query)
+      - 'age_days' (if present upstream)
+    It also ensures core fields exist: url, title, snippet.
+    """
     out: List[Dict[str, Any]] = []
-
     for it in items or []:
-        url = it.get("url") or ""
-        if not url:
+        if not isinstance(it, dict):
             continue
-        cu = canonical_url(url)
-        fp = _fingerprint({**it, "url": cu})
-        if fp in seen_fps:
-            continue
-        seen_fps.add(fp)
 
-        domain = urlparse(cu).netloc
-        count = per_domain.get(domain, 0)
-        if count >= max_per_domain:
-            continue
-        per_domain[domain] = count + 1
+        url = _first(
+            it.get("url"),
+            it.get("link"),
+            it.get("source_url"),
+            it.get("resolved_url"),
+        )
+        title = _first(
+            it.get("title"),
+            it.get("name"),
+            it.get("headline"),
+        ) or ""
+        snippet = _first(
+            it.get("snippet"),
+            it.get("summary"),
+            it.get("description"),
+            it.get("text"),
+        ) or ""
 
-        norm = dict(it)
-        norm["canonical_url"] = cu
-        norm["dedupe_key"] = fp
+        provider = _first(
+            it.get("provider"),
+            it.get("engine"),
+            it.get("source"),
+        ) or "unknown"
+
+        arm_raw = str(it.get("arm") or "").upper()
+        if arm_raw.startswith("A"):
+            arm = "A"
+        elif arm_raw.startswith("B"):
+            arm = "B"
+        else:
+            # Leave non-canonical labels as-is; upstream should stamp 'A'/'B'
+            arm = it.get("arm") or ""
+
+        norm: Dict[str, Any] = {
+            "url": url or "",
+            "title": title,
+            "snippet": snippet,
+            "provider": provider,
+            "arm": arm,
+            "query_used": _first(it.get("query_used"), it.get("q"), it.get("query")) or "",
+        }
+
+        # Preserve optional/diagnostic metadata if present
+        for key in ("age_days", "published_at", "domain", "score", "stance", "stance_score"):
+            if key in it:
+                norm[key] = it[key]
+
+        # Derived convenience fields (non-invasive)
+        if norm["url"] and "domain" not in norm:
+            norm["domain"] = _domain_from_url(norm["url"])
+
         out.append(norm)
-
     return out
 
-# Ensure these public helpers exist; keep signatures simple and total-order deterministic.
-from typing import Any, Dict, List, Tuple
-
-_WS = re.compile(r"\s+")
-
-def _clean_title(t: str) -> str:
-    return _WS.sub(" ", (t or "").strip())
-
-def canonical_url(url: str) -> str:
-    u = urlparse(url or "")
-    # strip fragments & queries for canonical form
-    u = u._replace(fragment="", query="")
-    # normalize scheme+host lowercasing
-    scheme = (u.scheme or "https").lower()
-    netloc = (u.netloc or "").lower()
-    clean = urlunparse((scheme, netloc, u.path or "", "", "", ""))
-    return clean
-
-def _fingerprint(title: str, url: str) -> str:
-    t = _clean_title(title).lower()
-    u = canonical_url(url)
-    return hashlib.sha1(f"{t}|{u}".encode("utf-8")).hexdigest()
-
-def _similar(a: str, b: str) -> float:
-    # very light similarity by token overlap (0..1)
-    at = set(re.findall(r"[A-Za-z0-9]+", (a or "").lower()))
-    bt = set(re.findall(r"[A-Za-z0-9]+", (b or "").lower()))
-    if not at or not bt:
-        return 0.0
-    inter = len(at & bt)
-    return inter / max(1, len(at | bt))
-
-def normalize_candidates(cands: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """
-    1) Canonicalize URL & clean title
-    2) Drop exact dupes
-    3) Collapse near-duplicates by title similarity (≥0.8) keeping first
-    """
-    exact_seen = set()
-    kept: List[Dict[str, Any]] = []
-    for c in cands or []:
-        url = canonical_url(c.get("url",""))
-        title = _clean_title(c.get("title",""))
-        key = (url, title)
-        if key in exact_seen:
-            continue
-        exact_seen.add(key)
-        kept.append({**c, "url": url, "title": title, "fp": _fingerprint(title, url)})
-
-    # near-duplicate collapse by title similarity
-    out: List[Dict[str, Any]] = []
-    for cand in kept:
-        if any(_similar(cand["title"], x["title"]) >= 0.80 for x in out):
-            continue
-        out.append(cand)
-    return out
 
 def dedupe(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Remove duplicate URLs (case-insensitive)."""
-    seen = set()
-    out = []
+    """
+    Deterministic, stable de-duplication for provider candidates.
+    Priority keys:
+      1) normalized URL
+      2) (title, domain) tuple when URL absent or different mirrors
+    Preserves input order; keeps the first occurrence.
+    """
+    out: List[Dict[str, Any]] = []
+    seen_url: set[str] = set()
+    seen_title_domain: set[Tuple[str, str]] = set()
+
     for it in items or []:
-        u = (it.get("url") or "").strip().lower()
-        if not u or u in seen:
+        if not isinstance(it, dict):
             continue
-        seen.add(u)
-        out.append(it)
+
+        url = _normalize_url(it.get("url") or it.get("link") or it.get("source_url") or it.get("resolved_url") or "")
+        title = (it.get("title") or it.get("name") or it.get("headline") or "").strip().lower()
+        domain = _domain_from_url(url) if url else (it.get("domain") or "").strip().lower()
+
+        key_url = url
+        key_td = (title, domain)
+
+        # Decide if duplicate
+        is_dup = False
+        if key_url:
+            if key_url in seen_url:
+                is_dup = True
+            else:
+                seen_url.add(key_url)
+
+        # If no URL or still potentially mirror content, check title/domain
+        if not is_dup and title:
+            if key_td in seen_title_domain:
+                is_dup = True
+            else:
+                seen_title_domain.add(key_td)
+
+        if not is_dup:
+            out.append(it)
+
     return out
