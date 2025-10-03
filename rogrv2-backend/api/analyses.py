@@ -5,6 +5,7 @@ from infrastructure.auth.deps import require_user
 from intelligence.pipeline.run import run_preview
 from intelligence.analyze.enrich import enrich_claim_obj
 from infrastructure.logging.jtrace import error_event, format_exc
+from intelligence.stance.verdict import compute_verdict
 
 router = APIRouter()
 
@@ -78,6 +79,22 @@ async def preview(body: PreviewBody, _user=Depends(require_user)):
     try:
         raw = await run_preview(text=body.text, test_mode=body.test_mode)
         res = _ensure_preview_shape(raw)
+        # Ensure each claim has a verdict with confidence + rationale_refs
+        try:
+            claims = (res.get("claims") or [])
+            for claim in claims:
+                ev = (claim or {}).get("evidence") or {}
+                armA = ev.get("arm_A") or []
+                armB = ev.get("arm_B") or []
+                v = (claim or {}).get("verdict") or {}
+                if "confidence" not in v:
+                    v2 = compute_verdict(armA, armB, k=3)
+                    if "label" in v and v.get("label"):
+                        v2["label"] = v["label"]
+                    claim["verdict"] = {**v, **v2}
+        except Exception:
+            # Do not break preview if verdict enrichment fails
+            pass
         return res
     except HTTPException:
         raise
