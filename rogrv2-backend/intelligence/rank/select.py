@@ -1,91 +1,59 @@
 from __future__ import annotations
-import math, re, time
-from typing import Any, Dict, List, Tuple
-from urllib.parse import urlparse
+from typing import List, Dict, Any
 
-_WORD = re.compile(r"[A-Za-z0-9]+")
+__all__ = ["rank_candidates"]
 
-def _tokens(text: str) -> List[str]:
-    return [t.lower() for t in _WORD.findall(text or "")]
 
-def _lexical_score(query: str, title: str, snippet: str) -> float:
-    q = set(_tokens(query))
-    if not q:
-        return 0.0
-    doc = set(_tokens(title) + _tokens(snippet))
-    if not doc:
-        return 0.0
-    inter = len(q & doc)
-    return inter / max(1, len(q))
+def _arm_label(it: Dict[str, Any]) -> str:
+    arm = (it.get("arm") or "A").upper()
+    return "B" if arm.startswith("B") else "A"
 
-def _guess_source_type(url: str, title: str, snippet: str) -> str:
+
+def _rank_within_arm(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    # Stable sort by score (desc); default score=0.0 if missing
+    sorted_items = sorted(
+        (dict(it) for it in items if isinstance(it, dict)),
+        key=lambda x: float(x.get("score", 0.0)),
+        reverse=True,
+    )
+    for idx, it in enumerate(sorted_items, start=1):
+        it["rank"] = idx
+    return sorted_items
+
+
+def rank_candidates(
+    items: List[Dict[str, Any]] | None = None,
+    *,
+    candidates: List[Dict[str, Any]] | None = None,
+    claim_text: str | None = None,   # accepted for signature compatibility; unused in P15
+    query: str | None = None,        # accepted for signature compatibility; unused in P15
+    top_k: int | None = None,
+    **kwargs: Any,                    # ignore extra kwargs for forward-compat
+) -> List[Dict[str, Any]]:
+    """Per-arm ranking for evidence candidates.
+    Accepts either a positional flat list `items` or keyword `candidates=...`.
+    Returns a flat list where items are grouped A then B, each arm independently ranked 1..N.
+    Applies optional per-arm truncation when `top_k` is provided (> 0).
     """
-    Heuristic, non-domain-specific. We look for structural cues and language patterns.
-    Never whitelists/blacklists specific sites — reduces bias.
-    """
-    u = urlparse(url or "")
-    path = (u.path or "").lower()
-    host = (u.netloc or "").lower()
+    src = candidates if candidates is not None else items
+    if not src:
+        return []
 
-    text = f"{title} {snippet}".lower()
+    armA: List[Dict[str, Any]] = []
+    armB: List[Dict[str, Any]] = []
+    for it in src:
+        if not isinstance(it, dict):
+            # ignore non-dicts defensively
+            continue
+        (armA if _arm_label(it) == "A" else armB).append(it)
 
-    # peer-reviewed-ish: DOI-like patterns, "journal", volume/issue cues
-    if re.search(r"\bdoi:\s*10\.\d{4,9}/[-._;()/:A-Za-z0-9]+", text) or \
-       re.search(r"\bvol\.\s*\d+\b", text) and re.search(r"\bissue\b|\bno\.\b", text) or \
-       "/article/" in path and ("journal" in host or "press" in host):
-        return "peer_review"
+    ranked_A = _rank_within_arm(armA)
+    ranked_B = _rank_within_arm(armB)
 
-    # government-ish: TLD or language cues in titles/snippets, not relying on exact domains
-    if host.endswith(".gov") or " government" in text or "official site" in text:
-        return "government"
+    if isinstance(top_k, int) and top_k > 0:
+        ranked_A = ranked_A[:top_k]
+        ranked_B = ranked_B[:top_k]
+        # ranks already 1..N after _rank_within_arm; truncation preserves numbering
 
-    # newsroom/newswire-ish cues
-    if any(k in text for k in ["breaking", "newsroom", "press release", "newswire", "ap photo", "reporting by"]):
-        return "news"
-
-    # social-like
-    if any(k in host for k in ["twitter", "x.com", "facebook", "instagram", "tiktok"]) or \
-       any(k in text for k in ["retweet", "posted", "followers", "likes"]):
-        return "social"
-
-    # blog/medium-like
-    if any(k in path for k in ["/blog/", "/posts/", "/p/"]) or "subscribe" in text:
-        return "blog"
-
-    return "web"
-
-# light priors by TYPE (not by specific site) — tunable, bounded, and documented
-TYPE_PRIOR = {
-    "peer_review": 1.00,
-    "government":  0.85,
-    "news":        0.70,
-    "web":         0.55,
-    "blog":        0.45,
-    "social":      0.30,
-}
-
-def _recency_score(published_at_ts: float | None) -> float:
-    if not published_at_ts:
-        return 0.5
-    # Half-life style: newer is better, but bounded
-    age_days = max(0.0, (time.time() - published_at_ts) / 86400.0)
-    return 1.0 / (1.0 + age_days / 90.0)
-
-def rank_candidates(*, claim_text: str, query: str, candidates: List[Dict[str, Any]], top_k: int = 6) -> List[Dict[str, Any]]:
-    scored: List[Tuple[float, Dict[str, Any]]] = []
-    for c in candidates:
-        url = c.get("url","")
-        title = c.get("title","")
-        snippet = c.get("snippet","")
-        stype = _guess_source_type(url, title, snippet)
-        prior = TYPE_PRIOR.get(stype, 0.5)
-
-        lx = _lexical_score(query, title, snippet)
-        rec = _recency_score(None)  # placeholder; if you later parse dates, pass ts here
-
-        # Weighted sum; bounded to [0,1], then scaled to 0..100 for readability downstream
-        score = min(1.0, max(0.0, 0.55*lx + 0.30*prior + 0.15*rec))
-        scored.append((score, {**c, "rank_features": {"lexical": round(lx,3), "type": stype, "prior": prior, "recency": round(rec,3)}, "rank_score": round(score*100, 1)}))
-
-    scored.sort(key=lambda x: x[0], reverse=True)
-    return [d for _, d in scored[:top_k]]
+    # Concatenate A then B to preserve downstream expectations
+    return ranked_A + ranked_B
