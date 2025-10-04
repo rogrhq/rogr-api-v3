@@ -5,7 +5,9 @@ from infrastructure.auth.deps import require_user
 from intelligence.pipeline.run import run_preview
 from intelligence.analyze.enrich import enrich_claim_obj
 from infrastructure.logging.jtrace import error_event, format_exc
+import os
 from intelligence.stance.verdict import compute_verdict
+from intelligence.content.fetch_sync import fetch_text
 
 router = APIRouter()
 
@@ -92,6 +94,37 @@ async def preview(body: PreviewBody, _user=Depends(require_user)):
                     if "label" in v and v.get("label"):
                         v2["label"] = v["label"]
                     claim["verdict"] = {**v, **v2}
+                # --- P17: Attach full-text fetch for a small, neutral budget per arm ---
+                try:
+                    topk = int(os.getenv("ROGR_FETCH_TOPK_PER_ARM", "2"))
+                    explore = int(os.getenv("ROGR_FETCH_EXPLORE_PER_ARM", "0"))
+                    # helper to annotate selected items
+                    def _enrich(items):
+                        sel = list(items[:max(0, topk)])
+                        # simple exploration: first N from the remainder
+                        if explore > 0 and len(items) > topk:
+                            sel += list(items[topk: topk+explore])
+                        for it in sel:
+                            if not isinstance(it, dict):
+                                continue
+                            if it.get("content_chars"):
+                                continue  # already enriched
+                            url = it.get("url")
+                            if not url:
+                                continue
+                            res = fetch_text(url, timeout=8.0)
+                            txt = res.get("text") or ""
+                            if txt:
+                                excerpt = txt[:600]
+                                it["content_chars"] = len(txt)
+                                it["content_excerpt"] = excerpt
+                                it["content_status"] = res.get("status")
+                            else:
+                                it["content_status"] = res.get("status")
+                    _enrich(armA)
+                    _enrich(armB)
+                except Exception:
+                    pass
         except Exception:
             # Do not break preview if verdict enrichment fails
             pass
