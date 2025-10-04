@@ -6,7 +6,8 @@ from intelligence.pipeline.run import run_preview
 from intelligence.analyze.enrich import enrich_claim_obj
 from infrastructure.logging.jtrace import error_event, format_exc
 import os
-from intelligence.stance.verdict import compute_verdict
+from intelligence.stance.verdict import compute_verdict, compute_verdict_content_first
+from intelligence.content.align import align_claim_to_text
 from intelligence.content.fetch_sync import fetch_text
 
 router = APIRouter()
@@ -89,11 +90,15 @@ async def preview(body: PreviewBody, _user=Depends(require_user)):
                 armA = ev.get("arm_A") or []
                 armB = ev.get("arm_B") or []
                 v = (claim or {}).get("verdict") or {}
-                if "confidence" not in v:
+                # P18: prefer content-first verdict if any content_score present
+                has_content_sig = any(isinstance((x or {}).get("content_score"), (int, float)) and (x.get("content_score") or 0) > 0 for x in (armA + armB))
+                if has_content_sig:
+                    v2 = compute_verdict_content_first(armA, armB, k=3)
+                else:
                     v2 = compute_verdict(armA, armB, k=3)
-                    if "label" in v and v.get("label"):
-                        v2["label"] = v["label"]
-                    claim["verdict"] = {**v, **v2}
+                if "label" in v and v.get("label"):
+                    v2["label"] = v["label"]
+                claim["verdict"] = {**v, **v2}
                 # --- P17: Attach full-text fetch for a small, neutral budget per arm ---
                 try:
                     topk = int(os.getenv("ROGR_FETCH_TOPK_PER_ARM", "2"))
@@ -119,6 +124,22 @@ async def preview(body: PreviewBody, _user=Depends(require_user)):
                                 it["content_chars"] = len(txt)
                                 it["content_excerpt"] = excerpt
                                 it["content_status"] = res.get("status")
+                                # P18: content-aware alignment & stance
+                                claim_text = (claim or {}).get("text") or ""
+                                al = align_claim_to_text(claim_text, excerpt)
+                                if isinstance(al, dict):
+                                    it["alignment"] = {
+                                        "entity_hit": bool(al.get("entity_hit")),
+                                        "number_hit": bool(al.get("number_hit")),
+                                        "year_hit": bool(al.get("year_hit")),
+                                    }
+                                    it["matches"] = al.get("matches") or []
+                                    cs = float(al.get("content_score") or 0.0)
+                                    if cs > 0:
+                                        it["content_score"] = cs
+                                    stance = al.get("item_stance")
+                                    if isinstance(stance, str):
+                                        it["item_stance"] = stance
                             else:
                                 it["content_status"] = res.get("status")
                     _enrich(armA)
