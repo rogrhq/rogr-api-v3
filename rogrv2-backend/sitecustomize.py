@@ -1,15 +1,21 @@
-# path: sitecustomize.py
 """
-Auto-load hooks: imported by Python at startup when repo root is on sys.path.
-Ensures P19 & P20 wrappers are installed without editing existing modules.
-Safe and idempotent.
+ROGRv2 bootstrap imports for runtime wrappers.
+Loads P20 (if present) and P22 ingestion enrichment.
+This file is auto-imported by Python when present on sys.path.
 """
-try:
-    from intelligence.gather import p19_wrapper  # noqa: F401
-except Exception:
-    pass
+from importlib import import_module
+import os, json, traceback
 
-try:
-    from intelligence.content import p20_wrapper  # noqa: F401
-except Exception:
-    pass
+def _try(mod: str):
+    try:
+        import_module(mod)
+        if os.getenv("ROGR_DIAG"):
+            print(json.dumps({"event": "sitecustomize.import_ok", "module": mod}))
+    except Exception as e:
+        if os.getenv("ROGR_DIAG"):
+            print(json.dumps({"event": "sitecustomize.import_fail", "module": mod, "error": str(e)}))
+
+# Keep earlier packet wrapper if installed
+_try("intelligence.content.p20_wrapper")
+# Install P22 ingestion enrichment
+_try("intelligence.content.p22_ingest")
