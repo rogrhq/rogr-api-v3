@@ -7,7 +7,7 @@ from intelligence.analyze.enrich import enrich_claim_obj
 from infrastructure.logging.jtrace import error_event, format_exc
 import os
 from intelligence.stance.verdict import compute_verdict, compute_verdict_content_first
-from intelligence.content.align import align_claim_to_text
+from intelligence.content.align import align_claim_to_text, align_claim_to_text_windowed
 from intelligence.content.fetch_sync import fetch_text
 
 router = APIRouter()
@@ -103,6 +103,7 @@ async def preview(body: PreviewBody, _user=Depends(require_user)):
                 try:
                     topk = int(os.getenv("ROGR_FETCH_TOPK_PER_ARM", "2"))
                     explore = int(os.getenv("ROGR_FETCH_EXPLORE_PER_ARM", "0"))
+                    fetch_timeout = float(os.getenv("ROGR_FETCH_TIMEOUT", "8.0"))
                     # helper to annotate selected items
                     def _enrich(items):
                         sel = list(items[:max(0, topk)])
@@ -117,16 +118,17 @@ async def preview(body: PreviewBody, _user=Depends(require_user)):
                             url = it.get("url")
                             if not url:
                                 continue
-                            res = fetch_text(url, timeout=8.0)
+                            res = fetch_text(url, timeout=fetch_timeout)
                             txt = res.get("text") or ""
                             if txt:
-                                excerpt = txt[:600]
+                                # Use full streamed text for alignment; keep excerpt for display
+                                excerpt = txt[:1200]
                                 it["content_chars"] = len(txt)
                                 it["content_excerpt"] = excerpt
                                 it["content_status"] = res.get("status")
-                                # P18: content-aware alignment & stance
                                 claim_text = (claim or {}).get("text") or ""
-                                al = align_claim_to_text(claim_text, excerpt)
+                                # P19: windowed full-text alignment
+                                al = align_claim_to_text_windowed(claim_text, txt)
                                 if isinstance(al, dict):
                                     it["alignment"] = {
                                         "entity_hit": bool(al.get("entity_hit")),
