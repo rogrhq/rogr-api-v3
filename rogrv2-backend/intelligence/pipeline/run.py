@@ -103,6 +103,7 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
     arm_A: List[Any] = []
     arm_B: List[Any] = []
     verdict: Dict[str, Any] = {}
+    coverage_by_arm: Dict[str, Any] = {}
 
     if isinstance(claim_ev, dict):
         # Preferred shape: {"arm_A": [...], "arm_B": [...], "verdict": {...}}
@@ -112,6 +113,10 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
             arm_B = claim_ev.get("arm_B") or []
         if isinstance(claim_ev.get("verdict"), dict):
             verdict = claim_ev.get("verdict") or {}
+
+        # Extract coverage_by_arm
+        if isinstance(claim_ev.get("coverage_by_arm"), dict):
+            coverage_by_arm = claim_ev.get("coverage_by_arm") or {}
 
         # Alternate shape: {"A": {"candidates":[...]}, "B": {"candidates":[...]}}
         if not arm_A and isinstance(claim_ev.get("A"), dict):
@@ -134,6 +139,7 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
             "evidence": {
                 "arm_A": _to_json_primitive(arm_A),
                 "arm_B": _to_json_primitive(arm_B),
+                "coverage_by_arm": _to_json_primitive(coverage_by_arm),
             },
             "verdict": _to_json_primitive(verdict)
         }

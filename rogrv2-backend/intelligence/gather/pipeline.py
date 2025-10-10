@@ -10,6 +10,7 @@ from intelligence.policy.guardrails import apply_guardrails_to_arms
 from intelligence.consensus.metrics import compute_overlap_conflict
 from intelligence.score.labeling import score_from_evidence, map_score_to_label
 from intelligence.util import diag
+from intelligence.gather.counter_frames import generate_counter_frame_queries, compute_coverage_metrics
 
 
 def _canonical_arm_label(arm_def: Dict[str, Any], idx: int) -> str:
@@ -116,12 +117,32 @@ async def build_evidence_for_claim(*, claim_text: str, plan: Dict[str, Any], max
     labeled_cands: List[Dict[str, Any]] = []
     for idx, arm_def in enumerate(arm_defs):
         label = _canonical_arm_label(arm_def, idx)
+
+        # P19: Add counter-frames for challenge arm (Arm B)
+        intent = arm_def.get("intent", "").lower()
+        arm_name = arm_def.get("name", "").upper()
+
+        if intent in ("challenge", "contradict", "refute") or arm_name.startswith("B") or label == "B":
+            counter_queries = generate_counter_frame_queries(claim_text, arm_def.get("queries", []))
+
+            # Add counter-frame queries to arm
+            if "queries" not in arm_def:
+                arm_def["queries"] = []
+            for frame_name, query in counter_queries:
+                arm_def["queries"].append(query)
+
         labeled_cands.extend(await _exec_plan_for_arm(plan, arm_def, label, max_per_query=2))
 
     # 2) Group by explicit arm, then normalize & rank
     armA_raw, armB_raw = _group_by_arm(labeled_cands)
     armA_norm = normalize_candidates(armA_raw)
     armB_norm = normalize_candidates(armB_raw)
+
+    # P19 Reordering: Sort Arm B candidates by anchor match score
+    if armB_norm:
+        from intelligence.gather.counter_frames import reorder_by_anchor_score
+        armB_norm = reorder_by_anchor_score(armB_norm, claim_text)
+
     if diag.enabled():
         diag.log("gather_counts_pre_rank", armA=len(armA_norm), armB=len(armB_norm))
 
@@ -164,4 +185,28 @@ async def build_evidence_for_claim(*, claim_text: str, plan: Dict[str, Any], max
     # Expose Day-1 contract keys expected by API/tests
     guarded["arm_A"] = a
     guarded["arm_B"] = b
+
+    # P19: Track coverage per arm
+    coverage_by_arm = {}
+
+    # Coverage for Arm A
+    armA_queries = []
+    for arm_def in arm_defs:
+        label = _canonical_arm_label(arm_def, arm_defs.index(arm_def))
+        if label == "A":
+            armA_queries.extend(arm_def.get("queries", []))
+    armA_providers = set(c.get("provider", "") for c in armA_raw if c.get("provider"))
+    coverage_by_arm["A"] = compute_coverage_metrics(armA_raw, armA_queries, armA_providers)
+
+    # Coverage for Arm B
+    armB_queries = []
+    for arm_def in arm_defs:
+        label = _canonical_arm_label(arm_def, arm_defs.index(arm_def))
+        if label == "B":
+            armB_queries.extend(arm_def.get("queries", []))
+    armB_providers = set(c.get("provider", "") for c in armB_raw if c.get("provider"))
+    coverage_by_arm["B"] = compute_coverage_metrics(armB_raw, armB_queries, armB_providers)
+
+    guarded["coverage_by_arm"] = coverage_by_arm
+
     return guarded
