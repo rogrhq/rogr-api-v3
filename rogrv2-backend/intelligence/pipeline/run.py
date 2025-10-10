@@ -5,6 +5,7 @@ from intelligence.ifcn.labels import label_for_score, scale_spec, explanation_fr
 from intelligence.policy.checks import check_input
 from intelligence.content.fetch_enrichment import enrich_items_with_content
 from intelligence.content.grade import attach_finding_to_item
+from intelligence.content.fullread import evaluate_full_evidence
 
 def _to_json_primitive(x: Any) -> Any:
     """
@@ -104,6 +105,15 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
             except Exception:
                 # Non-critical: continue if finding attachment fails
                 pass
+
+    # P21: Full-read evaluation
+    for arm_key in ("arm_A", "arm_B"):
+        for item in evidence_bundle.get(arm_key, []):
+            if item.get("content"):  # Only if we have full text
+                try:
+                    evaluate_full_evidence(claim["text"], item)
+                except Exception:
+                    pass
 
     # 4) Attach per-claim evidence + verdict
     claims = []
