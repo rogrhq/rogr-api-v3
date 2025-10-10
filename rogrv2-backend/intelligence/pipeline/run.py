@@ -4,6 +4,7 @@ from intelligence.score.aggregate import overall_from_claims
 from intelligence.ifcn.labels import label_for_score, scale_spec, explanation_from_counts
 from intelligence.policy.checks import check_input
 from intelligence.content.fetch_enrichment import enrich_items_with_content
+from intelligence.content.grade import attach_finding_to_item
 
 def _to_json_primitive(x: Any) -> Any:
     """
@@ -94,6 +95,15 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
         if items:
             items, fetch_cache = await enrich_items_with_content(items, fetch_cache)
             evidence_bundle[arm_key] = items
+
+    # P20: Attach findings to each item
+    for arm_key, arm_label in [("arm_A", "A"), ("arm_B", "B")]:
+        for item in evidence_bundle.get(arm_key, []):
+            try:
+                attach_finding_to_item(claim["text"], arm_label, item)
+            except Exception:
+                # Non-critical: continue if finding attachment fails
+                pass
 
     # 4) Attach per-claim evidence + verdict
     claims = []
