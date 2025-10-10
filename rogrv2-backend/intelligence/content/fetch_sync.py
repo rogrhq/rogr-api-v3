@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Dict, Any
+from functools import lru_cache
 import httpx
 import re
 import html as _html
@@ -17,9 +18,6 @@ HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
 
-# simple in-process cache to avoid refetching the same URL within a test run
-_CACHE: dict[str, Dict[str, Any]] = {}
-
 
 def html_to_text(html: str) -> str:
     if not html:
@@ -32,6 +30,7 @@ def html_to_text(html: str) -> str:
     return s.strip()
 
 
+@lru_cache(maxsize=1000)
 def fetch_text(url: str, *, timeout: float = 8.0) -> Dict[str, Any]:
     """Synchronous fetch for HTML-like content. Returns dict with keys:
     {status, content_type, text}  (text empty if not HTML or error)
@@ -46,11 +45,6 @@ def fetch_text(url: str, *, timeout: float = 8.0) -> Dict[str, Any]:
             max_bytes = int(os.getenv("ROGR_FETCH_MAX_BYTES", "80000"))
         except Exception:
             max_bytes = 80000
-
-        # cache hit
-        cached = _CACHE.get(url)
-        if cached is not None:
-            return cached
 
         with httpx.Client(timeout=httpx.Timeout(connect=timeout, read=timeout, write=timeout, pool=timeout), follow_redirects=True, headers=HEADERS) as client:
             text = ""
@@ -75,11 +69,6 @@ def fetch_text(url: str, *, timeout: float = 8.0) -> Dict[str, Any]:
             if status == 200 and text:
                 text = html_to_text(text)
             res = {"status": status, "content_type": ct, "text": text}
-            # populate cache (bounded)
-            if len(_CACHE) > 200:
-                # drop an arbitrary item (simple bound; deterministic not required here)
-                _CACHE.pop(next(iter(_CACHE)))
-            _CACHE[url] = res
             return res
     except Exception:
         return {"status": 0, "content_type": "", "text": ""}

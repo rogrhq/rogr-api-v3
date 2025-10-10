@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Union, Tuple
 from intelligence.score.aggregate import overall_from_claims
 from intelligence.ifcn.labels import label_for_score, scale_spec, explanation_from_counts
 from intelligence.policy.checks import check_input
+from intelligence.content.fetch_enrichment import enrich_items_with_content
 
 def _to_json_primitive(x: Any) -> Any:
     """
@@ -84,6 +85,15 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
         import logging
         logging.getLogger(__name__).exception("preview evidence build failed")
         evidence_bundle = {"A": {"candidates":[]}, "B":{"candidates":[]}}
+
+    # P22: Content enrichment (request-scoped cache)
+    fetch_cache = {}  # Request-scoped - will be cleared when function ends
+
+    for arm_key in ("arm_A", "arm_B"):
+        items = evidence_bundle.get(arm_key, [])
+        if items:
+            items, fetch_cache = await enrich_items_with_content(items, fetch_cache)
+            evidence_bundle[arm_key] = items
 
     # 4) Attach per-claim evidence + verdict
     claims = []
