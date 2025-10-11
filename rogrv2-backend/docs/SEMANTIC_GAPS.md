@@ -162,7 +162,42 @@ This document tracks ACTUAL findings from testing, not assumptions.
 ---
 
 ## P25 - Verdict Aggregation
-**Status:** NOT YET TESTED
+**Status:** ✅ COMPLETE - No bugs found, all capabilities working
+
+**Testing Results:**
+- ✅ Field validation: Returns all expected fields (label, confidence, arm_strength)
+- ✅ Label validity: Produces valid labels (supports/challenges/mixed/insufficient)
+- ✅ Value ranges: All values within expected ranges (0-1 for most, -1 to 1 for balance)
+- ✅ Edge cases: Handles empty arms, single items, missing fields gracefully
+- ✅ Clear support detection: Strong arm_A + weak arm_B → "supports"
+- ✅ Clear challenge detection: Weak arm_A + strong arm_B → "challenges"
+- ✅ Mixed verdict detection: Balanced arms → "mixed"
+- ✅ Insufficient evidence: Both arms weak (< 0.12) → "insufficient"
+- ✅ Diminishing returns: Multiple items increase confidence (with diminishing weights)
+- ✅ Coverage weighting: full (1.0) > partial (0.75) > snippet (0.55)
+- ✅ Delta threshold: Balance >= delta (0.15) correctly determines verdict
+
+**How It Works:**
+1. **Item strength** (0-1): Combines frame match score (55%), item grade (45%), weighted by coverage
+2. **Arm strength** (0-1): Aggregates top 4 items with diminishing weights [1.0, 0.7, 0.5, 0.35]
+3. **Confidence** (0-1): Based on total strength, balance between arms, and item count
+4. **Verdict**:
+   - support - challenge >= 0.15 → "supports"
+   - challenge - support >= 0.15 → "challenges"
+   - |difference| < 0.15 → "mixed"
+   - both < 0.12 → "insufficient"
+
+**Example:**
+- 2 strong support items (0.9 score) + 1 weak challenge item (0.2 score)
+- Result: "supports", confidence=0.671, support=0.836, challenge=0.098
+
+**Archived Wrapper Comparison:**
+- File: MONKEY_PATCH_ARCHIVE/wrappers/content/p25_semantic_aggregate.py
+- Finding: Wrapper only imports and calls aggregate_verdict from clean module
+- Conclusion: No logic was lost - clean module IS the complete implementation
+- All intended functionality present
+
+**No Phase 2 work needed** - P25 is complete and working as designed
 
 ---
 
@@ -180,9 +215,9 @@ This document tracks ACTUAL findings from testing, not assumptions.
 - P21 full-read semantic: 2-3 days (HIGH priority)
 - P23 semantic findings: 2-3 days (HIGH priority)
 - P24 frame extraction: 3-4 days (MEDIUM-HIGH priority - action alignment + semantic)
-- P25 aggregation (TBD based on testing): 1-2 days
+- P25 aggregation: ✅ COMPLETE - no work needed
 - Integration & testing: 2-3 days
-- **Total: ~3 weeks**
+- **Total: ~2.5-3 weeks**
 
 ### Success Criteria
 - "Water boils at 100°C" with paraphrased evidence → supports, high confidence
