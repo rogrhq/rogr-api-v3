@@ -74,7 +74,7 @@ def parse_claim(text: str) -> Dict[str, Any]:
             scope["geo_hint"] = e
             break
 
-    return {
+    parsed = {
         "text": s,
         "entities": ents,
         "numbers": nums,
@@ -82,3 +82,154 @@ def parse_claim(text: str) -> Dict[str, Any]:
         "scope": scope,
         "kind_hint": "comparative" if cues["has_comparison"] else "attribution" if cues["has_attribution"] else "statement",
     }
+
+    # Extract concept (phenomenon being discussed)
+    concept_info = extract_concept(s, parsed)
+    parsed["concept"] = concept_info["concept"]
+    parsed["dimension"] = concept_info["dimension"]
+
+    return parsed
+
+
+def extract_concept(claim_text: str, parsed: Dict[str, Any]) -> Dict[str, str]:
+    """
+    Extract the phenomenon/concept from claim.
+
+    Returns: {"concept": str, "dimension": str}
+
+    Examples:
+    - "Water boils at 100°C" → {"concept": "water boiling point", "dimension": "temperature"}
+    - "Ice melts at 0°C" → {"concept": "ice melting point", "dimension": "temperature"}
+    """
+    text_lower = claim_text.lower()
+    entities = parsed.get('entities', [])
+    entity = entities[0].lower() if entities else ""
+
+    # Verb → phenomenon mapping
+    verb_to_phenomenon = {
+        'boils': 'boiling point',
+        'boiling': 'boiling point',
+        'freezes': 'freezing point',
+        'melts': 'melting point',
+        'melting': 'melting point',
+        'reacts': 'reaction',
+        'moves': 'movement',
+        'expands': 'expansion'
+    }
+
+    # Check for phenomenon verbs
+    concept = None
+    for verb, phenomenon in verb_to_phenomenon.items():
+        if verb in text_lower:
+            concept = f"{entity} {phenomenon}"
+            break
+
+    # Detect dimension from text (temperature units, pressure indicators)
+    dimension = None
+    if any(unit in text_lower for unit in ['celsius', 'fahrenheit', 'kelvin', 'degrees', '°c', '°f']):
+        dimension = "temperature"
+    elif any(unit in text_lower for unit in ['pressure', 'atm', 'kpa', 'psi', 'bar']):
+        dimension = "pressure"
+    elif any(word in text_lower for word in ['distance', 'meter', 'kilometer', 'mile', 'feet']):
+        dimension = "distance"
+    elif any(word in text_lower for word in ['mass', 'weight', 'kilogram', 'pound', 'gram']):
+        dimension = "mass"
+
+    # Fallbacks
+    if not concept and dimension:
+        concept = f"{entity} {dimension}"
+    elif not concept and entity:
+        # Try to find verb+s pattern (finds "boils", "melts")
+        import re
+        verb_match = re.search(r'\b(\w+)s\b', text_lower)
+        if verb_match:
+            verb = verb_match.group(1)
+            concept = f"{entity} {verb}ing"
+
+    if not concept:
+        # Last resort: use entity alone
+        concept = entity
+
+    return {
+        "concept": concept or "",
+        "dimension": dimension or "unknown"
+    }
+
+
+def detect_claim_type(claim: Dict[str, Any]) -> str:
+    """
+    Detect claim type for P19 counter-frame template selection.
+    Returns: "scientific" | "policy_econ" | "generic"
+
+    Uses parsed fields from claim enrichment to classify claim domain.
+    """
+    text = claim.get("text", "").lower()
+
+    # Scientific indicators
+    scientific_units = {
+        # Temperature
+        "celsius", "fahrenheit", "kelvin", "degrees",
+        # Distance/length
+        "meter", "meters", "kilometer", "kilometers", "mile", "miles", "feet", "inches",
+        # Mass/weight
+        "gram", "grams", "kilogram", "kilograms", "pound", "pounds", "ounce", "ounces",
+        # Energy
+        "joule", "joules", "calorie", "calories", "watt", "watts",
+        # Time (scientific context)
+        "nanosecond", "microsecond", "millisecond",
+        # Other scientific
+        "mole", "moles", "pascal", "pascals", "hertz", "volt", "volts", "ampere", "amperes"
+    }
+
+    scientific_keywords = {
+        "boils", "boiling", "melts", "melting", "freezes", "freezing",
+        "chemical", "physics", "biology", "chemistry", "molecule", "molecules",
+        "atom", "atoms", "element", "elements", "compound", "compounds",
+        "reaction", "formula", "equation", "theory", "hypothesis",
+        "gravity", "velocity", "acceleration", "force", "energy", "mass",
+        "temperature", "pressure", "volume", "density"
+    }
+
+    # Policy/economic indicators
+    policy_econ_keywords = {
+        # Budget/financial
+        "budget", "spending", "revenue", "tax", "taxes", "fund", "funding", "grant", "grants",
+        "appropriation", "appropriations", "fiscal", "financial", "deficit", "surplus",
+        "allocation", "allocations", "expenditure", "expenditures",
+        # Policy/government
+        "policy", "law", "regulation", "regulations", "bill", "amendment", "legislation",
+        "congress", "senate", "house", "government", "federal", "state", "municipal",
+        "council", "committee", "department", "agency",
+        # Economic
+        "gdp", "inflation", "unemployment", "economy", "economic", "recession",
+        "growth rate", "interest rate", "market", "stock", "bond", "currency"
+    }
+
+    # Check for scientific indicators
+    scientific_score = 0
+    for unit in scientific_units:
+        if unit in text:
+            scientific_score += 2  # Units are strong signals
+    for keyword in scientific_keywords:
+        if keyword in text:
+            scientific_score += 1
+
+    # Check for policy/economic indicators
+    policy_econ_score = 0
+    for keyword in policy_econ_keywords:
+        if keyword in text:
+            policy_econ_score += 1
+
+    # Check for budget + percentage combination (strong policy/econ signal)
+    nums = claim.get("numbers", {})
+    if nums and nums.get("percents"):
+        if any(kw in text for kw in ["budget", "spending", "revenue", "tax", "fund"]):
+            policy_econ_score += 3
+
+    # Decision logic
+    if scientific_score >= 2:
+        return "scientific"
+    elif policy_econ_score >= 2:
+        return "policy_econ"
+    else:
+        return "generic"

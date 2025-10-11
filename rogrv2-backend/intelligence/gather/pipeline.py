@@ -123,7 +123,7 @@ async def build_evidence_for_claim(claim_text: str, plan: Dict[str, Any], max_pe
         arm_name = arm_def.get("name", "").upper()
 
         if intent in ("challenge", "contradict", "refute") or arm_name.startswith("B") or label == "B":
-            counter_queries = generate_counter_frame_queries(claim_text, arm_def.get("queries", []))
+            counter_queries = generate_counter_frame_queries(claim_text, arm_def.get("queries", []), plan)
 
             # Add counter-frame queries to arm
             if "queries" not in arm_def:

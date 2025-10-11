@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Union
 import re
 _DOMAIN_RE = re.compile(r"""(?ix)
     (?:^|[\s'"\]])            # start or space
@@ -45,13 +45,32 @@ def _time_terms(scope: Dict[str, Any]) -> List[str]:
     # could add month/quarter in later packets
     return out
 
-def _entity_terms(entities: List[Dict[str, Any]]) -> List[str]:
-    out: List[str] = []
-    for e in entities or []:
-        name = (e.get("name") or "").strip()
-        if name:
-            out.append(name)
-    return out
+def _entity_terms(entities: Union[List[str], List[Dict[str, Any]]]) -> List[str]:
+    """
+    Extract entity terms, handling both string list and dict list formats.
+
+    Args:
+        entities: List[str] (canonical) or List[Dict] with "name" key (legacy)
+
+    Returns:
+        List of entity name strings
+    """
+    if not entities:
+        return []
+
+    result = []
+    for e in entities:
+        if isinstance(e, str):
+            # Canonical format: List[str]
+            result.append(e)
+        elif isinstance(e, dict) and "name" in e:
+            # Legacy format: List[Dict] with "name" key
+            name = (e.get("name") or "").strip()
+            if name:
+                result.append(name)
+        # Ignore anything else (malformed input)
+
+    return result
 
 def _comparison_terms(cues: Dict[str, Any]) -> List[str]:
     if not cues:
@@ -125,5 +144,11 @@ def build_search_plans_v2(claim: Dict[str, Any]) -> Dict[str, Any]:
         "arms": {
             "A": {"intent": "support", "queries": a_queries[:5]},
             "B": {"intent": "challenge", "queries": b_queries[:5]},
+        },
+        "meta": {
+            "claim_id": claim.get("id", "unknown"),
+            "claim_type": claim.get("claim_type", "generic"),
+            "concept": claim.get("concept", ""),
+            "dimension": claim.get("dimension", "unknown")
         }
     }

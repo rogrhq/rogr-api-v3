@@ -124,6 +124,14 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
     # Create claim
     claim = {"id": "c-0", "text": text.strip(), "tier": "primary"}
 
+    # Enrich claim with parsed entities/numbers/cues
+    from intelligence.analyze.enrich import enrich_claim_obj
+    claim = enrich_claim_obj(claim)
+
+    # Add claim_type detection
+    from intelligence.claims.interpret import detect_claim_type
+    claim["claim_type"] = detect_claim_type(claim)
+
     # Build base search plan
     from intelligence.strategy.plan_v2 import build_search_plans_v2
     base_plan = build_search_plans_v2(claim)

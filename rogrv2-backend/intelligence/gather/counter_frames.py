@@ -2,17 +2,32 @@ from typing import List, Dict, Tuple, Set, Any
 import re
 
 
-def generate_counter_frame_queries(claim_text: str, original_queries: List[str]) -> List[Tuple[str, str]]:
+def generate_counter_frame_queries(
+    claim_text: str,
+    original_queries: List[str],
+    plan: Dict[str, Any] = None
+) -> List[Tuple[str, str]]:
     """
     Generate 5 types of counter-frame queries for the challenge arm (Arm B).
 
     Args:
         claim_text: The claim to generate counter-frames for
         original_queries: Original queries (not currently used but kept for API compatibility)
+        plan: Search plan containing meta.claim_type
 
     Returns:
         List of (frame_name, query_string) tuples
     """
+    # Get claim_type, concept, and dimension from plan.meta
+    claim_type = "generic"
+    concept = ""
+    dimension = ""
+    if plan:
+        meta = plan.get("meta", {})
+        claim_type = meta.get("claim_type", "generic")
+        concept = meta.get("concept", "")
+        dimension = meta.get("dimension", "")
+
     # Extract anchors from claim
     anchors = _extract_anchors(claim_text)
 
@@ -25,10 +40,10 @@ def generate_counter_frame_queries(claim_text: str, original_queries: List[str])
         "methodology"
     ]
 
-    # Build queries for each frame type
+    # Build queries for each frame type using claim_type-specific templates
     queries = []
     for frame_type in frame_types:
-        query = _build_frame_query(frame_type, claim_text, anchors)
+        query = _build_frame_query(frame_type, claim_text, anchors, claim_type, concept, dimension)
         queries.append((frame_type, query))
 
     return queries
@@ -66,26 +81,48 @@ def _extract_anchors(claim_text: str) -> Dict[str, List[str]]:
     }
 
 
-def _build_frame_query(frame_type: str, claim_text: str, anchors: Dict) -> str:
+def _build_frame_query(frame_type: str, claim_text: str, anchors: Dict, claim_type: str = "generic", concept: str = "", dimension: str = "") -> str:
     """
-    Build query for specific frame type.
+    Build query for specific frame type using claim_type-specific templates.
 
     Args:
         frame_type: Type of counter-frame
         claim_text: Original claim text
         anchors: Extracted anchors from claim
+        claim_type: Claim type (scientific, policy_econ, or generic)
+        concept: Extracted concept/phenomenon (e.g., "water boiling point")
+        dimension: Extracted dimension (e.g., "temperature")
 
     Returns:
         Formatted query string
     """
-    # Templates for each frame type
-    templates = {
-        "numeric_dispute": "{entity} {number} audit revised actual figure",
-        "denominator_shift": "{entity} total baseline context general fund",
-        "timing_change": "{entity} {year} rescinded changed amended revised",
-        "authority_conflict": "{entity} official statement comptroller minutes",
-        "methodology": "{entity} methodology calculation how measured"
+    # Template families for different claim types
+    TEMPLATE_FAMILIES = {
+        "scientific": {
+            "numeric_dispute": "{concept} {number} conditions exceptions variations",
+            "denominator_shift": "{concept} different conditions {dimension} altitude pressure",
+            "timing_change": "{concept} {dimension} phase state changes factors",
+            "authority_conflict": "{concept} studies research findings experiments data",
+            "methodology": "{concept} how measured experimental conditions factors"
+        },
+        "policy_econ": {
+            "numeric_dispute": "{entity} {number} audit revised actual figure",
+            "denominator_shift": "{entity} total baseline context general fund",
+            "timing_change": "{entity} {year} rescinded changed amended revised",
+            "authority_conflict": "{entity} official statement comptroller minutes",
+            "methodology": "{entity} methodology calculation how measured"
+        },
+        "generic": {
+            "numeric_dispute": "{entity} {number} different actual reported varies",
+            "denominator_shift": "{entity} context total scope definition",
+            "timing_change": "{entity} {year} changed updated modified revised",
+            "authority_conflict": "{entity} sources reports statements conflicting",
+            "methodology": "{entity} how determined measured calculated defined"
+        }
     }
+
+    # Select template family based on claim_type
+    templates = TEMPLATE_FAMILIES.get(claim_type, TEMPLATE_FAMILIES["generic"])
 
     # Get template for this frame type
     template = templates.get(frame_type, "{entity} {number}")
@@ -99,10 +136,15 @@ def _build_frame_query(frame_type: str, claim_text: str, anchors: Dict) -> str:
     # Get first year
     year = anchors['years'][0] if anchors['years'] else ""
 
+    # Use concept if available, fallback to entity
+    concept_to_use = concept if concept else entity
+
     # Replace placeholders
-    query = template.replace("{entity}", entity)
+    query = template.replace("{concept}", concept_to_use)
+    query = query.replace("{entity}", entity)
     query = query.replace("{number}", number)
     query = query.replace("{year}", year)
+    query = query.replace("{dimension}", dimension if dimension and dimension != "unknown" else "")
 
     # Clean up extra spaces
     query = re.sub(r'\s+', ' ', query).strip()
