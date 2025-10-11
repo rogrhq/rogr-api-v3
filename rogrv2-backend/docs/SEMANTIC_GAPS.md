@@ -113,7 +113,51 @@ This document tracks ACTUAL findings from testing, not assumptions.
 ---
 
 ## P24 - Frame Extraction
-**Status:** NOT YET TESTED
+**Status:** ⚠️ INCOMPLETE - Negation bug fixed, action alignment bug found, semantic gaps remain
+
+**Fixed:**
+- ✅ Window sliding bug (now handles evidence < 3 sentences)
+- ✅ Negation bug (elif fix) - "did not increase" now correctly contradicts "increased"
+- Verified with comprehensive regression tests (11/13 passed)
+
+**Testing Results:**
+- ✅ Exact matching works for aligned cases (claim=increase + evidence=increase)
+- ✅ Action keyword detection (increase/decrease/cut)
+- ✅ Number/year extraction (percentages, years)
+- ✅ Negation detection (contradict when "did not X")
+- ✅ Slot coverage tracking
+- ❌ No paraphrase understanding (increased ≠ went up)
+- ❌ No entity identity (California = Texas in scoring)
+- ❌ No numeric comparison (8% = 8.2% = 12%)
+- 🐛 **Action alignment bug**: Assumes evidence "decrease" = contradiction, doesn't check claim action
+
+**Action Alignment Bug Example:**
+- Claim: "Texas **decreased** spending by 5%"
+- Evidence: "Texas **decreased** spending by 5%" (exact match!)
+- Expected: entail ✓
+- Actual: contradict ❌
+- Root cause: Line 189 triggers on evidence action alone, not alignment with claim
+
+**Example Gaps:**
+- Paraphrase: "increased" (0.800) vs "went up" (0.240) ❌
+- Entity identity: California vs Texas → same score (0.160) ❌
+- Numeric comparison: 8% = 8.2% = 12% → all score 0.160 ❌
+
+**What's Needed:**
+- **Fix action alignment logic** (compare claim action vs evidence action)
+- Paraphrase/synonym dictionaries (increased ↔ went up ↔ rose ↔ grew)
+- Entity identity verification (not just presence)
+- Numeric tolerance and contradiction detection
+- Expanded action vocabulary beyond hardcoded lists
+
+**Archived Wrapper Comparison:**
+- File: MONKEY_PATCH_ARCHIVE/wrappers/content/p24_semantic_frames.py
+- Finding: Wrapper only imports and calls analyze_frames from clean module
+- Conclusion: No semantic logic was lost - clean module IS the implementation
+- Bugs existed in original design, not caused by wrapper removal
+
+**Estimated Rebuild:** 3-4 days (action logic + semantic layers)
+**Priority:** MEDIUM-HIGH (affects contradiction detection in budget/policy claims)
 
 ---
 
@@ -132,13 +176,13 @@ This document tracks ACTUAL findings from testing, not assumptions.
 5. Full pipeline testing after all semantic layers complete
 
 ### Estimated Timeline
-- P20 stance detection: 2-3 days
-- P21 full-read semantic: 2-3 days
-- P23 semantic findings: 2-3 days
-- P24 frame extraction (TBD based on testing): 1-2 days
+- P20 stance detection: 2-3 days (HIGH priority)
+- P21 full-read semantic: 2-3 days (HIGH priority)
+- P23 semantic findings: 2-3 days (HIGH priority)
+- P24 frame extraction: 3-4 days (MEDIUM-HIGH priority - action alignment + semantic)
 - P25 aggregation (TBD based on testing): 1-2 days
 - Integration & testing: 2-3 days
-- **Total: ~2-3 weeks**
+- **Total: ~3 weeks**
 
 ### Success Criteria
 - "Water boils at 100°C" with paraphrased evidence → supports, high confidence

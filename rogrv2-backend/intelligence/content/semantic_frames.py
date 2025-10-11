@@ -188,10 +188,10 @@ def _entail_contradict(claim: Dict[str,Any], win: Dict[str,Any], sim: float) -> 
     # Primary contradiction signals
     if action == "decrease" and (eok and sok):
         label = "contradict"; rules.append("antonym_action")
-    if neg and (eok and sok):
+    elif neg and (eok and sok):
         label = "contradict"; rules.append("negation_present")
     # Primary entailment signals
-    if action == "increase" and (eok and sok and qok):
+    elif action == "increase" and (eok and sok and qok):
         label = "entail"; rules.append("aligned_action_quantity")
     # If still undecided, use similarity + partials
     if label == "unrelated":
@@ -223,9 +223,15 @@ def analyze_frames(claim_text: str, content: str, *, window: int = 3, max_window
     best_score = 0.0
     best_frame: Dict[str,Any] = {"entity": [], "action": "unknown", "quantity": [], "year": [], "scope": "unknown"}
 
-    limit = max(0, min(len(sents), max_windows) - window + 1)
-    for i in range(limit):
-        win_text = " ".join(sents[i:i+window]).strip()
+    # Handle short evidence: create at least one window
+    if len(sents) < window:
+        windows = [sents] if sents else []
+    else:
+        num_windows = min(len(sents) - window + 1, max_windows)
+        windows = [sents[i:i + window] for i in range(num_windows)]
+
+    for win_sents in windows:
+        win_text = " ".join(win_sents).strip()
         wframe = extract_window_frame(win_text)
         wtris = _trigrams(_tokens(win_text))
         sim = _jaccard_tris(ctris, wtris)
