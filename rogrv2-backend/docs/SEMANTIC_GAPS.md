@@ -226,6 +226,44 @@ This document tracks ACTUAL findings from testing, not assumptions.
 
 ---
 
+## P28 - Query Diversification
+**Status:** ⚠️ MINOR DIFFERENCES - Implementation variations from wrapper
+
+**Current Clean Module:**
+- ✅ All tests pass (13 structural + 12 capability)
+- ✅ R1/R2 have different provider orders (Google-first vs Brave-first)
+- ✅ Deterministic query shuffling working
+- ✅ Reproducible with seed-based randomization
+- ✅ Core diversification goal achieved (R1 ≠ R2)
+
+**Implementation Differences from Wrapper:**
+
+1. **Seed Generation (Different but valid):**
+   - Wrapper: `f"{lane}::{claim}"` → first 8 hex chars
+   - Clean: `f"{lane}:{claim}"` → full hash mod 2^31
+   - Impact: Different shuffles, both deterministic ✓
+
+2. **Provider Detection (Simplified):**
+   - Wrapper: Multiple env var names per provider (BING_API_KEY, BING_SUBSCRIPTION_KEY, AZURE_BING_KEY)
+   - Clean: Single env var per provider
+   - Impact: May miss alternate env var names
+
+3. **Arm Name Mapping (Removed):**
+   - Wrapper: Maps "A_SUPPORT"/"ARM_A" → "A"
+   - Clean: Uses exact arm name
+   - Impact: Less flexible arm name handling
+
+**What Phase 2 Could Restore:**
+- Multi-env-var provider detection (wrapper lines 56-69)
+- Arm name mapping flexibility (wrapper lines 113-116)
+- Consider aligning seed generation if shuffle compatibility needed
+
+**Reference:** MONKEY_PATCH_ARCHIVE/wrappers/content/p28_diversify.py
+**Estimated Rebuild:** 0.5-1 day (optional enhancements)
+**Priority:** LOW (core functionality working, differences are minor)
+
+---
+
 ## Phase 2 Implementation Plan (After Execution Plan Complete)
 
 ### Approach
@@ -242,8 +280,9 @@ This document tracks ACTUAL findings from testing, not assumptions.
 - P24 frame extraction: 3-4 days (MEDIUM-HIGH priority - action alignment + semantic)
 - P25 aggregation: ✅ COMPLETE - no work needed
 - P27 consensus mechanism: 1-2 days (MEDIUM priority - restore variable formulas)
+- P28 diversification: 0.5-1 day (LOW priority - optional enhancements)
 - Integration & testing: 2-3 days
-- **Total: ~3-3.5 weeks**
+- **Total: ~3-4 weeks**
 
 ### Success Criteria
 - "Water boils at 100°C" with paraphrased evidence → supports, high confidence
