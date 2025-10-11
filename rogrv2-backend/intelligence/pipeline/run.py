@@ -6,6 +6,9 @@ from intelligence.policy.checks import check_input
 from intelligence.content.fetch_enrichment import enrich_items_with_content
 from intelligence.content.grade import attach_finding_to_item
 from intelligence.content.fullread import evaluate_full_evidence
+from intelligence.content.semantic_read import analyze_item
+from intelligence.content.semantic_frames import analyze_frames
+from intelligence.content.p25_aggregate import aggregate_verdict
 
 def _to_json_primitive(x: Any) -> Any:
     """
@@ -115,6 +118,42 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
                 except Exception:
                     pass
 
+    # P23: Semantic reading
+    for arm_key in ("arm_A", "arm_B"):
+        for item in evidence_bundle.get(arm_key, []):
+            if item.get("content"):
+                try:
+                    analyze_item(claim["text"], item, window=3)
+                except Exception:
+                    pass
+
+    # P24: Frame extraction
+    for arm_key in ("arm_A", "arm_B"):
+        for item in evidence_bundle.get(arm_key, []):
+            content = item.get("content") or item.get("content_excerpt") or ""
+            if content:
+                try:
+                    frames = analyze_frames(claim["text"], content, window=3)
+                    item.update(frames)
+                except Exception:
+                    pass
+
+    # P25: Aggregate verdict
+    try:
+        p25_verdict = aggregate_verdict(
+            claim["text"],
+            evidence_bundle.get("arm_A", []),
+            evidence_bundle.get("arm_B", []),
+            delta=0.15
+        )
+        evidence_bundle["verdict"] = p25_verdict
+    except Exception:
+        evidence_bundle["verdict"] = {
+            "label": "insufficient",
+            "confidence": 0.0,
+            "arm_strength": {"support": 0.0, "challenge": 0.0, "balance": 0.0}
+        }
+
     # 4) Attach per-claim evidence + verdict
     claims = []
     claim_ev = evidence_bundle or {}
@@ -204,35 +243,38 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
     overall_score = overall_result.get("score", 50)
     overall_label = label_for_score(overall_score)
 
-    # Ensure each claim contains verdict with IFCN label + explanation
-    claims_out = []
-    for c in claims:
-        v = c.get("verdict") or {}
-        v_score = int(v.get("score", v.get("claim_grade_numeric", overall_score)))
-        v_label = label_for_score(v_score)
-        # Build minimal deterministic explanation using stance counts and top-ranked titles
-        ev = c.get("evidence") or {}
-        # Collect stance counts across arms if present
-        support = 0; refute = 0; neutral = 0
-        titles_publishers: List[Tuple[str,str]] = []
-        for arm_key in ("arm_A","arm_B","arm_brave","arm_bing","arm_google"):
-            items = (ev.get(arm_key) or [])
-            for it in items:
-                stance = (it.get("stance") or "").lower()
-                if stance == "support": support += 1
-                elif stance == "refute": refute += 1
-                else: neutral += 1
-                title = (it.get("title") or "")[:120]
-                publisher = (it.get("publisher") or "")[:80]
-                if title or publisher:
-                    titles_publishers.append((title, publisher))
-        counts = {"support": support, "refute": refute, "neutral": neutral}
-        explanation = explanation_from_counts(c.get("text",""), counts, titles_publishers)
-        v["score"] = v_score
-        v["label"] = v_label
-        v["explanation"] = explanation
-        c["verdict"] = v
+    # # COMMENTED OUT FOR P25 TESTING - IFCN compliance section overwrites P25 verdict
+    # # Ensure each claim contains verdict with IFCN label + explanation
+    # claims_out = []
+    # for c in claims:
+    #     v = c.get("verdict") or {}
+    #     v_score = int(v.get("score", v.get("claim_grade_numeric", overall_score)))
+    #     v_label = label_for_score(v_score)
+    #     # Build minimal deterministic explanation using stance counts and top-ranked titles
+    #     ev = c.get("evidence") or {}
+    #     # Collect stance counts across arms if present
+    #     support = 0; refute = 0; neutral = 0
+    #     titles_publishers: List[Tuple[str,str]] = []
+    #     for arm_key in ("arm_A","arm_B","arm_brave","arm_bing","arm_google"):
+    #         items = (ev.get(arm_key) or [])
+    #         for it in items:
+    #             stance = (it.get("stance") or "").lower()
+    #             if stance == "support": support += 1
+    #             elif stance == "refute": refute += 1
+    #             else: neutral += 1
+    #             title = (it.get("title") or "")[:120]
+    #             publisher = (it.get("publisher") or "")[:80]
+    #             if title or publisher:
+    #                 titles_publishers.append((title, publisher))
+    #     counts = {"support": support, "refute": refute, "neutral": neutral}
+    #     explanation = explanation_from_counts(c.get("text",""), counts, titles_publishers)
+    #     v["score"] = v_score
+    #     v["label"] = v_label
+    #     v["explanation"] = explanation
+    #     c["verdict"] = v
 
+    # Process claims for guardrails (P25 verdict preserved)
+    for c in claims:
         # Add stance balance guardrail counts (non-failing; best-effort)
         try:
             from intelligence.stance.balance import summarize_balance
@@ -312,17 +354,15 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
         except Exception:
             pass
 
-        claims_out.append(c)
-
     # S2P9 hotfix: if no claims were extracted (edge in some modes), emit a minimal fallback claim
-    if not claims_out:
+    if not claims:
         # Ensure evidence/guardrails objects exist even if empty
         _guardrails = (evidence_bundle or {}).get("guardrails") or {
             "A": {"kept": 0, "dropped": 0, "domains": {}, "types": {}, "parameters": {"max_per_domain": 1, "min_total": 2, "prefer_types": [], "version": "s2p9-1"}},
             "B": {"kept": 0, "dropped": 0, "domains": {}, "types": {}, "parameters": {"max_per_domain": 1, "min_total": 2, "prefer_types": [], "version": "s2p9-1"}},
             "version": "s2p9-1",
         }
-        claims_out = [{
+        claims = [{
             "text": text,
             "tier": "primary",
             "entities": [],
@@ -378,19 +418,19 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
     }
 
     try:
-        guards = any(c.get("evidence", {}).get("guardrails", {}) or {} for c in claims_out)
+        guards = any(c.get("evidence", {}).get("guardrails", {}) or {} for c in claims)
         if guards:
             methodology_final.setdefault("guardrails", {})
-            if any(c.get("evidence", {}).get("guardrails", {}).get("balance") for c in claims_out):
+            if any(c.get("evidence", {}).get("guardrails", {}).get("balance") for c in claims):
                 methodology_final["guardrails"]["balance"] = "per-arm pro/con/neutral counts computed"
-            if any(c.get("evidence", {}).get("guardrails", {}).get("credibility") for c in claims_out):
+            if any(c.get("evidence", {}).get("guardrails", {}).get("credibility") for c in claims):
                 methodology_final["guardrails"]["credibility"] = "per-item deterministic credibility scored; per-arm and overall averages reported"
     except Exception:
         pass
 
     response = _to_json_primitive({
         "overall": {"score": overall_score, "label": overall_label},
-        "claims": claims_out,
+        "claims": claims,
         "methodology": methodology_final,
     })
     return response

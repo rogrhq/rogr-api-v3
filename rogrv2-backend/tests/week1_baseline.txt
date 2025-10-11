@@ -1,0 +1,3 @@
+Week 1 Baseline (Single Researcher)
+Mean: 2563 ms
+Median: 2483 ms
