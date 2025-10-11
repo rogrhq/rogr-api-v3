@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Union, Tuple
 from intelligence.score.aggregate import overall_from_claims
 from intelligence.ifcn.labels import label_for_score, scale_spec, explanation_from_counts
 from intelligence.policy.checks import check_input
+from intelligence.gather.pipeline import build_evidence_for_claim
 from intelligence.content.fetch_enrichment import enrich_items_with_content
 from intelligence.content.grade import attach_finding_to_item
 from intelligence.content.fullread import evaluate_full_evidence
@@ -30,6 +31,87 @@ def _to_json_primitive(x: Any) -> Any:
         return [_to_json_primitive(i) for i in x]
     # fallback
     return str(x)
+
+async def run_single_lane_enrichment(
+    claim_text: str,
+    plan: Dict[str, Any],
+    lane_id: str,
+    telemetry: Any
+) -> Dict[str, Any]:
+    """
+    Run full P19-P25 enrichment for one researcher lane.
+
+    Args:
+        claim_text: Claim being fact-checked
+        plan: Diversified search plan
+        lane_id: "R1" or "R2"
+        telemetry: Telemetry tracker
+
+    Returns:
+        {"verdict": {...}, "evidence": {...}}
+    """
+    # Gather evidence (includes P19 counter-frames)
+    evidence = await build_evidence_for_claim(claim_text, plan, max_per_arm=3)
+
+    # Track provider calls
+    for arm_key in ("arm_A", "arm_B"):
+        for item in evidence.get(arm_key, []):
+            provider = item.get("provider")
+            if provider:
+                telemetry.record_provider_call(provider)
+
+    # P22: Content enrichment
+    fetch_cache = {}
+    for arm_key in ("arm_A", "arm_B"):
+        items = evidence.get(arm_key, [])
+        if items:
+            items, fetch_cache = await enrich_items_with_content(items, fetch_cache)
+            evidence[arm_key] = items
+
+    # P20-P25: Item enrichment
+    for arm_key, arm_label in [("arm_A", "A"), ("arm_B", "B")]:
+        for item in evidence.get(arm_key, []):
+            # P20
+            try:
+                attach_finding_to_item(claim_text, arm_label, item)
+            except:
+                pass
+
+            # P21
+            if item.get("content"):
+                try:
+                    evaluate_full_evidence(claim_text, item)
+                except:
+                    pass
+
+            # P23
+            if item.get("content"):
+                try:
+                    analyze_item(claim_text, item, window=3)
+                except:
+                    pass
+
+            # P24
+            content = item.get("content") or ""
+            if content:
+                try:
+                    frames = analyze_frames(claim_text, content, window=3)
+                    item.update(frames)
+                except:
+                    pass
+
+    # P25: Aggregate
+    try:
+        verdict = aggregate_verdict(
+            claim_text,
+            evidence.get("arm_A", []),
+            evidence.get("arm_B", []),
+            delta=0.15
+        )
+    except:
+        verdict = {"label": "insufficient", "confidence": 0.0}
+
+    return {"verdict": verdict, "evidence": evidence}
 
 # NOTE: preview handler calls run_preview() (async), updated for async pipeline
 async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
