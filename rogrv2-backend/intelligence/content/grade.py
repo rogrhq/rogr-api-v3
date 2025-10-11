@@ -3,6 +3,27 @@
 Deterministic grading of a single evidence item against a claim.
 Produces a Finding Card: grade (0-10), stance, rationale[], matched_spans[].
 No filtering; purely annotative.
+
+KNOWN ISSUE (2025-10): Stance detection uses keyword matching designed for
+policy/budget claims. Fails for scientific claims with comparative language.
+
+Example failure:
+- Claim: "Water boils at 100°C"
+- Evidence: "Water boils at lower temperatures at high altitude"
+- Current: Detects "lower" → stance="challenge" ❌
+- Should be: Contextual support (explains variation) ✓
+
+PLANNED FIX: Replace with frame-based reasoning:
+1. Parse evidence windows for phenomenon, numbers, units, conditions
+2. Decision tree: phenomenon match → numeric match → directional cues
+3. Claim-type aware adapters (scientific vs policy)
+4. Return stance + rationale with anchored findings
+
+See docs/P20_REDESIGN_NEEDED.md for full architectural plan.
+
+FOR NOW: Minimal overwrite bug fix (if→elif). Stance may be incorrect for
+scientific claims. Continue testing P21-P25 to isolate other bugs before
+implementing full redesign.
 """
 from __future__ import annotations
 from typing import List, Dict, Any, Tuple
@@ -37,7 +58,7 @@ def _stance_for_window(text: str, arm: str) -> str:
     stance = "unrelated"
     if is_inc and not neg:
         stance = "support"
-    if (is_dec and not neg) or (neg and is_inc):
+    elif (is_dec and not neg) or (neg and is_inc):
         stance = "challenge"
     if is_inc and neg and arm.upper()=="A":
         stance = "mixed"
