@@ -201,6 +201,31 @@ This document tracks ACTUAL findings from testing, not assumptions.
 
 ---
 
+## P27 - Consensus Mechanism
+**Status:** ⚠️ SIMPLIFIED - Wrapper logic needs to be restored in Phase 2
+
+**Current Clean Module:**
+- Fixed adjustments: +0.10 bonus, -0.05/-0.10 penalties
+- Base confidence: max(r1_conf, r2_conf)
+- All tests pass, deterministic behavior ✅
+
+**Wrapper Logic (TO BE RESTORED):**
+- Variable bonus: min(0.20, 0.10 + 0.50 * abs(c1 - c2)) - adapts to confidence gap
+- Variable penalty: min(0.30, 0.15 + 0.50 * abs(c1 - c2)) - increases with disagreement
+- Base confidence: (c1 + c2) / 2.0 - uses average
+- More conservative when researchers have different confidences
+
+**What Phase 2 Needs:**
+- Implement variable bonus/penalty formulas from wrapper
+- Change base confidence calculation to average
+- Update tests to match wrapper behavior
+
+**Reference:** MONKEY_PATCH_ARCHIVE/wrappers/content/p27_consensus.py (lines 52-92)
+**Estimated Rebuild:** 1-2 days
+**Priority:** MEDIUM (improves consensus quality in edge cases)
+
+---
+
 ## Phase 2 Implementation Plan (After Execution Plan Complete)
 
 ### Approach
@@ -216,8 +241,9 @@ This document tracks ACTUAL findings from testing, not assumptions.
 - P23 semantic findings: 2-3 days (HIGH priority)
 - P24 frame extraction: 3-4 days (MEDIUM-HIGH priority - action alignment + semantic)
 - P25 aggregation: ✅ COMPLETE - no work needed
+- P27 consensus mechanism: 1-2 days (MEDIUM priority - restore variable formulas)
 - Integration & testing: 2-3 days
-- **Total: ~2.5-3 weeks**
+- **Total: ~3-3.5 weeks**
 
 ### Success Criteria
 - "Water boils at 100°C" with paraphrased evidence → supports, high confidence
