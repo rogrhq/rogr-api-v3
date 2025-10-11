@@ -68,6 +68,15 @@ def diversify_plan_for_lane(
     import copy
     diversified = copy.deepcopy(base_plan)
 
+    # NORMALIZE: Handle both dict and list format for arms
+    arms = diversified.get("arms", {})
+    if isinstance(arms, dict):
+        # Convert dict format {"A": {...}, "B": {...}} to list format
+        arms_list = []
+        for name, arm_data in arms.items():
+            arms_list.append({"name": name, **arm_data})
+        diversified["arms"] = arms_list
+
     # Shuffle queries for each arm
     queries_preview = {}
     for arm in diversified.get("arms", []):

@@ -102,7 +102,7 @@ def _extract_arm_defs(plan: Dict[str, Any]) -> List[Dict[str, Any]]:
     return out
 
 
-async def build_evidence_for_claim(*, claim_text: str, plan: Dict[str, Any], max_per_arm: int = 3) -> Dict[str, Any]:
+async def build_evidence_for_claim(claim_text: str, plan: Dict[str, Any], max_per_arm: int = 3) -> Dict[str, Any]:
     """
     LIVE evidence pipeline with explicit arm tagging at source (no mocks, no fallbacks).
       1) Execute plan per arm (A, B) and stamp every candidate with canonical arm label.
