@@ -12,7 +12,7 @@ from intelligence.content.semantic_frames import analyze_frames
 from intelligence.content.p25_aggregate import aggregate_verdict
 from intelligence.orchestration.dual_lane import run_dual_researchers
 from intelligence.planning.diversify import diversify_plan_for_lane
-from intelligence.telemetry.collect import LaneTelemetry
+from intelligence.telemetry.collect import LaneTelemetry, generate_manifest
 from intelligence.consensus.dual_lane import compute_consensus
 
 def _to_json_primitive(x: Any) -> Any:
@@ -148,6 +148,14 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
     else:
         consensus = dual_result.get("verdict", {})
 
+    # Generate manifest (P29)
+    if len(researchers) >= 2:
+        r1_config = researchers[0].get("lane_config", {})
+        r2_config = researchers[1].get("lane_config", {})
+        manifest = generate_manifest(text, r1_config, r2_config)
+    else:
+        manifest = {"replay_id": "error", "lanes": {}}
+
     # Build response
     claim_obj = {
         "id": "c-0",
@@ -161,5 +169,6 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
 
     return {
         "claims": [claim_obj],
+        "run_manifest": manifest,  # NEW
         "diversified": True
     }
