@@ -124,8 +124,14 @@ def analyze_item(claim_text: str, item: Dict[str,Any], *, window: int = 3) -> Di
     findings: List[Dict[str,Any]] = []
     best = 0.0
 
-    for i in range(0, max(0, len(sents) - window + 1)):
-        win = " ".join(sents[i:i+window]).strip()
+    # Handle short evidence: create at least one window
+    if len(sents) < window:
+        windows = [sents] if sents else []
+    else:
+        windows = [sents[i:i + window] for i in range(len(sents) - window + 1)]
+
+    for win_sents in windows:
+        win = " ".join(win_sents).strip()
         win_norm = _norm(win)
         w_toks = _tokens(win_norm)
         w_tris = _trigrams(w_toks)

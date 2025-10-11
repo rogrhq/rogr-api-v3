@@ -70,15 +70,45 @@ This document tracks ACTUAL findings from testing, not assumptions.
 ---
 
 ## P23 - Semantic Findings
-**Status:** TESTING IN PROGRESS
+**Status:** ⚠️ INCOMPLETE - Window bug fixed, semantic layer missing
 
 **Testing Results:**
-[To be filled after testing]
+- Fixed: Window sliding bug (now handles evidence < 3 sentences)
+- Current capabilities:
+  - ✅ Number matching (detects percentages, years)
+  - ✅ Stance keywords (confirm/refute/dispute/shows)
+  - ✅ Entity token matching (shared words > 2 chars)
+  - ✅ Exact trigram matching (Jaccard similarity)
+- Missing capabilities:
+  - ❌ Paraphrase detection (boils ≠ boiling point)
+  - ❌ Stemming (boils ≠ boiling, economy ≠ economic)
+  - ❌ Synonym matching (unemployment ≠ jobless)
+  - ❌ Semantic concept recognition
+  - ❌ Entity specificity (California = Texas in scoring)
+  - ❌ Number comparison logic (8% = 12% in scoring)
 
-**Reference:** MONKEY_PATCH_ARCHIVE/wrappers/content/p23_semantic.py
+**Example Gap:**
+- Claim: "Water boils at 100 degrees Celsius"
+- Evidence: "Water has a boiling point of 100 degrees Celsius"
+- Current: grade 0.397, stance: unrelated ❌
+- Should be: grade 0.8+, stance: support ✓
 
-**Estimated Rebuild:** TBD
-**Priority:** TBD
+**What's Needed:**
+- Paraphrase families (boils ↔ boiling point)
+- Stemming/lemmatization
+- Synonym dictionaries
+- Semantic concept matching
+- Entity-specific matching (not just token presence)
+- Numeric comparison/contradiction detection
+
+**Archived Wrapper Comparison:**
+- File: MONKEY_PATCH_ARCHIVE/wrappers/content/p23_semantic.py
+- Finding: Wrapper only imports and calls analyze_item from clean module
+- Conclusion: No semantic logic was lost - clean module IS the implementation
+- Gap existed in original design, not caused by wrapper removal
+
+**Estimated Rebuild:** 2-3 days
+**Priority:** HIGH (critical for semantic evidence evaluation)
 
 ---
 
@@ -104,9 +134,11 @@ This document tracks ACTUAL findings from testing, not assumptions.
 ### Estimated Timeline
 - P20 stance detection: 2-3 days
 - P21 full-read semantic: 2-3 days
-- P23/P24 (TBD based on testing): 1-2 days each
+- P23 semantic findings: 2-3 days
+- P24 frame extraction (TBD based on testing): 1-2 days
+- P25 aggregation (TBD based on testing): 1-2 days
 - Integration & testing: 2-3 days
-- **Total: ~2 weeks**
+- **Total: ~2-3 weeks**
 
 ### Success Criteria
 - "Water boils at 100°C" with paraphrased evidence → supports, high confidence
