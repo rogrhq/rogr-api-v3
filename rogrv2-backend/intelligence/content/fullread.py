@@ -54,10 +54,17 @@ def _window_sentences(text: str, win: int = 4, max_sents: int = 80) -> List[List
     raw = re.split(r"(?<=[\.\?\!])\s+", text or "")
     sents = [s.strip() for s in raw if s.strip()]
     sents = sents[:max_sents]
-    out: List[List[str]] = []
-    for i in range(0, max(0, len(sents)-win+1)):
-        out.append(sents[i:i+win])
-    return out
+
+    # Handle short evidence: create at least one window
+    if len(sents) < win:
+        # Use all available sentences as one window
+        return [sents] if sents else []
+    else:
+        # Normal sliding window
+        out: List[List[str]] = []
+        for i in range(len(sents) - win + 1):
+            out.append(sents[i:i+win])
+        return out
 
 def _stance_for_chunk(txt: str) -> str:
     sup = bool(_SUPPORT.search(txt))
