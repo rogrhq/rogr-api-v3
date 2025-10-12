@@ -1,8 +1,16 @@
 """Shared vocabulary - consolidated from P24, extract_facts, P21, P23"""
 
-# From P24 semantic_frames.py lines 74-75
-P24_INC_VERBS = {"increase", "rise", "grow", "boost", "surge", "jump", "climb"}
-P24_DEC_VERBS = {"decrease", "drop", "fall", "decline", "plunge", "shrink"}
+# From P24 semantic_frames.py lines 79-80 (COMPLETE sets with verb forms + policy verbs)
+P24_INC_VERBS = {
+    "increase", "increased", "raise", "raised", "boost", "boosted",
+    "grow", "grew", "expand", "expanded", "approve", "approved",
+    "adopt", "adopted", "pass", "passed"
+}
+P24_DEC_VERBS = {
+    "decrease", "decreased", "reduce", "reduced", "cut", "cuts",
+    "lower", "lowered", "decline", "declined", "reject", "rejected",
+    "fail", "failed", "vote down", "voted down"
+}
 
 # From extract_facts.py lines 27-28
 EXTRACT_FACTS_INC = ("increase", "rising", "growth", "up", "higher", "grew", "climbed")

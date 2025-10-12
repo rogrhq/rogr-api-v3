@@ -2,6 +2,11 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Tuple
 
+# Shared utilities
+from intelligence.content.shared.vocabulary import INC_VERBS, DEC_VERBS, ACTION_VERBS
+from intelligence.content.shared.frames import Frame, extract_frame, compare_frames
+from intelligence.content.shared.text_utils import normalize_text
+
 # --- Basic text utilities (deterministic, no external deps) ---
 _APOS = re.compile(r"['׳`´]")
 _PUNCT = re.compile(r"[^a-z0-9\s]")
@@ -71,8 +76,8 @@ def _best_offset(raw: str, snippet: str) -> Tuple[int,int]:
 
 # --- Domain-ish lexica (minimal, deterministic) ---
 BUDGET_CONTEXT = {"budget","general fund","operating budget","fy","fiscal","appropriation","spending","expenditure","revenue"}
-INC_VERBS = {"increase","increased","raise","raised","boost","boosted","grow","grew","expand","expanded","approve","approved","adopt","adopted","pass","passed"}
-DEC_VERBS = {"decrease","decreased","reduce","reduced","cut","cuts","lower","lowered","decline","declined","reject","rejected","fail","failed","vote down","voted down"}
+# INC_VERBS and DEC_VERBS now imported from shared.vocabulary (lines 79-80 replaced)
+# Original P24 definitions moved to shared/vocabulary.py for reuse across P20-P24
 NEG_WORDS  = {"not","no","never","without","deny","denied","false","untrue","incorrect","misleading","debunk","refute","contradict","dispute","challenge","rebut","didnt","didn't","doesnt","doesn't","isnt","isn't"}
 
 def _has_budget_context(toks: List[str]) -> bool:
