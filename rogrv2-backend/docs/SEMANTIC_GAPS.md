@@ -264,6 +264,48 @@ This document tracks ACTUAL findings from testing, not assumptions.
 
 ---
 
+## P29 - Telemetry & Reproducibility
+**Status:** ⚠️ CORE FEATURES ONLY - Wrapper had enhanced reproducibility
+
+**Current Clean Module:**
+- ✅ All tests pass (16 structural + 11 capability)
+- ✅ LaneTelemetry class (provider tracking, duration)
+- ✅ Deterministic replay_id generation (claim + seeds)
+- ✅ Basic manifest creation
+- ✅ Manual telemetry recording working
+
+**Wrapper Features Missing:**
+
+1. **Enhanced Manifest Fields:**
+   - `providers_available` - Environment snapshot
+   - `knobs` per lane - Configuration controls:
+     - `query_shuffle` (bool)
+     - `timeout_jitter_ms` (int)
+     - `max_per_provider` (int)
+   - `diversified` flag - Top-level indicator
+   - `parity.providers_equal` - Provider set equality check
+
+2. **Automatic Telemetry:**
+   - Wrapper: Auto-collected via ContextVar and wrappers
+   - Clean: Requires manual record_provider_call()
+
+3. **Full Integration:**
+   - Wrapper: Injected telemetry/knobs into researchers
+   - Clean: Standalone functions only
+
+**What Phase 2 Needs to Restore:**
+- Add knobs configuration to manifest
+- Add providers_available field
+- Add parity checking
+- Consider auto-telemetry collection (ContextVar approach)
+- Integration with P26 for automatic injection
+
+**Reference:** MONKEY_PATCH_ARCHIVE/wrappers/content/p29_diversify_controls.py
+**Estimated Rebuild:** 1-2 days
+**Priority:** MEDIUM (needed for full reproducibility/replay)
+
+---
+
 ## Phase 2 Implementation Plan (After Execution Plan Complete)
 
 ### Approach
@@ -281,6 +323,7 @@ This document tracks ACTUAL findings from testing, not assumptions.
 - P25 aggregation: ✅ COMPLETE - no work needed
 - P27 consensus mechanism: 1-2 days (MEDIUM priority - restore variable formulas)
 - P28 diversification: 0.5-1 day (LOW priority - optional enhancements)
+- P29 telemetry & reproducibility: 1-2 days (MEDIUM priority - enhanced manifest features)
 - Integration & testing: 2-3 days
 - **Total: ~3-4 weeks**
 
