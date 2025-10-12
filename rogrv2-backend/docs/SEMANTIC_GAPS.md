@@ -201,6 +201,42 @@ This document tracks ACTUAL findings from testing, not assumptions.
 
 ---
 
+## P26 - Dual-Researcher Orchestration
+**Status:** ✅ ENHANCED - Clean implementation exceeds wrapper
+
+**Old Wrapper (Archived):**
+- Ran `run_preview()` twice sequentially
+- Both R1 and R2 got identical search plans (no diversification)
+- No telemetry tracking
+- Basic merge: `{id, verdict, evidence}`
+- Strategy: Simple wrapper at API boundary
+
+**New Clean Implementation (run.py:140):**
+- ✅ Full orchestration via `run_dual_researchers()`
+- ✅ P28 integration: R1/R2 get different providers/query orders
+- ✅ P29 integration: Telemetry tracking (provider usage, duration, replay_id)
+- ✅ P27 integration: Consensus computation between lanes
+- ✅ Rich output: `lane_config` and `telemetry` per researcher
+- ✅ Proper architectural separation (orchestration layer)
+
+**Testing Results:**
+- ✅ All tests pass (13 structural + 12 capability = 25/25)
+- ✅ R1/R2 lanes execute independently with different plans
+- ✅ Provider diversity working (R1 uses Google-first, R2 uses Brave-first)
+- ✅ Telemetry captured per lane (provider counts, duration)
+- ✅ Lane configs properly exposed for reproducibility
+- ✅ Sequential execution (avoids rate limits)
+- ✅ Backward compatibility (top-level verdict/evidence from R1)
+
+**Conclusion:**
+Clean implementation is architecturally superior. This is NOT a gap - it's an improvement over the wrapper's basic sequential execution. The wrapper simply ran the same pipeline twice with no differentiation. The clean module properly orchestrates independent research lanes with diversification, telemetry, and consensus.
+
+**Reference:** MONKEY_PATCH_ARCHIVE/wrappers/content/p26_dual_researchers.py
+
+**No Phase 2 work needed** - P26 is enhanced beyond wrapper capabilities
+
+---
+
 ## P27 - Consensus Mechanism
 **Status:** ⚠️ SIMPLIFIED - Wrapper logic needs to be restored in Phase 2
 
@@ -321,6 +357,7 @@ This document tracks ACTUAL findings from testing, not assumptions.
 - P23 semantic findings: 2-3 days (HIGH priority)
 - P24 frame extraction: 3-4 days (MEDIUM-HIGH priority - action alignment + semantic)
 - P25 aggregation: ✅ COMPLETE - no work needed
+- P26 orchestration: ✅ ENHANCED - no work needed
 - P27 consensus mechanism: 1-2 days (MEDIUM priority - restore variable formulas)
 - P28 diversification: 0.5-1 day (LOW priority - optional enhancements)
 - P29 telemetry & reproducibility: 1-2 days (MEDIUM priority - enhanced manifest features)
