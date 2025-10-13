@@ -3,6 +3,9 @@ import re
 from typing import Dict, List, Tuple
 from urllib.parse import urlparse
 
+# Shared advanced text processing utilities
+from intelligence.content.shared.text_utils import tokenize_advanced as _tokens
+
 _WORD_RE = re.compile(r"[A-Za-z0-9]+")
 
 def _domain(u: str) -> str:
@@ -16,8 +19,9 @@ def _domain(u: str) -> str:
     except Exception:
         return ""
 
-def _tokens(s: str) -> List[str]:
-    return [w.lower() for w in _WORD_RE.findall(s or "") if len(w) > 2]
+# Local _tokens() removed - now using shared tokenize_advanced from text_utils
+# Stop words, apostrophe handling, and possessive removal handled by tokenize_advanced()
+# See intelligence/content/shared/text_utils.py for implementation
 
 def _content_tokens(item: Dict) -> List[str]:
     title = (item.get("title") or "")
