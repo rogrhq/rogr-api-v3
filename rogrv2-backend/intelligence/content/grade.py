@@ -57,12 +57,105 @@ def _modality_penalty(text: str) -> float:
         return P_MODAL
     return 0.0
 
-def _stance_for_window(text: str, arm: str) -> str:
+def _stance_for_window(text: str, arm: str, claim_text: str = None) -> str:
+    """
+    Frame-based stance detection with condition awareness.
+
+    Replaces keyword matching with:
+    1. Frame extraction (entity, action, quantity, conditions)
+    2. Paraphrase detection (rose ↔ increased)
+    3. Condition awareness (at sea level vs at altitude)
+    """
+    if not claim_text:
+        # Fallback to old keyword approach if no claim provided
+        return _stance_keyword_fallback(text, arm)
+
+    # Extract frames from claim and evidence
+    claim_frame = extract_frame(claim_text, domain='policy')
+    evidence_frame = extract_frame(text, domain='policy')
+
+    # Extract conditions
+    claim_conditions = extract_conditions(claim_text)
+    evidence_conditions = extract_conditions(text)
+
+    # Check condition compatibility
+    condition_match = False
+    condition_conflict = False
+    if claim_conditions and evidence_conditions:
+        if conditions_equivalent(claim_conditions[0], evidence_conditions[0]):
+            condition_match = True
+        else:
+            condition_conflict = True
+
+    # Compare frames
+    frame_comparison = compare_frames(claim_frame, evidence_frame)
+
+    # Check for paraphrases in action words
+    paraphrase_score = 0.0
+    if claim_frame.action and evidence_frame.action:
+        # Check if actions are paraphrases (rose ↔ increased)
+        claim_action_text = f"{claim_frame.action} {claim_frame.direction or ''}"
+        evidence_action_text = f"{evidence_frame.action} {evidence_frame.direction or ''}"
+        paraphrase_score = paraphrase_match_score(claim_action_text, evidence_action_text)
+
+    # Decision logic with frame-based reasoning
+    if frame_comparison == 'exact' or paraphrase_score > 0.25:
+        # Same frame or strong paraphrase
+        if condition_conflict:
+            return "contextual_support"  # Same phenomenon, different context
+        return "support"
+
+    elif frame_comparison == 'partial':
+        # Some frame overlap - check what matches
+        has_entity_match = claim_frame.entity and evidence_frame.entity and \
+                          claim_frame.entity.lower() == evidence_frame.entity.lower()
+        has_number_match = claim_frame.number and evidence_frame.number and \
+                          values_match(claim_frame.number, evidence_frame.number, abs_tol=0.5, rel_tol=0.10)
+
+        # If entity + number match, it's support (even if actions differ slightly)
+        if has_entity_match and has_number_match:
+            if condition_conflict:
+                return "contextual_support"
+            return "support"
+
+        # Otherwise, check conditions
+        if condition_match:
+            return "support"
+        elif condition_conflict:
+            return "contextual_support"
+
+        # Weak paraphrase with some overlap
+        if paraphrase_score > 0.2:
+            return "support"
+
+        return "mixed"
+
+    elif evidence_frame.action and claim_frame.action:
+        # Both have actions, check for contradiction
+        if (claim_frame.direction == 'up' and evidence_frame.direction == 'down') or \
+           (claim_frame.direction == 'down' and evidence_frame.direction == 'up'):
+            return "challenge"
+
+    # Fallback: Check for negation + keyword matching
+    t = text.lower()
+    neg = any(w in t for w in ("not ", "no ", "false", "incorrect", "deny", "dispute", "refute", "contradict", "debunk"))
+
+    if neg:
+        # Negation present - likely challenge or mixed
+        if paraphrase_score > 0.2:
+            return "challenge"
+        return "mixed" if arm.upper() == "A" else "challenge"
+
+    return "unrelated"
+
+
+def _stance_keyword_fallback(text: str, arm: str) -> str:
+    """Fallback to old keyword approach when frame extraction unavailable"""
     t = (text or "").lower()
     is_inc = any(w in t for w in ("increase","increased","up","rise","grew","growth","higher"))
     is_dec = any(w in t for w in ("decrease","decreased","down","lower","reduced","reduction"))
     neg = any(w in t for w in ("not ","no ","false","incorrect","deny","dispute","refute","contradict","debunk"))
-    # simple rule grid
+
     stance = "unrelated"
     if is_inc and not neg:
         stance = "support"
@@ -83,6 +176,9 @@ def build_finding(claim_text: str, arm: str, content_text: str, snippet_text: st
     if not window:
         from intelligence.content.extract_facts import best_window_for_text
         window, sim = best_window_for_text(claim_text, content_text or "", win=4)
+        # Fix: If window still empty (short content), use snippet or content directly
+        if not window:
+            window = snippet_text or content_text or ""
     if sim is None or sim < 0:
         sim = jaccard_trigrams(claim_text, window)
 
@@ -96,7 +192,7 @@ def build_finding(claim_text: str, arm: str, content_text: str, snippet_text: st
     has_yr  = has_any(window, yrs)
 
     # Stance & modality
-    stance = _stance_for_window(window, arm)
+    stance = _stance_for_window(window, arm, claim_text=claim_text)
     penalty = _modality_penalty(window)
 
     # Score
