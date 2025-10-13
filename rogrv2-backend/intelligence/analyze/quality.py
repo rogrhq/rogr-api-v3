@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Dict, Set
 import re
+from intelligence.content.shared.text_utils import tokenize_advanced
 
 # --- helpers ---
 def _letter(score: float) -> str:
@@ -16,7 +17,8 @@ _MONTH = re.compile(r"\b(jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|jun(e)?|ju
 _TOKEN = re.compile(r"[A-Za-z][A-Za-z0-9_.-]+")
 
 def _tokens(s: str) -> Set[str]:
-    return set(t.lower() for t in _TOKEN.findall(s or ""))
+    """Wrapper to maintain Set[str] return type for quality.py"""
+    return set(tokenize_advanced(s))
 
 def _entities_like(s: str) -> Set[str]:
     # crude entity proxy: capitalized tokens merged from title/snippet
