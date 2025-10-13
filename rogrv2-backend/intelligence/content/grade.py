@@ -34,6 +34,14 @@ from intelligence.content.extract_facts import (
     claim_entities, claim_numbers, claim_years
 )
 
+# Shared utilities for frame-based redesign
+from intelligence.content.shared.frames import Frame, extract_frame, compare_frames
+from intelligence.content.shared.vocabulary import INC_VERBS, DEC_VERBS
+from intelligence.content.shared.paraphrases import paraphrase_match_score
+from intelligence.content.shared.conditions import extract_conditions, conditions_equivalent
+from intelligence.content.shared.units import values_match
+from intelligence.content.shared.text_utils import normalize_text
+
 # Tunable weights (safe, conservative)
 W_ENTITY = 2.0
 W_NUMBER = 2.0
