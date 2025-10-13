@@ -1,6 +1,7 @@
 from __future__ import annotations
 import re
 from typing import Dict, List, Any, Tuple
+from intelligence.content.shared.text_utils import tokenize_advanced as _tokens
 
 # Very lightweight deterministic interpreters (no external NLP deps)
 _WORD = re.compile(r"[A-Za-z][A-Za-z\-\']+")
@@ -13,9 +14,6 @@ _ENTITY = re.compile(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\b")
 _NEG_CUES = {"not","no","never","none","n't"}
 _COMP_CUES = {"more","less","increase","decrease","higher","lower","rise","fell","fewer","greater","smaller","above","below","exceed","drop","up","down"}
 _ATTRIB_CUES = {"claims","said","according","reported","announced","stated","told","alleged"}
-
-def _tokens(s: str) -> List[str]:
-    return [m.group(0).lower() for m in _WORD.finditer(s)]
 
 def _entities(s: str) -> List[str]:
     ents: List[str] = []
