@@ -405,4 +405,15 @@ Clean implementation is architecturally superior. This is NOT a gap - it's an im
 
 ---
 
+## CRITICAL: Paraphrase System Limitation
+
+**Status:** Must fix before AI Assist
+
+**Issue:** Dictionary-based matching, not semantic
+**Impact:** Limited to ~50-100 predefined word families
+**Solution:** Upgrade to embeddings-based semantic similarity
+**Timeline:** After Phase 2, before AI Assist
+
+---
+
 *This is a living document. Updated as we test each module.*
