@@ -5,30 +5,14 @@ from typing import Any, Dict, List, Tuple
 # Shared utilities
 from intelligence.content.shared.vocabulary import INC_VERBS, DEC_VERBS, ACTION_VERBS
 from intelligence.content.shared.frames import Frame, extract_frame, compare_frames
-from intelligence.content.shared.text_utils import normalize_text
+from intelligence.content.shared.text_utils import normalize_text_advanced as _norm, tokenize_advanced as _tokens
 
-# --- Basic text utilities (deterministic, no external deps) ---
-_APOS = re.compile(r"['׳`´]")
-_PUNCT = re.compile(r"[^a-z0-9\s]")
-_WS = re.compile(r"\s+")
+# --- Sentence splitting (kept for window processing) ---
 _SENT_SPLIT = re.compile(r"(?<=[\.\!\?])\s+")
 
-_STOP = {
-    "the","a","an","of","in","on","for","to","and","or","by","with","from","as","at",
-    "this","that","be","is","are","was","were","it","its","their","his","her","they",
-    "we","you"
-}
-
-def _norm(s: str) -> str:
-    s = (s or "").lower()
-    s = _APOS.sub("'", s)
-    s = s.replace("'s", " ")
-    s = _PUNCT.sub(" ", s)
-    s = _WS.sub(" ", s).strip()
-    return s
-
-def _tokens(s: str) -> List[str]:
-    return [t for t in _norm(s).split() if t and t not in _STOP]
+# Local _norm() and _tokens() removed - now using shared advanced versions from text_utils
+# Stop words, apostrophe handling, and possessive removal handled by normalize_text_advanced()
+# See intelligence/content/shared/text_utils.py for implementation
 
 def _split_sentences(text: str) -> List[str]:
     text = text or ""

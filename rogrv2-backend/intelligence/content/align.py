@@ -4,6 +4,9 @@ import re
 import os
 import json
 
+# Shared advanced text processing utilities
+from intelligence.content.shared.text_utils import normalize_text_advanced as _normalize_sentence
+
 __all__ = [
     "align_claim_to_text",
     "align_claim_to_text_windowed",
@@ -33,16 +36,9 @@ _NUM_WORDS = {
     "19": "nineteen", "20": "twenty",
 }
 
-_APOS = re.compile(r"['׳`´]")
-_PUNCT = re.compile(r"[^a-z0-9\s]")
-
-def _normalize_sentence(s: str) -> str:
-    s = (s or "").lower()
-    s = _APOS.sub("'", s)              # normalize fancy apostrophes
-    s = s.replace("'s", " ")           # fold possessives
-    s = _PUNCT.sub(" ", s)             # strip punctuation, keep spaces
-    s = re.sub(r"\s+", " ", s).strip()
-    return s
+# Local _normalize_sentence() removed - now using shared normalize_text_advanced from text_utils
+# Stop words, apostrophe handling, and possessive removal handled by normalize_text_advanced()
+# See intelligence/content/shared/text_utils.py for implementation
 
 def _diag_enabled() -> bool:
     v = os.getenv("ROGR_DIAG_ALIGN", "")

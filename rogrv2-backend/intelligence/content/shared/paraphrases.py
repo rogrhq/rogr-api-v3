@@ -67,10 +67,10 @@ def paraphrase_match_score(text1, text2):
     Compute paraphrase match score between two texts.
     Returns: 0.0 (no match) to 1.0 (all words have paraphrases)
     """
-    from intelligence.content.shared.text_utils import tokenize
+    from intelligence.content.shared.text_utils import tokenize_advanced
 
-    tokens1 = tokenize(text1)
-    tokens2 = tokenize(text2)
+    tokens1 = tokenize_advanced(text1)
+    tokens2 = tokenize_advanced(text2)
 
     matches = 0
     for t1 in tokens1:

@@ -12,6 +12,9 @@ from __future__ import annotations
 from typing import List, Dict, Any, Tuple, Iterable
 import re
 
+# Shared advanced text processing utilities
+from intelligence.content.shared.text_utils import tokenize_advanced as tokenize
+
 _WORD = re.compile(r"[A-Za-z0-9%]+")
 _APOS = re.compile(r"['׳`´]")
 _NONWORD = re.compile(r"[^a-z0-9\s]")
@@ -35,8 +38,8 @@ def _clean(s: str) -> str:
     s = _WS.sub(" ", s).strip()
     return s
 
-def tokenize(s: str) -> List[str]:
-    return [t for t in _WORD.findall(s or "")]
+# Local tokenize() removed - now using shared tokenize_advanced from text_utils
+# See intelligence/content/shared/text_utils.py for implementation
 
 def percent_forms(n: str) -> List[str]:
     forms = [f"{n}%"]

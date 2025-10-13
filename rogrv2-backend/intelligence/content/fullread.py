@@ -16,9 +16,10 @@ import re
 import math
 from urllib.parse import urlparse
 
-_WORD = re.compile(r"[a-z0-9]+")
-_APOS = re.compile(r"['׳`´]")
-_PUNCT = re.compile(r"[^a-z0-9\s]")
+# Shared advanced text processing utilities
+from intelligence.content.shared.text_utils import normalize_text_advanced as _norm, tokenize_advanced as _tokens
+
+# Regex patterns for specific matching
 _PERCENT = re.compile(r"(?:(\d{1,3})(?:\.\d+)?)\s?%|\b(\d{1,2})\s?(?:percent|per\s?cent)\b", re.I)
 _YEAR = re.compile(r"\b(19[5-9]\d|20[0-4]\d|2050)\b")
 _NEG = re.compile(r"\b(no|not|never|without|lacks|declined|denied|false|incorrect|inaccurate|misleading)\b", re.I)
@@ -26,16 +27,9 @@ _SUPPORT = re.compile(r"\b(confirms?|supports?|corroborates?|shows|finds|indicat
 _CHALLENGE = re.compile(r"\b(disputes?|contradicts?|refutes?|debunks?|casts\s+doubt|challenges?)\b", re.I)
 _AUTHZ_WORDS = re.compile(r"\b(report|press\s+release|statement|dataset|methodology|audit|budget)\b", re.I)
 
-def _norm(s: str) -> str:
-    s = (s or "").lower()
-    s = _APOS.sub("'", s)
-    s = s.replace("'s", " ")
-    s = _PUNCT.sub(" ", s)
-    s = re.sub(r"\s+", " ", s).strip()
-    return s
-
-def _tokens(s: str) -> List[str]:
-    return _WORD.findall(_norm(s))
+# Local _norm() and _tokens() removed - now using shared advanced versions from text_utils
+# Stop words, apostrophe handling, and possessive removal handled by normalize_text_advanced()
+# See intelligence/content/shared/text_utils.py for implementation
 
 def _ngrams(tokens: List[str], n: int) -> List[Tuple[str,...]]:
     return [tuple(tokens[i:i+n]) for i in range(0, max(0, len(tokens)-n+1))]
