@@ -1,16 +1,12 @@
 from __future__ import annotations
 from typing import Dict, List, Tuple
 import re
+from intelligence.content.shared.text_utils import tokenize_advanced as _tokens
 
 _NEG_TOKENS = {
     "no","not","never","without","none","false","deny","denies","denied","refute","refutes","refuted",
     "decline","declines","declined","incorrect","inaccurate","myth","hoax"
 }
-
-_WORD_RE = re.compile(r"[A-Za-z0-9]+")
-
-def _tokens(s: str) -> List[str]:
-    return [w.lower() for w in _WORD_RE.findall(s or "") if len(w) > 2]
 
 def _has_neg_language(title: str, snippet: str) -> bool:
     toks = set(_tokens(title + " " + snippet))
