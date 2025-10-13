@@ -18,6 +18,9 @@ from urllib.parse import urlparse
 
 # Shared advanced text processing utilities
 from intelligence.content.shared.text_utils import normalize_text_advanced as _norm, tokenize_advanced as _tokens
+from intelligence.content.shared.paraphrases import paraphrase_match_score
+from intelligence.content.shared.conditions import extract_conditions, conditions_equivalent
+from intelligence.content.shared.units import values_match
 
 # Regex patterns for specific matching
 _PERCENT = re.compile(r"(?:(\d{1,3})(?:\.\d+)?)\s?%|\b(\d{1,2})\s?(?:percent|per\s?cent)\b", re.I)
@@ -91,9 +94,9 @@ def _percent_hits(claim: str, text: str) -> Tuple[bool, bool]:
                 pass
     if not claim_nums:
         return (False, False)
-    # close if within 0.5 absolute or within 10% relative tolerance
+    # Use shared tolerance matching
     close = any(
-        abs(t - c) <= 0.5 or (abs(t - c) / max(0.5, c)) <= 0.10
+        values_match(t, c, abs_tol=0.5, rel_tol=0.10)
         for c in claim_nums for t in tnums
     )
     return (True, close)
@@ -163,12 +166,38 @@ def evaluate_full_evidence(claim_text: str, item: Dict[str, Any]) -> Dict[str, A
         ent = _entity_overlap(claim, txt)
         pct_any, pct_close = _percent_hits(claim, txt)
         yh = _year_hit(claim, txt)
+        # Condition awareness
+        claim_conditions = extract_conditions(claim)
+        window_conditions = extract_conditions(txt)
+        cond_match = False
+        cond_mismatch = False
+        if claim_conditions and window_conditions:
+            # Check if any conditions match
+            for cc in claim_conditions:
+                for wc in window_conditions:
+                    if conditions_equivalent(cc, wc):
+                        cond_match = True
+                        break
+                if cond_match:
+                    break
+            # If we have conditions but no match, it's a mismatch
+            if not cond_match:
+                cond_mismatch = True
         # weighted score for window
         score = 0.0
         score += 2.0 * (1.0 if pct_close else 0.0) + 0.8 * (1.0 if pct_any else 0.0)
         score += 1.2 * (1.0 if yh else 0.0)
         score += 2.0 * min(ent, 1.0)
         score += 3.0 * j  # tri-gram paraphrase
+        # Real paraphrase matching (not just n-grams)
+        para_score = paraphrase_match_score(claim, txt)
+        if para_score > 0.3:  # Threshold for meaningful paraphrase match
+            score += 0.6 * para_score  # Add paraphrase signal
+        # Apply condition awareness to score
+        if cond_match:
+            score += 0.4  # Matching conditions boost score
+        elif cond_mismatch:
+            score -= 0.3  # Mismatched conditions reduce score
         if stance in ("support", "challenge"):
             score += 0.8
         if score > best["score"]:
