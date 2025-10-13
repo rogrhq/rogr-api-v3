@@ -1,11 +1,7 @@
 from __future__ import annotations
 from typing import List, Dict
 import re
-
-# very light normalizer
-_WS = re.compile(r"\s+")
-def _norm(s: str) -> str:
-    return _WS.sub(" ", s.strip())
+from intelligence.content.shared.text_utils import normalize_text_advanced as _norm
 
 def generate_counterclaims(claim_text: str) -> List[Dict[str, str]]:
     """
