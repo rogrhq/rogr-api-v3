@@ -9,6 +9,8 @@ from intelligence.content.shared.text_utils import (
     trigrams as shared_trigrams,
     jaccard_similarity as shared_jaccard
 )
+from intelligence.content.shared.entities import extract_entities, entity_overlap
+from intelligence.content.shared.paraphrases import paraphrase_match_score, find_paraphrases_in_text
 
 _APOS = re.compile(r"['׳`´]")
 _PUNCT = re.compile(r"[^a-z0-9\s]")
@@ -152,14 +154,17 @@ def analyze_item(claim_text: str, item: Dict[str,Any], *, window: int = 3) -> Di
         stance = _stance_for_window(win_norm)
         j = _jaccard(c_tris, w_tris)
 
+        # Enhanced: Add paraphrase matching
+        para_score = paraphrase_match_score(claim_text, win)
+
         # score:
         # base from signals
         base = 0.0
         if ent_hit: base += 0.25
         if num_hit: base += 0.25
         if year_hit: base += 0.15
-        # similarity
-        base += min(0.35, j * 0.7)  # cap contribution
+        # similarity: 70% jaccard, 30% paraphrase
+        base += min(0.35, (0.7 * j + 0.3 * para_score) * 0.7)  # cap contribution
         # stance adjustment (we keep both; stance used downstream)
         if stance == "mixed":
             base += 0.05
