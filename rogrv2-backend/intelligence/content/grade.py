@@ -260,7 +260,7 @@ def attach_finding_to_item(claim_text: str, arm: str, item: Dict[str, Any]) -> D
         break
     finding = build_finding(claim_text, arm, content_text=content, snippet_text=snippet, precomputed_window=pre, precomputed_sim=pre_sim)
     # annotate the item
-    item["grade"] = finding["grade"]
+    item["item_grade"] = finding["grade"]
     item["stance"] = finding["stance"]
     item["finding"] = finding
     return item
