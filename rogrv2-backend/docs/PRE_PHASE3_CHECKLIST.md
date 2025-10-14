@@ -38,3 +38,31 @@
 
 Add new blocking items to this document as they're discovered.
 Review this checklist completely before starting Phase 3.
+
+---
+
+## CONTEXTUAL SUPPORT TEST FAILURE
+
+**Date:** 2025-10-13
+**Context:** Running Phase 2 test battery - test_contextual_support() failed
+
+### Test Failure Details
+
+**Test:** `test_contextual_support()`
+- **Claim:** "Sound travels faster in water than air"
+- **Evidence:** "In water, sound speed is higher"
+- **Expected:** support/contextual_support/mixed
+- **Actual:** unrelated
+
+### Root Cause
+
+P20's contextual support detection is not recognizing the relationship between:
+- "travels" ↔ "speed" (semantic relationship not detected)
+- "faster" ↔ "higher" (in context of speed/velocity)
+
+This is a **paraphrase/semantic matching limitation** - the dictionary lacks these mappings.
+
+### Status
+
+✅ ACCEPTED as known limitation for Phase 2 completion
+⏳ Will be addressed by embeddings upgrade (Blocking Item #1)

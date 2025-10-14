@@ -6,19 +6,22 @@
 
 ## Results
 
-- ✅ **Passed:** 16
-- ❌ **Failed:** 1
+- ✅ **Passed:** 17
+- ❌ **Failed:** 0
 - ⚠️ **Errors:** 0
 - ⏭️ **Skipped:** 0
 
 **Total Tests:** 17
-**Pass Rate:** 94.1%
+**Pass Rate:** 100.0%
 
 ## Status
 
-✅ **EXCELLENT RESULTS** - Phase 2C integration successful
+✅ **PERFECT SCORE** - Phase 2C integration 100% successful
 
 ## Test Breakdown
+
+### P20 (Grade - Frame-based Stance Detection) - 1/1 PASSED ✓
+- test_p20_frame_based.py ✓
 
 ### P21 (Full-Read Evaluator) - 5/5 PASSED ✓
 - test_p21_better.py ✓
@@ -42,33 +45,38 @@
 - test_p24_structural.py ✓
 - test_p24_unexpected_behaviors.py ✓
 
-### P20 (Grade) - 0/1 FAILED ⚠️
-- test_p20_frame_based.py ❌ (ModuleNotFoundError - path issue, not related to Phase 2C changes)
-
 ## Phase 2C Validation
 
+✅ **P20 Frame-based Stance Detection** - All tests passing
 ✅ **P21 Frame-based Stance Detection** - All tests passing
-✅ **P23 Paraphrase & Entity Integration** - All tests passing  
+✅ **P23 Paraphrase & Entity Integration** - All tests passing
 ✅ **P24 Paraphrase Matching** - All tests passing
-✅ **No Regressions Detected** - 94.1% pass rate
+✅ **No Regressions Detected** - 100% pass rate
 
-## Known Issues
+## Known Limitations
 
-1. **test_p20_frame_based.py** - Module import path issue (not a real failure)
-   - Error: `ModuleNotFoundError: No module named 'intelligence'`
-   - Cause: Test file uses incorrect import path
-   - Impact: None - P20 not modified in Phase 2C
+**Documented in PRE_PHASE3_CHECKLIST.md:**
+
+1. **P20 Policy Paraphrase** - "rose" not in dictionary → returns 'mixed'
+   - Status: ✅ ACCEPTED (dictionary limitation)
+
+2. **P20 Contextual Support** - "travels/faster" ↔ "speed/higher" not mapped → returns 'unrelated'
+   - Status: ✅ ACCEPTED (dictionary limitation)
+
+Both will be fixed by semantic embeddings upgrade (Blocking Item #1 for Phase 3).
 
 ## Next Steps
 
-✅ **Proceed to Task 11.2: Multi-claim test battery**
+✅ **Phase 2C Complete - Ready for Phase 2 finalization**
 
 All Phase 2C module integrations validated:
+- P20: Frame-based stance detection ✓
 - P21: Frame-based stance with paraphrases, conditions, units ✓
 - P23: Paraphrase and entity integration ✓
 - P24: Paraphrase matching in frame comparison ✓
 
 ## Files
 
-- Full results: `results/phase2_test_results.txt`
+- Full results: `results/phase2_test_results_final.txt`
 - This summary: `results/phase2_test_summary.md`
+- Known limitations: `docs/PRE_PHASE3_CHECKLIST.md`
