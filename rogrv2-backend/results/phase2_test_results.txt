@@ -1,0 +1,35 @@
+======================================================================
+Running: tests/test_p20_frame_based.py
+======================================================================
+
+Traceback (most recent call last):
+  File "/Users/txtk/Documents/ROGR/github/rogrv2-backend/tests/test_p20_frame_based.py", line 3, in <module>
+    from intelligence.content.grade import grade
+ModuleNotFoundError: No module named 'intelligence'
+
+FAILED
+
+======================================================================
+SUMMARY
+======================================================================
+FAILED: tests/test_p20_frame_based.py
+PASSED: tests/test_p21_better.py
+PASSED: tests/test_p21_detailed.py
+PASSED: tests/test_p21_logic.py
+PASSED: tests/test_p21_trigrams.py
+PASSED: tests/test_p21_window_debug.py
+PASSED: tests/test_p23_detailed.py
+PASSED: tests/test_p23_evaluation.py
+PASSED: tests/test_p23_logic.py
+PASSED: tests/test_p23_trigram_analysis.py
+PASSED: tests/test_p23_window_debug.py
+PASSED: tests/test_p24_capabilities.py
+PASSED: tests/test_p24_comprehensive.py
+PASSED: tests/test_p24_negation_bug.py
+PASSED: tests/test_p24_negation_fix_verify.py
+PASSED: tests/test_p24_structural.py
+PASSED: tests/test_p24_unexpected_behaviors.py
+
+Total: 17 | Passed: 16 | Failed: 1
+Pass Rate: 94.1%
+
