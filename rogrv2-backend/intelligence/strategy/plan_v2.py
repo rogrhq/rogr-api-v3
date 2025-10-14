@@ -22,17 +22,33 @@ def _norm_words(s: str) -> List[str]:
     return [w for w in re.split(r"[^\w%]+", s) if w]
 
 def _percent_terms(numbers: Dict[str, Any]) -> List[str]:
+    """
+    Extract percentage terms from enrichment data.
+
+    Handles both float values (8.0) and string formats ("8%").
+    Converts floats to proper percentage strings to prevent domain filter issues.
+    """
     out: List[str] = []
     if not numbers:
         return out
+
     for p in numbers.get("percents", []) or []:
-        s = str(p)
-        # keep original
-        out.append(s)
-        # normalize "8%" -> "8 percent"
-        m = re.match(r"^(\d+(?:\.\d+)?)%$", s)
-        if m:
-            out.append(f"{m.group(1)} percent")
+        # Handle both float (8.0) and string ("8%") formats
+        if isinstance(p, (int, float)):
+            # Convert float to percent string
+            # Use int() if it's a whole number (8.0 → 8%), else keep decimal (8.5 → 8.5%)
+            val = int(p) if p == int(p) else p
+            out.append(f"{val}%")
+            out.append(f"{val} percent")
+        else:
+            # String format (already has %)
+            s = str(p)
+            out.append(s)
+            # normalize "8%" -> "8 percent"
+            m = re.match(r"^(\d+(?:\.\d+)?)%$", s)
+            if m:
+                out.append(f"{m.group(1)} percent")
+
     return out
 
 def _time_terms(scope: Dict[str, Any]) -> List[str]:
