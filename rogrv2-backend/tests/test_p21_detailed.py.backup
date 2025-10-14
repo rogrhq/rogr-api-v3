@@ -23,7 +23,7 @@ for chunk in windows:
     txt = " ".join(chunk)
     tri = _ngrams(_tokens(txt), 3)
     j = _jaccard(claim_tri, tri)
-    stance = _stance_for_chunk(claim, txt)
+    stance = _stance_for_chunk(txt)
     ent = _entity_overlap(claim, txt)
     pct_any, pct_close = _percent_hits(claim, txt)
     yh = _year_hit(claim, txt)

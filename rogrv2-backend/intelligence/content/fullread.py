@@ -21,6 +21,7 @@ from intelligence.content.shared.text_utils import normalize_text_advanced as _n
 from intelligence.content.shared.paraphrases import paraphrase_match_score
 from intelligence.content.shared.conditions import extract_conditions, conditions_equivalent
 from intelligence.content.shared.units import values_match
+from intelligence.content.shared.frames import extract_frame, compare_frames
 
 # Regex patterns for specific matching
 _PERCENT = re.compile(r"(?:(\d{1,3})(?:\.\d+)?)\s?%|\b(\d{1,2})\s?(?:percent|per\s?cent)\b", re.I)
@@ -63,7 +64,45 @@ def _window_sentences(text: str, win: int = 4, max_sents: int = 80) -> List[List
             out.append(sents[i:i+win])
         return out
 
-def _stance_for_chunk(txt: str) -> str:
+def _frame_based_stance(claim_text: str, evidence_text: str) -> str:
+    """
+    Determine stance using frame-based reasoning.
+    Returns: 'support', 'challenge', 'mixed', or 'unrelated' (if inconclusive)
+    """
+    # Extract frames
+    try:
+        claim_frame = extract_frame(claim_text, domain='policy')
+        evidence_frame = extract_frame(evidence_text, domain='policy')
+
+        # If frames are incomplete, return 'unrelated' (fall back to keyword method)
+        if not claim_frame or not evidence_frame:
+            return "unrelated"
+
+        # Compare frames
+        frame_result = compare_frames(claim_frame, evidence_frame)
+
+        # Map frame comparison to stance
+        if frame_result == 'exact' or frame_result == 'partial':
+            return 'support'
+        elif frame_result == 'contradiction':
+            return 'challenge'
+        else:
+            return "unrelated"  # Inconclusive, fall back to keywords
+    except Exception:
+        # If frame extraction fails, fall back to keyword method
+        return "unrelated"
+
+def _stance_for_chunk(claim_text: str, txt: str) -> str:
+    """
+    Determine stance for a window of evidence.
+    Uses frame-based detection first, falls back to keywords.
+    """
+    # Try frame-based detection first (NEW)
+    frame_stance = _frame_based_stance(claim_text, txt)
+    if frame_stance != "unrelated":
+        return frame_stance
+
+    # Fall back to existing keyword-based detection (PRESERVED)
     sup = bool(_SUPPORT.search(txt))
     ch = bool(_CHALLENGE.search(txt))
     if sup and ch:
@@ -161,7 +200,7 @@ def evaluate_full_evidence(claim_text: str, item: Dict[str, Any]) -> Dict[str, A
         txt = " ".join(chunk)
         tri = _ngrams(_tokens(txt), 3)
         j = _jaccard(claim_tri, tri)
-        stance = _stance_for_chunk(txt)
+        stance = _stance_for_chunk(claim, txt)
         neg = bool(_NEG.search(txt))
         ent = _entity_overlap(claim, txt)
         pct_any, pct_close = _percent_hits(claim, txt)
