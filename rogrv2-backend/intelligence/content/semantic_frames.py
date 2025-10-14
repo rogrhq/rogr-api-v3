@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Tuple
 from intelligence.content.shared.vocabulary import INC_VERBS, DEC_VERBS, ACTION_VERBS
 from intelligence.content.shared.frames import Frame, extract_frame, compare_frames
 from intelligence.content.shared.text_utils import normalize_text_advanced as _norm, tokenize_advanced as _tokens
+from intelligence.content.shared.paraphrases import are_paraphrases, paraphrase_match_score
 
 # --- Sentence splitting (kept for window processing) ---
 _SENT_SPLIT = re.compile(r"(?<=[\.\!\?])\s+")
@@ -170,8 +171,12 @@ def _entail_contradict(claim: Dict[str,Any], win: Dict[str,Any], sim: float) -> 
     yok, ywhy = _year_compatible(claim["year"], win["year"]); rules.append(ywhy)
     qok, qwhy = _quantity_compatible(claim["quantity"], win["quantity"]); rules.append(qwhy)
 
+    claim_action = claim["action"]
     action = win["action"]
     neg = win.get("neg", False)
+
+    # Check if actions match exactly OR are paraphrases
+    actions_match = (claim_action == action) or are_paraphrases(claim_action, action)
 
     label = "unrelated"
     # Primary contradiction signals
@@ -179,8 +184,8 @@ def _entail_contradict(claim: Dict[str,Any], win: Dict[str,Any], sim: float) -> 
         label = "contradict"; rules.append("antonym_action")
     elif neg and (eok and sok):
         label = "contradict"; rules.append("negation_present")
-    # Primary entailment signals
-    elif action == "increase" and (eok and sok and qok):
+    # Primary entailment signals - enhanced with paraphrase matching
+    elif actions_match and (eok and sok and qok):
         label = "entail"; rules.append("aligned_action_quantity")
     # If still undecided, use similarity + partials
     if label == "unrelated":
@@ -224,6 +229,13 @@ def analyze_frames(claim_text: str, content: str, *, window: int = 3, max_window
         wframe = extract_window_frame(win_text)
         wtris = _trigrams(_tokens(win_text))
         sim = _jaccard_tris(ctris, wtris)
+
+        # Check for paraphrase similarity in text
+        paraphrase_score = paraphrase_match_score(claim_text, win_text)
+        # Boost similarity score if paraphrases detected
+        if paraphrase_score > 0.3:
+            sim = max(sim, paraphrase_score * 0.8)  # Boost similarity with paraphrase score
+
         label, rules = _entail_contradict(claim, wframe, sim)
 
         # slots matched count
