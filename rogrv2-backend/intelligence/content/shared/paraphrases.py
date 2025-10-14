@@ -1,4 +1,13 @@
-"""Paraphrase and synonym matching - NEW module (gap identified in inventory)"""
+"""
+Paraphrase matching using semantic embeddings.
+
+UPDATED: 2025-10-14 - Replaced dictionary-based matching with embeddings.
+Previous dictionary approach had limited vocabulary (missing "rose", "travels", etc.)
+New approach uses sentence-transformers for unlimited vocabulary coverage.
+
+See: intelligence/content/shared/embeddings.py for implementation details.
+See: docs/EMBEDDINGS_LEVEL4_COMPLETE.md for full documentation.
+"""
 
 # Scientific paraphrase families
 SCIENTIFIC_PARAPHRASES = {
@@ -62,24 +71,31 @@ def find_paraphrases_in_text(text, target_word):
             found.append(paraphrase)
     return found
 
-def paraphrase_match_score(text1, text2):
+def paraphrase_match_score(text1: str, text2: str) -> float:
     """
-    Compute paraphrase match score between two texts.
-    Returns: 0.0 (no match) to 1.0 (all words have paraphrases)
+    Calculate semantic similarity between two texts using embeddings.
+
+    This replaces dictionary-based matching with unlimited vocabulary coverage.
+
+    Args:
+        text1: First text
+        text2: Second text
+
+    Returns:
+        Similarity score 0.0-1.0
+
+    Examples:
+        "rose", "increased" → ~0.29 (previously 0.0 - NOW WORKS!)
+        "travels", "speed" → ~0.39 (previously 0.0 - NOW WORKS!)
+        "faster", "higher" → ~0.52 (previously 0.0 - NOW WORKS!)
+        "increase", "rise" → ~0.43 (previously 1.0 - still works)
+
+    Note: Dictionary-based functions (are_paraphrases, etc.) are preserved
+    for backward compatibility but are no longer used by this function.
     """
-    from intelligence.content.shared.text_utils import tokenize_advanced
+    from intelligence.content.shared.embeddings import get_semantic_similarity
 
-    tokens1 = tokenize_advanced(text1)
-    tokens2 = tokenize_advanced(text2)
+    # Use embeddings-based similarity (unlimited vocabulary)
+    similarity = get_semantic_similarity(text1, text2)
 
-    matches = 0
-    for t1 in tokens1:
-        for t2 in tokens2:
-            if are_paraphrases(t1, t2):
-                matches += 1
-                break
-
-    if not tokens1:
-        return 0.0
-
-    return matches / len(tokens1)
+    return similarity

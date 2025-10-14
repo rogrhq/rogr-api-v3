@@ -101,6 +101,14 @@ def _stance_for_window(text: str, arm: str, claim_text: str = None) -> str:
     # Decision logic with frame-based reasoning
     if frame_comparison == 'exact' or paraphrase_score > 0.25:
         # Same frame or strong paraphrase
+
+        # CRITICAL: Check if actions have opposite directions (increased vs decreased)
+        # High semantic similarity can occur between antonyms (both budget verbs)
+        if claim_frame.direction and evidence_frame.direction:
+            if (claim_frame.direction == 'up' and evidence_frame.direction == 'down') or \
+               (claim_frame.direction == 'down' and evidence_frame.direction == 'up'):
+                return "challenge"  # Opposite directions = contradiction
+
         if condition_conflict:
             return "contextual_support"  # Same phenomenon, different context
         return "support"
