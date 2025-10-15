@@ -12,12 +12,12 @@ from intelligence.pipeline.run import run_preview
 async def test_validation():
     # Mock fetch_text to return sample content for testing
     async def mock_fetch(url, timeout=8.0):
-        return """
-        This is sample article content about the Austin budget for fiscal year 2024.
-        The city council approved an 8% increase in spending compared to last year.
-        The budget includes funding for public safety, infrastructure, and social services.
-        Officials stated this represents responsible fiscal management while addressing community needs.
-        """
+        return {
+            "text": """This is sample article content about the Austin budget for fiscal year 2024. The city council approved an 8% increase in spending compared to last year. The budget includes funding for public safety, infrastructure, and social services. Officials stated this represents responsible fiscal management while addressing community needs.""",
+            "status": 200,
+            "mime": "text/html",
+            "final_url": url
+        }
 
     with patch('intelligence.content.fetch.fetch_text', side_effect=mock_fetch):
         print("="*60)
@@ -31,7 +31,7 @@ async def test_validation():
 
         checks = {
             'P22 content_hash': 'content_hash' in item,
-            'P20 grade': 'grade' in item,
+            'P20 item_grade': 'item_grade' in item,
             'P21 grade_full': 'grade_full' in item,
             'P23 findings': 'findings' in item,
             'P24 item_frame': 'item_frame' in item,

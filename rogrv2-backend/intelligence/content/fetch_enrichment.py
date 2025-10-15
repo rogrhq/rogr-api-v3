@@ -60,7 +60,8 @@ async def fetch_missing_urls(urls: List[str], fetch_cache: Dict[str, str], timeo
     async def fetch_one(url: str) -> Tuple[str, str]:
         """Fetch a single URL and return (url, content)."""
         try:
-            content = await fetch_text(url, timeout)
+            result = await fetch_text(url, timeout=timeout)  # Fix 1: keyword argument
+            content = result.get('text', '')  # Fix 2: extract text from dict
             return (url, content)
         except Exception:
             return (url, '')
