@@ -2,6 +2,14 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Tuple
 
+# Shared utilities
+from intelligence.content.shared.text_utils import (
+    normalize_text_advanced,
+    tokenize_advanced,
+    trigrams as shared_trigrams,
+    jaccard_similarity as shared_jaccard
+)
+
 _APOS = re.compile(r"['׳`´]")
 _PUNCT = re.compile(r"[^a-z0-9\s]")
 _WS = re.compile(r"\s+")
@@ -17,15 +25,12 @@ _STOP = {
 }
 
 def _norm(s: str) -> str:
-    s = (s or "").lower()
-    s = _APOS.sub("'", s)
-    s = s.replace("'s", " ")
-    s = _PUNCT.sub(" ", s)
-    s = _WS.sub(" ", s).strip()
-    return s
+    """Now uses shared normalize_text_advanced"""
+    return normalize_text_advanced(s)
 
 def _tokens(s: str) -> List[str]:
-    return [t for t in _norm(s).split() if t and t not in _STOP]
+    """Now uses shared tokenize_advanced"""
+    return tokenize_advanced(s)
 
 def _split_sentences(text: str) -> List[str]:
     text = text or ""
@@ -48,17 +53,12 @@ def _split_sentences(text: str) -> List[str]:
     return sents[:500]
 
 def _trigrams(toks: List[str]) -> List[Tuple[str,str,str]]:
-    if len(toks) < 3:
-        return []
-    return [(toks[i], toks[i+1], toks[i+2]) for i in range(len(toks)-2)]
+    """Now uses shared trigrams"""
+    return shared_trigrams(toks)
 
 def _jaccard(a: List[Tuple[str,str,str]], b: List[Tuple[str,str,str]]) -> float:
-    if not a or not b:
-        return 0.0
-    A = set(a); B = set(b)
-    inter = len(A & B)
-    union = len(A | B)
-    return inter / union if union else 0.0
+    """Now uses shared jaccard_similarity"""
+    return shared_jaccard(a, b)
 
 def _percent_numbers(text: str) -> List[str]:
     hits = []
