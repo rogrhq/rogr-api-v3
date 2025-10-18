@@ -168,3 +168,96 @@ def build_search_plans_v2(claim: Dict[str, Any]) -> Dict[str, Any]:
             "dimension": claim.get("dimension", "unknown")
         }
     }
+
+# ============================================================================
+# PHASE 5.1: QUERY STRATEGY DIFFERENTIATION (ADDED)
+# ============================================================================
+
+def generate_queries_r1(claim_text: str, entities: list, numbers: list, arm: str) -> list:
+    """
+    R1 (Precision) query strategy - quoted, anchored, exact.
+
+    Characteristics:
+    - Uses exact quotes
+    - Anchors on specific entities + numbers
+    - Conservative counter-frames
+    - Aims for high precision (fewer results, high relevance)
+
+    Args:
+        claim_text: The claim
+        entities: Extracted entities
+        numbers: Extracted numbers
+        arm: 'A' (support) or 'B' (challenge)
+
+    Returns:
+        List of query strings (3-5 queries)
+    """
+    queries = []
+
+    # Query 1: Exact claim (quoted)
+    queries.append(f'"{claim_text}"')
+
+    # Query 2: Entity + number combinations (quoted)
+    if entities and numbers:
+        for entity in entities[:2]:  # Top 2 entities
+            for number in numbers[:2]:  # Top 2 numbers
+                entity_str = entity if isinstance(entity, str) else entity.get('name', '')
+                num_val = number.get('value', '') if isinstance(number, dict) else str(number)
+                queries.append(f'"{entity_str}" {num_val}')
+
+    # Query 3: Conservative counter-frame (if arm B)
+    if arm == 'B' and entities:
+        entity_str = entities[0] if isinstance(entities[0], str) else entities[0].get('name', '')
+        queries.append(f'"{entity_str}" actual value')
+        queries.append(f'"{entity_str}" verify')
+
+    return queries[:5]  # Max 5 queries
+
+
+def generate_queries_r2(claim_text: str, entities: list, numbers: list, arm: str) -> list:
+    """
+    R2 (Recall) query strategy - paraphrased, exploratory, broad.
+
+    Characteristics:
+    - No quotes (natural language)
+    - Paraphrased versions
+    - Broader synonyms
+    - Aggressive counter-frames
+    - Aims for high recall (more results, cast wide net)
+
+    Args:
+        claim_text: The claim
+        entities: Extracted entities
+        numbers: Extracted numbers
+        arm: 'A' (support) or 'B' (challenge)
+
+    Returns:
+        List of query strings (5-8 queries)
+    """
+    queries = []
+
+    # Query 1: Natural language (no quotes)
+    queries.append(claim_text)
+
+    # Query 2: Paraphrased (simple rewording)
+    # TODO: Add actual paraphrase generation
+    # For now, extract key terms
+    if entities:
+        entity_str = entities[0] if isinstance(entities[0], str) else entities[0].get('name', '')
+        queries.append(f"{entity_str} data statistics")
+        queries.append(f"{entity_str} report analysis")
+
+    # Query 3: Broader exploratory terms
+    if entities and numbers:
+        entity_str = entities[0] if isinstance(entities[0], str) else entities[0].get('name', '')
+        queries.append(f"{entity_str} trends changes")
+
+    # Query 4: Aggressive counter-frames (if arm B)
+    if arm == 'B' and entities:
+        entity_str = entities[0] if isinstance(entities[0], str) else entities[0].get('name', '')
+        queries.append(f"{entity_str} variation exceptions")
+        queries.append(f"{entity_str} different conditions")
+        queries.append(f"{entity_str} context factors")
+
+    return queries[:8]  # Max 8 queries
+
