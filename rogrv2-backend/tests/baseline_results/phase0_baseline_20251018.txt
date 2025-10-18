@@ -1,0 +1,28 @@
+============================================================
+WEEK 1 VALIDATION
+============================================================
+
+1. Testing full pipeline...
+Loading semantic models...
+✓ Semantic models loaded
+  P22 content_hash: ✓
+  P20 item_grade: ✓
+  P21 grade_full: ✓
+  P23 findings: ✓
+  P24 item_frame: ✓
+  P25 verdict: ✓
+✓ All modules working
+
+2. Memory leak test (100 requests)...
+  ⚠ psutil not available, skipping
+
+3. Performance baseline (20 requests)...
+  Mean: 5772 ms
+  Median: 5267 ms
+✓ Baseline saved
+
+============================================================
+✓ WEEK 1 VALIDATION PASSED
+============================================================
+
+✅ SAFE TO DEPLOY or continue to Week 2
