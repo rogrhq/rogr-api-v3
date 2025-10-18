@@ -422,3 +422,137 @@ def quality_gate(candidates: list) -> tuple:
 
     return filtered, dropped
 
+
+
+# ============================================================================
+# PHASE 7.1: QUERY VALIDATION LOOP
+# ============================================================================
+
+def validate_query_results(claim_text: str, claim_entities: list, claim_numbers: list,
+                          query: str, results: list, max_retries: int = 2) -> tuple:
+    """
+    Check if query returned on-topic results; refine if not.
+
+    Validation:
+    - Sample top 5 results
+    - Check relevance using fast filter (from Phase 2)
+    - If <60% relevant and retries remaining, refine and retry
+
+    Args:
+        claim_text: The claim
+        claim_entities: Entities from claim
+        claim_numbers: Numbers from claim
+        query: Original query string
+        results: Search results
+        max_retries: Max refinement attempts (default 2)
+
+    Returns:
+        Tuple of (final_query, final_results, refinement_count)
+    """
+
+    if not results:
+        return query, results, 0  # No results to validate
+
+    # Sample top 5 results
+    sample_size = min(5, len(results))
+    sample = results[:sample_size]
+
+    # Check relevance using Phase 2 filter logic
+    relevant_count = 0
+    for result in sample:
+        snippet = result.get('snippet', '').lower()
+
+        # Entity match
+        entity_match = False
+        for entity in claim_entities:
+            entity_str = entity if isinstance(entity, str) else entity.get('name', '')
+            if entity_str.lower() in snippet:
+                entity_match = True
+                break
+
+        # Number match
+        number_match = False
+        for number in claim_numbers:
+            num_val = number.get('value', '') if isinstance(number, dict) else str(number)
+            if str(num_val) in snippet:
+                number_match = True
+                break
+
+        # Keyword overlap
+        claim_words = set(claim_text.lower().split())
+        snippet_words = set(snippet.split())
+        overlap = len(claim_words & snippet_words) / len(claim_words) if claim_words else 0
+        keyword_match = overlap >= 0.30
+
+        # Relevant if any anchor present
+        if entity_match or number_match or keyword_match:
+            relevant_count += 1
+
+    relevance_rate = relevant_count / sample_size if sample_size > 0 else 0.0
+
+    # If >60% relevant, good
+    if relevance_rate >= 0.6:
+        return query, results, 0
+
+    # If <60% relevant and retries remaining, refine
+    if max_retries > 0:
+        refined_query = refine_query(claim_text, claim_entities, claim_numbers, query, sample)
+
+        # NOTE: Actual search would happen here
+        # For now, return original (search integration needed)
+        # new_results = search(refined_query)
+        # return validate_query_results(claim_text, claim_entities, claim_numbers,
+        #                              refined_query, new_results, max_retries - 1)
+
+        # Placeholder: return with note
+        return refined_query, results, 1  # Indicate refinement attempted
+
+    # Out of retries, return what we have
+    return query, results, max_retries
+
+
+def refine_query(claim_text: str, claim_entities: list, claim_numbers: list,
+                original_query: str, off_topic_results: list) -> str:
+    """
+    Refine query to be more targeted.
+
+    Refinement strategies:
+    1. Add entity quotes if missing
+    2. Add units if numeric claim
+    3. Add domain constraint (.gov OR .edu)
+
+    Args:
+        claim_text: The claim
+        claim_entities: Entities
+        claim_numbers: Numbers
+        original_query: Original query that failed
+        off_topic_results: Off-topic results (for analysis)
+
+    Returns:
+        Refined query string
+    """
+
+    # Strategy 1: Add entity quotes if missing
+    if '"' not in original_query and claim_entities:
+        entity = claim_entities[0]
+        entity_str = entity if isinstance(entity, str) else entity.get('name', '')
+        return f'"{entity_str}" {original_query}'
+
+    # Strategy 2: Add units if numeric
+    if claim_numbers:
+        # Check if query has units
+        units = ['percent', '%', 'million', 'billion', 'degrees', '°']
+        has_units = any(unit in original_query.lower() for unit in units)
+
+        if not has_units:
+            # Try to infer unit from claim
+            if '%' in claim_text or 'percent' in claim_text.lower():
+                return f'{original_query} percent'
+
+    # Strategy 3: Add domain constraint
+    if 'site:' not in original_query:
+        return f'{original_query} site:.gov OR site:.edu'
+
+    # Fallback: Return original
+    return original_query
+
