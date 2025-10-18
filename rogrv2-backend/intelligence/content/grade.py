@@ -264,3 +264,85 @@ def attach_finding_to_item(claim_text: str, arm: str, item: Dict[str, Any]) -> D
     item["stance"] = finding["stance"]
     item["finding"] = finding
     return item
+
+
+# ============================================================================
+# PHASE 1.2a: NEW ORCHESTRATOR FUNCTIONS (ADDED)
+# ============================================================================
+
+def build_finding_v2(claim_text: str, arm: str, evidence_item: dict) -> dict:
+    """
+    NEW orchestrated grading - calls P21, P23, P24 and fuses results.
+
+    This replaces the old build_finding() which did its own analysis.
+    Now P20 acts as orchestrator, calling other modules as helpers.
+
+    Args:
+        claim_text: The claim being fact-checked
+        arm: 'A' (support) or 'B' (challenge)
+        evidence_item: Evidence item dict with 'content', 'url', etc.
+
+    Returns:
+        Dict with combined features and single item_grade (0-1)
+    """
+    from intelligence.content.fullread import evaluate_full_evidence
+    from intelligence.content.semantic_read import analyze_item
+    from intelligence.content.semantic_frames import analyze_frames
+
+    # Initialize feature collectors
+    features = {
+        'p21_available': False,
+        'p23_available': False,
+        'p24_available': False,
+    }
+
+    # P21: Full-text analysis
+    try:
+        # P21 modifies item in place, returns updated item
+        p21_result = evaluate_full_evidence(claim_text, evidence_item.copy())
+        features['p21'] = {
+            'grade_full': p21_result.get('grade_full', 0.0),
+            'stance_full': p21_result.get('stance_full', 'unrelated'),
+            'credibility': p21_result.get('credibility', 0.5),
+            'signals_full': p21_result.get('signals_full', {}),
+        }
+        features['p21_available'] = True
+    except Exception as e:
+        features['p21'] = {'error': str(e)}
+
+    # P23: Semantic analysis
+    try:
+        # P23 modifies item in place, returns updated item
+        p23_result = analyze_item(claim_text, evidence_item.copy(), window=3)
+        features['p23'] = {
+            'item_grade': p23_result.get('item_grade', 0.0),
+            'findings': p23_result.get('findings', []),
+            'grade_label': p23_result.get('grade_label', 'low'),
+        }
+        features['p23_available'] = True
+    except Exception as e:
+        features['p23'] = {'error': str(e)}
+
+    # P24: Frame analysis
+    try:
+        content = evidence_item.get('content', evidence_item.get('snippet', ''))
+        p24_result = analyze_frames(claim_text, content, window=3, max_windows=500)
+        features['p24'] = {
+            'frame_matches': p24_result.get('frame_matches', []),
+            'frame_confidence': p24_result.get('frame_confidence', 0.0),
+            'item_frame': p24_result.get('item_frame', {}),
+        }
+        features['p24_available'] = True
+    except Exception as e:
+        features['p24'] = {'error': str(e)}
+
+    # Temporary: Just return features (fusion in step 1.2e)
+    # For now, use P23's grade as primary (it's most tested)
+    item_grade = features.get('p23', {}).get('item_grade', 0.0)
+
+    return {
+        'item_grade': item_grade,
+        'features': features,
+        'orchestrated': True,  # Flag that this used new system
+    }
+
