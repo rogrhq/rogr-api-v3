@@ -228,7 +228,7 @@ def build_finding(claim_text: str, arm: str, content_text: str, snippet_text: st
 
     score = max(0.0, score)
     # normalize to 0..10 (max theoretical ~8); scale gently
-    grade = round(min(score, 8.0) * (10.0/8.0), 2)
+    grade = round(min(score, 8.0)  / 8.0, 3)
 
     finding = {
         "grade": grade,
