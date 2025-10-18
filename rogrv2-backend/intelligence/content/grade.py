@@ -296,11 +296,15 @@ def fuse_module_grades(features: dict, evidence_item: dict) -> float:
     else:
         frame_score = 0.0
 
-    # P21: Credibility
+    # P21: Credibility (for authority calculation)
     if features.get('p21_available'):
         credibility = features['p21'].get('credibility', 0.5)
     else:
         credibility = 0.5
+
+    # PHASE 3.2: Calculate authority from domain + credibility
+    url = evidence_item.get('url', '')
+    authority = calculate_authority_score(url, credibility)
 
     # Coverage: full > partial > snippet_only
     coverage = evidence_item.get('coverage', 'snippet_only')
@@ -311,11 +315,11 @@ def fuse_module_grades(features: dict, evidence_item: dict) -> float:
     else:  # snippet_only
         coverage_weight = 0.4
 
-    # Fuse with weights
+    # Fuse with weights (PHASE 3.2: using authority instead of credibility)
     item_grade = (
         0.40 * semantic_score +
         0.30 * frame_score +
-        0.20 * credibility +
+        0.20 * authority +       # NEW: Domain-aware authority
         0.10 * coverage_weight
     )
 
@@ -402,4 +406,119 @@ def build_finding_v2(claim_text: str, arm: str, evidence_item: dict) -> dict:
         'features': features,
         'orchestrated': True,  # Flag that this used new system
     }
+
+
+
+# ============================================================================
+# PHASE 3.1: AUTHORITY SCORING SYSTEM (ADDED)
+# ============================================================================
+
+def calculate_authority_score(url: str, credibility: float = 0.5) -> float:
+    """
+    Score source authority 0-1 based on domain.
+
+    Authority tiers:
+    - Government (.gov): 1.0
+    - Education (.edu): 0.9
+    - Peer-reviewed journals: 0.85
+    - International organizations: 0.90-0.95
+    - Trusted news (Tier 1): 0.85 (Reuters, AP)
+    - Trusted news (Tier 2): 0.75 (NYT, BBC)
+    - Default: 0.5
+
+    Args:
+        url: Source URL
+        credibility: Existing credibility score (0-1) from P21
+
+    Returns:
+        Authority score 0-1 (combined domain + credibility)
+    """
+    from urllib.parse import urlparse
+
+    def extract_domain(url):
+        """Extract clean domain from URL"""
+        try:
+            parsed = urlparse(url)
+            domain = parsed.netloc.lower()
+            # Remove www. prefix
+            if domain.startswith('www.'):
+                domain = domain[4:]
+            return domain
+        except:
+            return ''
+
+    domain = extract_domain(url)
+
+    # Domain-specific scores (most authoritative first)
+    DOMAIN_SCORES = {
+        # US Government
+        'nih.gov': 1.0,
+        'cdc.gov': 1.0,
+        'census.gov': 0.98,
+        'nasa.gov': 0.98,
+        'usgs.gov': 0.97,
+        'noaa.gov': 0.97,
+        'fda.gov': 0.98,
+        'epa.gov': 0.97,
+
+        # International Organizations
+        'who.int': 0.95,
+        'un.org': 0.92,
+        'worldbank.org': 0.90,
+
+        # Peer-reviewed Journals
+        'nature.com': 0.95,
+        'science.org': 0.95,
+        'sciencedirect.com': 0.90,
+        'cell.com': 0.93,
+        'nejm.org': 0.95,
+        'thelancet.com': 0.94,
+        'plos.org': 0.85,
+
+        # News - Tier 1 (wire services)
+        'apnews.com': 0.85,
+        'reuters.com': 0.85,
+        'bloomberg.com': 0.82,
+
+        # News - Tier 2 (major newspapers)
+        'nytimes.com': 0.75,
+        'washingtonpost.com': 0.75,
+        'wsj.com': 0.75,
+        'bbc.com': 0.82,
+        'bbc.co.uk': 0.82,
+        'npr.org': 0.80,
+        'theguardian.com': 0.72,
+
+        # Encyclopedias
+        'britannica.com': 0.80,
+        'wikipedia.org': 0.70,  # Lower due to editability
+
+        # Fact-checkers
+        'snopes.com': 0.90,
+        'factcheck.org': 0.92,
+        'politifact.com': 0.88,
+    }
+
+    # Check direct match
+    if domain in DOMAIN_SCORES:
+        domain_score = DOMAIN_SCORES[domain]
+    else:
+        # Check domain patterns
+        if domain.endswith('.gov'):
+            domain_score = 0.95  # Any .gov
+        elif domain.endswith('.edu'):
+            domain_score = 0.85  # Any .edu
+        elif domain.endswith('.org'):
+            domain_score = 0.60  # Generic .org (could be nonprofit or advocacy)
+        else:
+            domain_score = 0.50  # Default for unknown
+
+    # Combine domain score with existing credibility
+    # Domain = 60%, Credibility = 40%
+    authority = 0.6 * domain_score + 0.4 * credibility
+
+    # Ensure 0-1 range
+    authority = max(0.0, min(1.0, authority))
+
+    return round(authority, 3)
 
