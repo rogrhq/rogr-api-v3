@@ -270,6 +270,63 @@ def attach_finding_to_item(claim_text: str, arm: str, item: Dict[str, Any]) -> D
 # PHASE 1.2a: NEW ORCHESTRATOR FUNCTIONS (ADDED)
 # ============================================================================
 
+
+
+def fuse_module_grades(features: dict, evidence_item: dict) -> float:
+    """
+    Fuse P21, P23, P24 features into single item_grade (0-1).
+
+    Weighting:
+    - 40% semantic similarity (P23)
+    - 30% frame matching (P24)
+    - 20% credibility (P21)
+    - 10% coverage quality
+    """
+
+    # Extract components
+    # P23: Semantic similarity
+    if features.get('p23_available'):
+        semantic_score = features['p23'].get('item_grade', 0.0)
+    else:
+        semantic_score = 0.0
+
+    # P24: Frame matching
+    if features.get('p24_available'):
+        frame_score = features['p24'].get('frame_confidence', 0.0)
+    else:
+        frame_score = 0.0
+
+    # P21: Credibility
+    if features.get('p21_available'):
+        credibility = features['p21'].get('credibility', 0.5)
+    else:
+        credibility = 0.5
+
+    # Coverage: full > partial > snippet_only
+    coverage = evidence_item.get('coverage', 'snippet_only')
+    if coverage == 'full':
+        coverage_weight = 1.0
+    elif coverage == 'partial':
+        coverage_weight = 0.7
+    else:  # snippet_only
+        coverage_weight = 0.4
+
+    # Fuse with weights
+    item_grade = (
+        0.40 * semantic_score +
+        0.30 * frame_score +
+        0.20 * credibility +
+        0.10 * coverage_weight
+    )
+
+    # Ensure 0-1 range
+    item_grade = max(0.0, min(1.0, item_grade))
+
+    # Round to 3 decimals
+    item_grade = round(item_grade, 3)
+
+    return item_grade
+
 def build_finding_v2(claim_text: str, arm: str, evidence_item: dict) -> dict:
     """
     NEW orchestrated grading - calls P21, P23, P24 and fuses results.
@@ -338,7 +395,7 @@ def build_finding_v2(claim_text: str, arm: str, evidence_item: dict) -> dict:
 
     # Temporary: Just return features (fusion in step 1.2e)
     # For now, use P23's grade as primary (it's most tested)
-    item_grade = features.get('p23', {}).get('item_grade', 0.0)
+    item_grade = fuse_module_grades(features, evidence_item)
 
     return {
         'item_grade': item_grade,
