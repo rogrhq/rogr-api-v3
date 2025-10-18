@@ -100,3 +100,229 @@ def aggregate_verdict(claim_text: str, arm_a_items: List[Dict[str,Any]], arm_b_i
         "confidence": float(conf),
         "arm_strength": {"support": float(sa), "challenge": float(sb), "balance": float(sa - sb)},
     }
+
+
+# ============================================================================
+# PHASE 4.1: SOURCE DIVERSITY CHECKING (ADDED)
+# ============================================================================
+
+def calculate_diversity_score(items: list) -> float:
+    """
+    Score source diversity 0-1.
+
+    Higher score = more diverse sources
+    Lower score = clustered from few sources
+
+    Args:
+        items: List of evidence items (each has 'url')
+
+    Returns:
+        Diversity score 0-1
+    """
+    from urllib.parse import urlparse
+
+    if not items or len(items) == 0:
+        return 0.0
+
+    # Extract domains
+    domains = []
+    for item in items:
+        url = item.get('url', '')
+        try:
+            parsed = urlparse(url)
+            domain = parsed.netloc.lower()
+            if domain.startswith('www.'):
+                domain = domain[4:]
+            domains.append(domain)
+        except:
+            continue
+
+    if not domains:
+        return 0.0
+
+    # Calculate diversity
+    unique_domains = len(set(domains))
+    total_items = len(domains)
+
+    diversity = unique_domains / total_items
+
+    # Bonus for cross-source corroboration
+    # If 3+ unique sources with 3+ items, boost diversity
+    if unique_domains >= 3 and total_items >= 3:
+        diversity = min(1.0, diversity * 1.1)
+
+    return round(diversity, 3)
+
+
+
+# ============================================================================
+# PHASE 4.2: INTERNAL CONSISTENCY CHECKING (ADDED)
+# ============================================================================
+
+def calculate_consistency_score(items: list, claim_numbers: list = None) -> float:
+    """
+    Check if arm items agree on numbers (0-1).
+
+    Higher score = items agree
+    Lower score = items contradict each other
+
+    Args:
+        items: List of evidence items
+        claim_numbers: List of numbers from claim to check
+
+    Returns:
+        Consistency score 0-1 (1.0 = fully consistent)
+    """
+    import re
+
+    if not items or len(items) < 2:
+        return 1.0  # Only one item, can't have conflicts
+
+    if not claim_numbers:
+        return 1.0  # Non-numeric claim, consistency N/A
+
+    def extract_numbers(text):
+        """Extract all numbers from text"""
+        if not text:
+            return []
+        # Find all numbers (including decimals and percentages)
+        numbers = re.findall(r'\d+\.?\d*', text)
+        return [float(n) for n in numbers]
+
+    # Extract numbers from each item's content
+    item_numbers = []
+    for item in items:
+        # Check multiple fields for numbers
+        text = ''
+        text += item.get('snippet', '') + ' '
+        text += item.get('content', '')[:500]  # First 500 chars of content
+
+        numbers = extract_numbers(text)
+        if numbers:
+            item_numbers.append(numbers)
+
+    if len(item_numbers) < 2:
+        return 1.0  # Not enough data to check consistency
+
+    # Check variance in numbers
+    # If items report similar numbers, consistency is high
+    # If items report very different numbers, consistency is low
+
+    all_numbers = []
+    for nums in item_numbers:
+        all_numbers.extend(nums)
+
+    if not all_numbers:
+        return 1.0  # No numbers found
+
+    # Calculate coefficient of variation (std dev / mean)
+    import statistics
+    if len(all_numbers) >= 2:
+        mean = statistics.mean(all_numbers)
+        if mean > 0:
+            stdev = statistics.stdev(all_numbers)
+            coef_var = stdev / mean
+
+            # Convert to consistency score
+            # Low variance (< 0.10) = high consistency (1.0)
+            # High variance (> 0.50) = low consistency (0.0)
+            if coef_var < 0.10:
+                consistency = 1.0
+            elif coef_var > 0.50:
+                consistency = 0.0
+            else:
+                # Linear interpolation between 0.10 and 0.50
+                consistency = 1.0 - ((coef_var - 0.10) / 0.40)
+
+            return round(max(0.0, min(1.0, consistency)), 3)
+
+    return 1.0  # Default: assume consistent
+
+
+
+# ============================================================================
+# PHASE 4.3: COVERAGE BREADTH ANALYSIS (ADDED)
+# ============================================================================
+
+def calculate_breadth_score(items: list) -> float:
+    """
+    Measure breadth vs repetition 0-1.
+
+    Higher score = diverse angles, complementary coverage
+    Lower score = repetitive, same content repeated
+
+    Args:
+        items: List of evidence items
+
+    Returns:
+        Breadth score 0-1
+    """
+
+    if not items or len(items) < 2:
+        return 1.0  # Single item, can't measure breadth
+
+    # Extract matched spans or snippets
+    texts = []
+    for item in items:
+        # Prefer matched_span if available, else snippet
+        text = ''
+
+        # Check for matched span from various analysis modules
+        if 'findings' in item and item['findings']:
+            # P23 findings
+            for finding in item['findings']:
+                text += finding.get('quote', '') + ' '
+
+        if not text:
+            text = item.get('snippet', '')
+
+        if text:
+            texts.append(text.lower())
+
+    if len(texts) < 2:
+        return 1.0
+
+    # Calculate pairwise similarity using trigram overlap
+    def trigram_similarity(text1, text2):
+        """Calculate trigram similarity between two texts"""
+        def get_trigrams(text):
+            words = text.split()
+            if len(words) < 3:
+                return set()
+            trigrams = set()
+            for i in range(len(words) - 2):
+                trigrams.add(' '.join(words[i:i+3]))
+            return trigrams
+
+        trigrams1 = get_trigrams(text1)
+        trigrams2 = get_trigrams(text2)
+
+        if not trigrams1 or not trigrams2:
+            return 0.0
+
+        intersection = len(trigrams1 & trigrams2)
+        union = len(trigrams1 | trigrams2)
+
+        if union == 0:
+            return 0.0
+
+        return intersection / union
+
+    # Calculate average pairwise similarity
+    similarities = []
+    for i in range(len(texts)):
+        for j in range(i + 1, len(texts)):
+            sim = trigram_similarity(texts[i], texts[j])
+            similarities.append(sim)
+
+    if not similarities:
+        return 1.0
+
+    avg_similarity = sum(similarities) / len(similarities)
+
+    # High similarity = repetition = low breadth
+    # Low similarity = diverse angles = high breadth
+    breadth = 1.0 - avg_similarity
+
+    return round(max(0.0, min(1.0, breadth)), 3)
+
