@@ -210,3 +210,215 @@ async def build_evidence_for_claim(claim_text: str, plan: Dict[str, Any], max_pe
     guarded["coverage_by_arm"] = coverage_by_arm
 
     return guarded
+
+
+# ============================================================================
+# PHASE 2.1: FAST RELATEDNESS FILTER (ADDED)
+# ============================================================================
+
+def filter_unrelated(claim_text: str, claim_entities: list, claim_numbers: list, candidates: list) -> tuple:
+    """
+    Fast deterministic filter for obviously unrelated candidates.
+
+    Keeps candidates that have:
+    - At least one entity from claim OR
+    - At least one number from claim OR
+    - At least 30% keyword overlap with claim
+
+    Args:
+        claim_text: The claim being fact-checked
+        claim_entities: List of entities from claim (strings or dicts with 'name' key)
+        claim_numbers: List of numbers from claim (dicts with 'value' key)
+        candidates: List of search result dicts
+
+    Returns:
+        Tuple of (filtered_candidates, dropped_candidates)
+    """
+
+    # Normalize entities (handle both string and dict format)
+    entities_normalized = []
+    for entity in claim_entities:
+        if isinstance(entity, dict):
+            entities_normalized.append(entity.get('name', '').lower())
+        else:
+            entities_normalized.append(str(entity).lower())
+
+    # Normalize numbers
+    numbers_normalized = []
+    for num in claim_numbers:
+        if isinstance(num, dict):
+            value = num.get('value', '')
+            # Handle both float and string percentages
+            if isinstance(value, (int, float)):
+                numbers_normalized.append(str(value))
+            else:
+                # Extract numeric part from strings like "8%"
+                import re
+                matches = re.findall(r'\d+\.?\d*', str(value))
+                numbers_normalized.extend(matches)
+
+    # Claim keywords (for lexical overlap)
+    claim_words = set(claim_text.lower().split())
+    # Remove common stopwords
+    stopwords = {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+                 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should',
+                 'of', 'at', 'by', 'for', 'with', 'about', 'against', 'between', 'into',
+                 'through', 'during', 'before', 'after', 'above', 'below', 'to', 'from',
+                 'up', 'down', 'in', 'out', 'on', 'off', 'over', 'under', 'again', 'further',
+                 'then', 'once', 'here', 'there', 'when', 'where', 'why', 'how', 'all', 'both',
+                 'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not',
+                 'only', 'own', 'same', 'so', 'than', 'too', 'very', 'can', 'just', 'don',
+                 'now', 'but', 'and', 'or', 'if', 'because', 'as', 'until', 'while'}
+    claim_words = claim_words - stopwords
+
+    filtered = []
+    dropped = []
+
+    for candidate in candidates:
+        snippet = candidate.get('snippet', '').lower()
+
+        # Check 1: Entity match
+        entity_match = any(entity in snippet for entity in entities_normalized if entity)
+
+        # Check 2: Number match
+        number_match = any(number in snippet for number in numbers_normalized if number)
+
+        # Check 3: Keyword overlap (>30%)
+        snippet_words = set(snippet.split()) - stopwords
+        if len(claim_words) > 0:
+            overlap = len(claim_words & snippet_words) / len(claim_words)
+        else:
+            overlap = 0.0
+        keyword_match = overlap >= 0.30
+
+        # Keep if ANY anchor present
+        if entity_match or number_match or keyword_match:
+            filtered.append(candidate)
+        else:
+            candidate['dropped_reason'] = 'no_anchors'
+            candidate['dropped_checks'] = {
+                'entity_match': entity_match,
+                'number_match': number_match,
+                'keyword_overlap': overlap,
+            }
+            dropped.append(candidate)
+
+    return filtered, dropped
+
+
+
+# ============================================================================
+# PHASE 2.2: QUALITY GATE FILTER (ADDED)
+# ============================================================================
+
+def quality_gate(candidates: list) -> tuple:
+    """
+    Filter out low-quality sources.
+
+    Filters:
+    - Blocked domains
+    - Uncrawlable PDFs (except from whitelist)
+    - Non-English content
+    - Domain duplicates (max 2 per domain)
+
+    Returns:
+        Tuple of (filtered_candidates, dropped_candidates)
+    """
+    from urllib.parse import urlparse
+
+    # Blocked domains (known junk sites)
+    BLOCKED_DOMAINS = {
+        'pinterest.com',
+        'youtube.com',  # Video, not crawlable text
+        'instagram.com',
+        'facebook.com',
+        'twitter.com',  # Social media, not authoritative
+        'reddit.com',
+        'quora.com',
+    }
+
+    # Whitelist for PDFs (these are OK to include)
+    WHITELIST_PDF_DOMAINS = {
+        '.gov',
+        '.edu',
+        'nih.gov',
+        'cdc.gov',
+        'census.gov',
+        'who.int',
+    }
+
+    def extract_domain(url):
+        """Extract domain from URL"""
+        try:
+            parsed = urlparse(url)
+            domain = parsed.netloc.lower()
+            # Remove www. prefix
+            if domain.startswith('www.'):
+                domain = domain[4:]
+            return domain
+        except:
+            return ''
+
+    def is_english(text):
+        """Simple English detection - filters out obviously non-English content"""
+        if not text:
+            return False
+
+        # Check for accented characters and non-Latin scripts
+        # These indicate Spanish, French, German, Chinese, Arabic, etc.
+        non_english_chars = set('áéíóúñüàèìòùäöößçåæø中国日本한국اللغة')
+
+        # If text contains non-English characters, it's not English
+        text_lower = text.lower()
+        if any(char in text_lower for char in non_english_chars):
+            return False
+
+        # Otherwise, assume English (simple, permissive)
+        return True
+
+    def is_whitelisted_pdf(url):
+        """Check if PDF is from whitelisted domain"""
+        domain = extract_domain(url)
+        return any(wl in domain for wl in WHITELIST_PDF_DOMAINS)
+
+    filtered = []
+    dropped = []
+    domain_counts = {}
+
+    for candidate in candidates:
+        url = candidate.get('url', '')
+        snippet = candidate.get('snippet', '')
+        domain = extract_domain(url)
+
+        # Check 1: Blocked domain
+        if domain in BLOCKED_DOMAINS:
+            candidate['dropped_reason'] = 'blocked_domain'
+            dropped.append(candidate)
+            continue
+
+        # Check 2: PDF check
+        if url.endswith('.pdf'):
+            if not is_whitelisted_pdf(url):
+                candidate['dropped_reason'] = 'uncrawlable_pdf'
+                dropped.append(candidate)
+                continue
+
+        # Check 3: Language check
+        if not is_english(snippet):
+            candidate['dropped_reason'] = 'non_english'
+            dropped.append(candidate)
+            continue
+
+        # Check 4: Domain duplicate limit (max 2 per domain)
+        current_count = domain_counts.get(domain, 0)
+        if current_count >= 2:
+            candidate['dropped_reason'] = 'domain_duplicate'
+            dropped.append(candidate)
+            continue
+
+        # Passed all checks
+        filtered.append(candidate)
+        domain_counts[domain] = current_count + 1
+
+    return filtered, dropped
+
