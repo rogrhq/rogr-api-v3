@@ -193,6 +193,70 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
     else:
         consensus = dual_result.get("verdict", {})
 
+    # Phase 10: Confidence calibration (ADDED)
+    from intelligence.calibration.confidence import calibrate_confidence, apply_confidence_thresholds
+
+    # Extract quality metrics from researchers
+    if len(researchers) >= 2:
+        r1_evidence = researchers[0].get("evidence", {})
+        r2_evidence = researchers[1].get("evidence", {})
+
+        # Extract credibility scores from items
+        # NOTE: Items don't have "authority_score" attribute (verified in DATA_STRUCTURE_VERIFICATION.md)
+        # Instead, use "credibility" which exists on all items from P21
+        arm_a_items = r1_evidence.get("arm_A", []) + r2_evidence.get("arm_A", [])
+        arm_b_items = r1_evidence.get("arm_B", []) + r2_evidence.get("arm_B", [])
+
+        # Use credibility scores (authority_score doesn't exist on items)
+        arm_a_authorities = [item.get("credibility", 0.5) for item in arm_a_items]
+        arm_b_authorities = [item.get("credibility", 0.5) for item in arm_b_items]
+
+        # Calculate arm quality
+        arm_a_quality = {
+            "overall": (r1_verdict.get("arm_strength", {}).get("support", 0) +
+                       r2_verdict.get("arm_strength", {}).get("support", 0)) / 2,
+            "avg_authority": sum(arm_a_authorities) / len(arm_a_authorities) if arm_a_authorities else 0.5
+        }
+        arm_b_quality = {
+            "overall": (r1_verdict.get("arm_strength", {}).get("challenge", 0) +
+                       r2_verdict.get("arm_strength", {}).get("challenge", 0)) / 2,
+            "avg_authority": sum(arm_b_authorities) / len(arm_b_authorities) if arm_b_authorities else 0.5
+        }
+
+        # Calibrate confidence
+        claim_classification = claim.get("classification", {
+            "verifiability": "HIGHLY_VERIFIABLE",
+            "confidence_thresholds": {"min_confidence": 0.65, "mixed_threshold": 0.15}
+        })
+
+        raw_confidence = consensus.get("confidence", 0.0)
+        calibrated_confidence = calibrate_confidence(
+            raw_confidence,
+            claim_classification,
+            arm_a_quality,
+            arm_b_quality
+        )
+
+        # Handle calibration failure (below minimum)
+        if calibrated_confidence is None:
+            consensus["label"] = "insufficient"
+            consensus["confidence"] = raw_confidence
+            consensus["calibration_note"] = "Below minimum confidence threshold"
+        else:
+            # Apply thresholds
+            arm_balance = abs(arm_a_quality["overall"] - arm_b_quality["overall"])
+            final_verdict = apply_confidence_thresholds(
+                consensus["label"],
+                calibrated_confidence,
+                arm_balance,
+                claim_classification
+            )
+
+            # Update consensus
+            consensus["label"] = final_verdict["label"]
+            consensus["confidence"] = final_verdict["confidence"]
+            consensus["calibration_note"] = final_verdict["rationale"]
+
     # Generate manifest (P29)
     if len(researchers) >= 2:
         r1_config = researchers[0].get("lane_config", {})
