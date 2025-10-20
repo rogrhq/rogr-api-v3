@@ -258,10 +258,10 @@ def attach_finding_to_item(claim_text: str, arm: str, item: Dict[str, Any]) -> D
         except Exception:
             pass
         break
-    finding = build_finding(claim_text, arm, content_text=content, snippet_text=snippet, precomputed_window=pre, precomputed_sim=pre_sim)
+    finding = build_finding_v2(claim_text, arm, item)
     # annotate the item
-    item["item_grade"] = finding["grade"]
-    item["stance"] = finding["stance"]
+    item["item_grade"] = finding["item_grade"]
+    item["stance"] = finding.get("features", {}).get("p23", {}).get("stance", "unrelated")
     item["finding"] = finding
     return item
 
@@ -375,10 +375,12 @@ def build_finding_v2(claim_text: str, arm: str, evidence_item: dict) -> dict:
     try:
         # P23 modifies item in place, returns updated item
         p23_result = analyze_item(claim_text, evidence_item.copy(), window=3)
+        p23_findings = p23_result.get('findings', [])
         features['p23'] = {
             'item_grade': p23_result.get('item_grade', 0.0),
-            'findings': p23_result.get('findings', []),
+            'findings': p23_findings,
             'grade_label': p23_result.get('grade_label', 'low'),
+            'stance': p23_findings[0].get('stance', 'unrelated') if p23_findings else 'unrelated',
         }
         features['p23_available'] = True
     except Exception as e:

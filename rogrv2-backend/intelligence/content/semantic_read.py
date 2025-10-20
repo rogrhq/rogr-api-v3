@@ -14,6 +14,7 @@ from intelligence.content.shared.paraphrases import paraphrase_match_score, find
 # Phase 9: Semantic depth and numeric precision (ADDED)
 from intelligence.content.shared.semantic_depth import check_negation_agreement, detect_hedging
 from intelligence.content.shared.numeric_precision import extract_and_match_numbers
+from intelligence.content.shared.embeddings import get_entailment_stance
 
 _APOS = re.compile(r"['׳`´]")
 _PUNCT = re.compile(r"[^a-z0-9\s]")
@@ -196,6 +197,22 @@ def analyze_item(claim_text: str, item: Dict[str,Any], *, window: int = 3, stanc
     # pick top findings (stable order by score desc then first occurrence)
     findings.sort(key=lambda f: f.get("score", 0.0), reverse=True)
     findings = findings[:5]
+
+    # Re-compute stance on top findings using cross-encoder entailment
+    for finding in findings:
+        quote = finding.get("quote", "")
+        if quote and quote.strip():
+            try:
+                entailment_result = get_entailment_stance(claim_text, quote)
+                stance_value = entailment_result.get("stance", "unrelated")
+                # Map contextual_support to support for downstream compatibility
+                if stance_value == "contextual_support":
+                    stance_value = "support"
+                finding["stance"] = stance_value
+            except Exception as e:
+                # Keep existing keyword-based stance on error
+                pass
+
     item["findings"] = findings
 
     # item grade blends best score with coverage
