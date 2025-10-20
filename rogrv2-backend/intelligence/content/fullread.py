@@ -22,6 +22,13 @@ from intelligence.content.shared.paraphrases import paraphrase_match_score
 from intelligence.content.shared.conditions import extract_conditions, conditions_equivalent
 from intelligence.content.shared.units import values_match
 from intelligence.content.shared.frames import extract_frame, compare_frames
+# Phase 9.2: Temporal/geographic context (ADDED)
+from intelligence.content.shared.context_handling import (
+    extract_publication_date,
+    calculate_temporal_weight,
+    extract_geographic_scope,
+    check_geographic_match
+)
 
 # Regex patterns for specific matching
 _PERCENT = re.compile(r"(?:(\d{1,3})(?:\.\d+)?)\s?%|\b(\d{1,2})\s?(?:percent|per\s?cent)\b", re.I)
@@ -174,7 +181,7 @@ def _credibility_from(url: str, text: str) -> float:
         score += 0.15
     return max(0.0, min(1.0, score))
 
-def evaluate_full_evidence(claim_text: str, item: Dict[str, Any]) -> Dict[str, Any]:
+def evaluate_full_evidence(claim_text: str, item: Dict[str, Any], claim_classification: dict = None) -> Dict[str, Any]:
     """
     Deterministic deeper read on best available text. Returns mutated item.
     """
@@ -265,4 +272,27 @@ def evaluate_full_evidence(claim_text: str, item: Dict[str, Any]) -> Dict[str, A
         "negation": bool(best["neg"]),
     }
     item["credibility"] = round(_credibility_from(item.get("url") or "", read), 3)
+
+    # Phase 9.2: Apply temporal/geographic context (ADDED)
+    pub_date = extract_publication_date(item.get('content', ''), item.get('url', ''))
+    item_scope = extract_geographic_scope(item.get('content', ''))
+    claim_scope = extract_geographic_scope(claim_text)
+
+    # Get claim category (default to SIMPLE_FACTUAL if not provided)
+    claim_category = 'SIMPLE_FACTUAL'
+    if claim_classification:
+        claim_category = claim_classification.get('category', 'SIMPLE_FACTUAL')
+
+    # Calculate weights
+    temporal_weight = calculate_temporal_weight(pub_date, claim_category)
+    geographic_weight = check_geographic_match(claim_scope, item_scope)
+
+    # Apply to credibility (use credibility, not authority_score which doesn't exist on items)
+    if 'credibility' in item:
+        item['credibility'] = item['credibility'] * temporal_weight * geographic_weight
+        item['context_weights'] = {
+            'temporal': temporal_weight,
+            'geographic': geographic_weight
+        }
+
     return item

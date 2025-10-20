@@ -42,7 +42,8 @@ async def run_single_lane_enrichment(
     lane_id: str,
     telemetry: Any,
     claim_entities: list = None,
-    claim_numbers: list = None
+    claim_numbers: list = None,
+    claim_classification: dict = None
 ) -> Dict[str, Any]:
     """
     Run full P19-P25 enrichment for one researcher lane.
@@ -86,7 +87,7 @@ async def run_single_lane_enrichment(
             # P21
             if item.get("content"):
                 try:
-                    evaluate_full_evidence(claim_text, item)
+                    evaluate_full_evidence(claim_text, item, claim_classification)
                 except:
                     pass
 
@@ -174,13 +175,15 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
     # Extract claim data for pipeline functions
     claim_entities = claim.get("entities", [])
     claim_numbers = claim.get("numbers", [])
+    # Extract claim classification (from TASK 1.1)
+    claim_classification = claim.get("classification", None)
 
     # Run dual researchers (P26)
     dual_result = await run_dual_researchers(
         claim_text=text,
         base_plan=base_plan,
         enrichment_pipeline=lambda claim_text, plan, lane_id, telemetry:
-            run_single_lane_enrichment(claim_text, plan, lane_id, telemetry, claim_entities, claim_numbers),
+            run_single_lane_enrichment(claim_text, plan, lane_id, telemetry, claim_entities, claim_numbers, claim_classification),
         diversify_fn=diversify_plan_for_lane,
         telemetry_class=LaneTelemetry
     )
