@@ -555,7 +555,6 @@ async def validate_query_results(claim_text: str, claim_entities: list, claim_nu
         refined_query = refine_query(claim_text, claim_entities, claim_numbers, query, sample)
 
         # Execute refined search
-        from intelligence.lib.diagnostics import diag
 
         # Build mini-plan with refined query
         refined_plan = {
