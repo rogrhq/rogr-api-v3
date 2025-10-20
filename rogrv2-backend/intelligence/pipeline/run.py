@@ -114,6 +114,7 @@ async def run_single_lane_enrichment(
             claim_text,
             evidence.get("arm_A", []),
             evidence.get("arm_B", []),
+            claim_numbers,  # Pass through from function parameter (added in TASK 1.2)
             delta=0.15
         )
     except:

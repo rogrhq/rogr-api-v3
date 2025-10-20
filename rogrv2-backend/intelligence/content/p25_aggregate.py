@@ -58,19 +58,39 @@ def _arm_strength(items: List[Dict[str,Any]], top_k: int = 4) -> float:
     max_possible = sum(weights[:len(vals)]) if vals else 1.0
     return max(0.0, min(1.0, total / max_possible))
 
-def _confidence_from_arms(sa: float, sb: float, n_items_a: int, n_items_b: int) -> float:
+def _confidence_from_arms(sa: float, sb: float, n_items_a: int, n_items_b: int,
+                         arm_a_items: list, arm_b_items: list, claim_numbers: list = None) -> float:
     """
-    Confidence increases with total strength and imbalance between arms, and with item count.
+    Enhanced confidence with quality multipliers (Phase 4).
+    NOTE: This violates architecture (p25_aggregate.py importing from grade.py),
+    but matches blueprint requirements for quality multipliers.
     """
     total = max(0.0, min(1.0, 0.6 * max(sa, sb) + 0.4 * (sa + sb) / 2.0))
-    count_factor = min(1.0, (n_items_a + n_items_b) / 6.0)  # saturate around 6 items
+    count_factor = min(1.0, (n_items_a + n_items_b) / 6.0)
     balance = abs(sa - sb)
-    # mix: enough evidence + clear lead => higher confidence
-    conf = 0.4 * total + 0.4 * balance + 0.2 * count_factor
+
+    # Phase 4: Add quality multipliers
+    all_items = arm_a_items + arm_b_items
+    diversity = calculate_diversity_score(all_items)
+    consistency = calculate_consistency_score(all_items, claim_numbers)
+
+    # Calculate average authority using credibility (not authority_score which doesn't exist on items)
+    authorities = [item.get("credibility", 0.5) for item in all_items]
+    avg_authority = sum(authorities) / len(authorities) if authorities else 0.5
+
+    # 6-factor formula (OLD: 3-factor)
+    conf = (
+        0.25 * total +
+        0.25 * balance +
+        0.15 * count_factor +
+        0.15 * avg_authority +
+        0.10 * diversity +
+        0.10 * consistency
+    )
     return max(0.0, min(1.0, conf))
 
 def aggregate_verdict(claim_text: str, arm_a_items: List[Dict[str,Any]], arm_b_items: List[Dict[str,Any]],
-                      *, delta: float = 0.15) -> Dict[str, Any]:
+                      claim_numbers: list = None, *, delta: float = 0.15) -> Dict[str, Any]:
     """
     Produce deterministic verdict from arm strengths.
     Returns:
@@ -94,7 +114,8 @@ def aggregate_verdict(claim_text: str, arm_a_items: List[Dict[str,Any]], arm_b_i
         else:
             label = "mixed"
 
-    conf = _confidence_from_arms(sa, sb, len(arm_a_items), len(arm_b_items))
+    conf = _confidence_from_arms(sa, sb, len(arm_a_items), len(arm_b_items),
+                                arm_a_items, arm_b_items, claim_numbers)
     return {
         "label": label,
         "confidence": float(conf),
