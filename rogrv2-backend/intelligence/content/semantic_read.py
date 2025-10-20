@@ -202,16 +202,12 @@ def analyze_item(claim_text: str, item: Dict[str,Any], *, window: int = 3, stanc
     for finding in findings:
         quote = finding.get("quote", "")
         if quote and quote.strip():
-            try:
-                entailment_result = get_entailment_stance(claim_text, quote)
-                stance_value = entailment_result.get("stance", "unrelated")
-                # Map contextual_support to support for downstream compatibility
-                if stance_value == "contextual_support":
-                    stance_value = "support"
-                finding["stance"] = stance_value
-            except Exception as e:
-                # Keep existing keyword-based stance on error
-                pass
+            entailment_result = get_entailment_stance(claim_text, quote)
+            stance_value = entailment_result.get("stance", "unrelated")
+            # Map contextual_support to support for downstream compatibility
+            if stance_value == "contextual_support":
+                stance_value = "support"
+            finding["stance"] = stance_value
 
     item["findings"] = findings
 
