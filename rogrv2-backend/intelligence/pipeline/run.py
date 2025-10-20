@@ -40,7 +40,9 @@ async def run_single_lane_enrichment(
     claim_text: str,
     plan: Dict[str, Any],
     lane_id: str,
-    telemetry: Any
+    telemetry: Any,
+    claim_entities: list = None,
+    claim_numbers: list = None
 ) -> Dict[str, Any]:
     """
     Run full P19-P25 enrichment for one researcher lane.
@@ -55,7 +57,7 @@ async def run_single_lane_enrichment(
         {"verdict": {...}, "evidence": {...}}
     """
     # Gather evidence (includes P19 counter-frames)
-    evidence = await build_evidence_for_claim(claim_text, plan, max_per_arm=3)
+    evidence = await build_evidence_for_claim(claim_text, plan, claim_entities, claim_numbers, max_per_arm=5)
 
     # Track provider calls
     for arm_key in ("arm_A", "arm_B"):
@@ -166,11 +168,16 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
     from intelligence.strategy.plan_v2 import build_search_plans_v2
     base_plan = build_search_plans_v2(claim)
 
+    # Extract claim data for pipeline functions
+    claim_entities = claim.get("entities", [])
+    claim_numbers = claim.get("numbers", [])
+
     # Run dual researchers (P26)
     dual_result = await run_dual_researchers(
         claim_text=text,
         base_plan=base_plan,
-        enrichment_pipeline=run_single_lane_enrichment,
+        enrichment_pipeline=lambda claim_text, plan, lane_id, telemetry:
+            run_single_lane_enrichment(claim_text, plan, lane_id, telemetry, claim_entities, claim_numbers),
         diversify_fn=diversify_plan_for_lane,
         telemetry_class=LaneTelemetry
     )

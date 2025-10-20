@@ -102,7 +102,7 @@ def _extract_arm_defs(plan: Dict[str, Any]) -> List[Dict[str, Any]]:
     return out
 
 
-async def build_evidence_for_claim(claim_text: str, plan: Dict[str, Any], max_per_arm: int = 3) -> Dict[str, Any]:
+async def build_evidence_for_claim(claim_text: str, plan: Dict[str, Any], claim_entities: list = None, claim_numbers: list = None, max_per_arm: int = 5) -> Dict[str, Any]:
     """
     LIVE evidence pipeline with explicit arm tagging at source (no mocks, no fallbacks).
       1) Execute plan per arm (A, B) and stamp every candidate with canonical arm label.
@@ -133,10 +133,27 @@ async def build_evidence_for_claim(claim_text: str, plan: Dict[str, Any], max_pe
 
         labeled_cands.extend(await _exec_plan_for_arm(plan, arm_def, label, max_per_query=2))
 
-    # 2) Group by explicit arm, then normalize & rank
+    # 2) Group by explicit arm, then normalize
     armA_raw, armB_raw = _group_by_arm(labeled_cands)
     armA_norm = normalize_candidates(armA_raw)
     armB_norm = normalize_candidates(armB_raw)
+
+    # Phase 2.1: Fast filter - remove obviously unrelated (ADDED)
+    if claim_entities is None:
+        claim_entities = []
+    if claim_numbers is None:
+        claim_numbers = []
+
+    armA_filtered, armA_dropped = filter_unrelated(claim_text, claim_entities, claim_numbers, armA_norm)
+    armB_filtered, armB_dropped = filter_unrelated(claim_text, claim_entities, claim_numbers, armB_norm)
+
+    if diag.enabled():
+        diag.log("filter_unrelated_results",
+                 armA_kept=len(armA_filtered), armA_dropped=len(armA_dropped),
+                 armB_kept=len(armB_filtered), armB_dropped=len(armB_dropped))
+
+    armA_norm = armA_filtered
+    armB_norm = armB_filtered
 
     # P19 Reordering: Sort Arm B candidates by anchor match score
     if armB_norm:
