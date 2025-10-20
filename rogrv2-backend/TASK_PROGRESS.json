@@ -1,6 +1,8 @@
 {
-  "completed": [],
-  "next": "1.1",
+  "completed": ["1.1"],
+  "next": "1.2",
+  "last_completed": "1.1 - Wire up classify_claim()",
+  "last_commit": "6903d7b51af8d5f549d7e95a8042e0650809489b",
   "status": "ready",
-  "timestamp": "2025-10-19T19:25:00"
+  "timestamp": "2025-10-19T19:27:26"
 }
