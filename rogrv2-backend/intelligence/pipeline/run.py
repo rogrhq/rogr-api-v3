@@ -165,7 +165,8 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
                 "researchers": []
             }],
             "run_manifest": {},
-            "diversified": False
+            "diversified": False,
+            "overall": {"score": 50, "label": "Mixed"}
         }
 
     # Build base search plan
@@ -308,8 +309,13 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
         "consensus": consensus  # NEW
     }
 
+    # Compute overall verdict from consensus
+    overall_score = int(consensus.get("confidence", 0.5) * 100)
+    overall_label = label_for_score(overall_score)
+
     return {
         "claims": [claim_obj],
         "run_manifest": manifest,  # NEW
-        "diversified": True
+        "diversified": True,
+        "overall": {"score": overall_score, "label": overall_label}
     }
