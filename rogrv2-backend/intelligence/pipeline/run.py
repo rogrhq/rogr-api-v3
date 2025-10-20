@@ -132,6 +132,36 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
     from intelligence.claims.interpret import detect_claim_type
     claim["claim_type"] = detect_claim_type(claim)
 
+    # Phase 8: Classify claim (ADDED)
+    from intelligence.preprocess.classify import classify_claim
+    classification = classify_claim(
+        claim_text=text,
+        entities=claim.get("entities", []),
+        numbers=claim.get("numbers", [])
+    )
+    claim["classification"] = classification
+
+    # Early exit for unverifiable claims
+    if classification.get("verifiability") == "UNVERIFIABLE":
+        # Return early with insufficient verdict
+        return {
+            "claims": [{
+                "id": "c-0",
+                "text": text.strip(),
+                "tier": "primary",
+                "classification": classification,
+                "verdict": {
+                    "label": "insufficient",
+                    "confidence": 0.0,
+                    "rationale": classification.get("note", "Unverifiable claim type")
+                },
+                "evidence": {},
+                "researchers": []
+            }],
+            "run_manifest": {},
+            "diversified": False
+        }
+
     # Build base search plan
     from intelligence.strategy.plan_v2 import build_search_plans_v2
     base_plan = build_search_plans_v2(claim)
