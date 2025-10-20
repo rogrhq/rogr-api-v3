@@ -100,7 +100,7 @@ def _best_offset(raw: str, snippet: str) -> Tuple[int,int]:
         return (i2, min(len(raw), i2+len(snippet)))
     return (-1,-1)
 
-def analyze_item(claim_text: str, item: Dict[str,Any], *, window: int = 3) -> Dict[str,Any]:
+def analyze_item(claim_text: str, item: Dict[str,Any], *, window: int = 3, stance_threshold: float = 0.60) -> Dict[str,Any]:
     """
     Deterministic semantic pass for a single item.
     Returns an updated item with `findings` (list), `item_grade` (0..1), `grade_label`.

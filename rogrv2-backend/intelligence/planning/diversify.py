@@ -77,20 +77,44 @@ def diversify_plan_for_lane(
             arms_list.append({"name": name, **arm_data})
         diversified["arms"] = arms_list
 
-    # Shuffle queries for each arm
+    # Phase 5: Generate lane-specific queries (CHANGED)
+    from intelligence.strategy.plan_v2 import generate_queries_r1, generate_queries_r2
+
+    # Extract claim data from plan (added by Part A above)
+    claim_data = diversified.get("claim", {})
+    claim_entities = claim_data.get("entities", [])
+    claim_numbers = claim_data.get("numbers", [])
+
     queries_preview = {}
     for arm in diversified.get("arms", []):
-        original_queries = arm.get("queries", [])
-        shuffled = _shuffle_queries_deterministic(original_queries, seed)
-        arm["queries"] = shuffled
-        queries_preview[arm.get("name", "?")] = shuffled[:3]
+        arm_name = arm.get("name", "")
 
-    # Config
+        # Determine arm label (A or B)
+        arm_label = "A" if "A" in arm_name.upper() else "B"
+
+        # Generate queries based on lane strategy
+        if lane_id == "R1":
+            # R1: Precision - quoted, exact, anchored
+            new_queries = generate_queries_r1(claim_text, claim_entities, claim_numbers, arm_label)
+        else:  # R2
+            # R2: Recall - broad, exploratory, paraphrased
+            new_queries = generate_queries_r2(claim_text, claim_entities, claim_numbers, arm_label)
+
+        # Replace queries (not shuffle)
+        arm["queries"] = new_queries
+        queries_preview[arm_name] = new_queries[:3]
+
+    # Prefer Brave for R1 (precision), Google for R2 (recall)
+    preferred_providers = ["brave", "google"] if lane_id == "R1" else ["google", "brave"]
+
+    # Add strategy info to config
     config = {
         "lane_id": lane_id,
-        "providers": providers,
+        "strategy": "precision" if lane_id == "R1" else "recall",
+        "providers": preferred_providers,  # Provider order matters
         "seed": seed,
-        "queries_first3": queries_preview
+        "queries_first3": queries_preview,
+        "note": "R1=Brave first (precision), R2=Google first (recall)"
     }
 
     return diversified, config

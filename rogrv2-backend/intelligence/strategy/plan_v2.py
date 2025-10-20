@@ -155,7 +155,7 @@ def build_search_plans_v2(claim: Dict[str, Any]) -> Dict[str, Any]:
     a_queries = _clean(a_queries)
     b_queries = _clean(b_queries)
 
-    return {
+    plan = {
         "version": "v2",
         "arms": {
             "A": {"intent": "support", "queries": a_queries[:5]},
@@ -168,6 +168,15 @@ def build_search_plans_v2(claim: Dict[str, Any]) -> Dict[str, Any]:
             "dimension": claim.get("dimension", "unknown")
         }
     }
+
+    # Add claim data for diversify_plan_for_lane()
+    plan["claim"] = {
+        "text": claim.get("text", ""),
+        "entities": claim.get("entities", []),
+        "numbers": claim.get("numbers", [])
+    }
+
+    return plan
 
 # ============================================================================
 # PHASE 5.1: QUERY STRATEGY DIFFERENTIATION (ADDED)

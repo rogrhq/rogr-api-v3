@@ -93,7 +93,9 @@ async def run_single_lane_enrichment(
             # P23
             if item.get("content"):
                 try:
-                    analyze_item(claim_text, item, window=3)
+                    # Set threshold based on lane (R1=Skeptic strict, R2=Explorer lenient)
+                    stance_threshold = 0.70 if lane_id == "R1" else 0.50
+                    analyze_item(claim_text, item, window=3, stance_threshold=stance_threshold)
                 except:
                     pass
 
