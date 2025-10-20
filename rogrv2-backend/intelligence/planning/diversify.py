@@ -83,7 +83,31 @@ def diversify_plan_for_lane(
     # Extract claim data from plan (added by Part A above)
     claim_data = diversified.get("claim", {})
     claim_entities = claim_data.get("entities", [])
-    claim_numbers = claim_data.get("numbers", [])
+
+    # Convert numbers dict to list of {"value": ...} dicts (bug fix for TASK 2.1)
+    numbers_dict = claim_data.get("numbers", {})
+    claim_numbers = []
+    if isinstance(numbers_dict, dict):
+        # Add percents
+        for percent in numbers_dict.get('percents', []):
+            claim_numbers.append({"value": percent})
+        # Add years
+        for year in numbers_dict.get('years', []):
+            claim_numbers.append({"value": year})
+        # Add number_units (tuples of (value, unit))
+        for num_unit in numbers_dict.get('number_units', []):
+            if isinstance(num_unit, (list, tuple)) and len(num_unit) >= 2:
+                claim_numbers.append({"value": num_unit[0], "unit": num_unit[1]})
+            elif isinstance(num_unit, (list, tuple)) and len(num_unit) == 1:
+                claim_numbers.append({"value": num_unit[0]})
+            else:
+                # Fallback if structure is different
+                claim_numbers.append({"value": num_unit})
+    elif isinstance(numbers_dict, list):
+        # Already a list
+        claim_numbers = numbers_dict
+    else:
+        claim_numbers = []
 
     queries_preview = {}
     for arm in diversified.get("arms", []):

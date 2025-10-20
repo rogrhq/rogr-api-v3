@@ -174,7 +174,31 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
 
     # Extract claim data for pipeline functions
     claim_entities = claim.get("entities", [])
-    claim_numbers = claim.get("numbers", [])
+
+    # Convert numbers dict to list of {"value": ...} dicts (bug fix for TASK 2.1)
+    numbers_dict = claim.get("numbers", {})
+    claim_numbers = []
+    if isinstance(numbers_dict, dict):
+        # Add percents
+        for percent in numbers_dict.get('percents', []):
+            claim_numbers.append({"value": percent})
+        # Add years
+        for year in numbers_dict.get('years', []):
+            claim_numbers.append({"value": year})
+        # Add number_units (tuples of (value, unit))
+        for num_unit in numbers_dict.get('number_units', []):
+            if isinstance(num_unit, (list, tuple)) and len(num_unit) >= 2:
+                claim_numbers.append({"value": num_unit[0], "unit": num_unit[1]})
+            elif isinstance(num_unit, (list, tuple)) and len(num_unit) == 1:
+                claim_numbers.append({"value": num_unit[0]})
+            else:
+                # Fallback if structure is different
+                claim_numbers.append({"value": num_unit})
+    elif isinstance(numbers_dict, list):
+        # Already a list
+        claim_numbers = numbers_dict
+    else:
+        claim_numbers = []
     # Extract claim classification (from TASK 1.1)
     claim_classification = claim.get("classification", None)
 
