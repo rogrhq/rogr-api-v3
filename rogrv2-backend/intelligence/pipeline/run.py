@@ -192,7 +192,9 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
     if len(researchers) >= 2:
         r1_verdict = researchers[0].get("verdict", {})
         r2_verdict = researchers[1].get("verdict", {})
-        consensus = compute_consensus(r1_verdict, r2_verdict)
+        r1_evidence = researchers[0].get("evidence", {})
+        r2_evidence = researchers[1].get("evidence", {})
+        consensus = compute_consensus(r1_verdict, r2_verdict, r1_evidence, r2_evidence)
     else:
         consensus = dual_result.get("verdict", {})
 

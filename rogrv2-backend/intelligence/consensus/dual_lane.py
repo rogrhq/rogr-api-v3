@@ -1,7 +1,10 @@
 from typing import Dict, Any
+# Phase 6: Evidence quality comparison (ADDED)
+from intelligence.consensus.build import compare_evidence_quality, resolve_disagreement, synthesize_evidence
 
 
-def compute_consensus(r1_verdict: Dict[str, Any], r2_verdict: Dict[str, Any]) -> Dict[str, Any]:
+def compute_consensus(r1_verdict: Dict[str, Any], r2_verdict: Dict[str, Any],
+                     r1_evidence: Dict[str, Any] = None, r2_evidence: Dict[str, Any] = None) -> Dict[str, Any]:
     """
     Combine two researcher verdicts into consensus.
 
@@ -49,10 +52,36 @@ def compute_consensus(r1_verdict: Dict[str, Any], r2_verdict: Dict[str, Any]) ->
         "delta_balance": r1_arm.get("balance", 0) - r2_arm.get("balance", 0)
     }
 
-    # Agreement case
+    # Phase 6: Synthesize evidence from both researchers (ADDED)
+    if r1_evidence and r2_evidence:
+        r1_items_a = r1_evidence.get("arm_A", [])
+        r1_items_b = r1_evidence.get("arm_B", [])
+        r2_items_a = r2_evidence.get("arm_A", [])
+        r2_items_b = r2_evidence.get("arm_B", [])
+        consensus_evidence = synthesize_evidence(r1_items_a, r1_items_b, r2_items_a, r2_items_b)
+    else:
+        # Fallback: combine arms from both researchers
+        consensus_evidence = {
+            "arm_A": (r1_evidence.get("arm_A", []) if r1_evidence else []) +
+                    (r2_evidence.get("arm_A", []) if r2_evidence else []),
+            "arm_B": (r1_evidence.get("arm_B", []) if r1_evidence else []) +
+                    (r2_evidence.get("arm_B", []) if r2_evidence else [])
+        }
+
+    # Disagreement logic with evidence quality
     if r1_label == r2_label:
+        # Agreement: check evidence quality for bonus
+        if r1_evidence and r2_evidence:
+            r1_items_a = r1_evidence.get("arm_A", [])
+            r1_items_b = r1_evidence.get("arm_B", [])
+            r2_items_a = r2_evidence.get("arm_A", [])
+            r2_items_b = r2_evidence.get("arm_B", [])
+            quality_boost = compare_evidence_quality(r1_items_a, r1_items_b, r2_items_a, r2_items_b)
+            bonus = 0.10 + quality_boost
+        else:
+            bonus = 0.10
+
         base_conf = max(r1_conf, r2_conf)
-        bonus = 0.10
         final_conf = min(base_conf + bonus, 0.95)
 
         support_mean = (r1_arm.get("support", 0) + r2_arm.get("support", 0)) / 2
@@ -71,47 +100,59 @@ def compute_consensus(r1_verdict: Dict[str, Any], r2_verdict: Dict[str, Any]) ->
             },
             "agreement": agreement
         }
+    else:
+        # Disagreement: resolve by evidence quality (Phase 6)
+        if r1_evidence and r2_evidence:
+            resolution = resolve_disagreement(r1_verdict, r2_verdict, r1_evidence, r2_evidence)
+            label = resolution["label"]
+            confidence_adjustment = resolution["confidence_adjustment"]
 
-    # Disagreement case
-    support_mean = (r1_arm.get("support", 0) + r2_arm.get("support", 0)) / 2
-    challenge_mean = (r1_arm.get("challenge", 0) + r2_arm.get("challenge", 0)) / 2
-    delta = abs(support_mean - challenge_mean)
+            support_mean = (r1_arm.get("support", 0) + r2_arm.get("support", 0)) / 2
+            challenge_mean = (r1_arm.get("challenge", 0) + r2_arm.get("challenge", 0)) / 2
+            delta = abs(support_mean - challenge_mean)
+            base_conf = max(r1_conf, r2_conf)
+            final_conf = max(base_conf + confidence_adjustment, 0.0)
 
-    base_conf = max(r1_conf, r2_conf)
+            return {
+                "label": label,
+                "confidence": final_conf,
+                "rationale": {
+                    "rule": "disagree_evidence_quality",
+                    "support_mean": support_mean,
+                    "challenge_mean": challenge_mean,
+                    "delta": delta,
+                    "base_conf": base_conf,
+                    "bonus_or_penalty": confidence_adjustment
+                },
+                "agreement": agreement
+            }
 
-    # Clear gap - pick stronger side
-    if delta >= 0.20:
-        label = "supports" if support_mean > challenge_mean else "challenges"
-        penalty = -0.05
+        # Fallback: original logic if no evidence
+        support_mean = (r1_arm.get("support", 0) + r2_arm.get("support", 0)) / 2
+        challenge_mean = (r1_arm.get("challenge", 0) + r2_arm.get("challenge", 0)) / 2
+        delta = abs(support_mean - challenge_mean)
+        base_conf = max(r1_conf, r2_conf)
+
+        if delta >= 0.20:
+            # Fallback: clear gap, pick stronger side
+            label = "supports" if support_mean > challenge_mean else "challenges"
+            penalty = -0.05
+        else:
+            # Fallback: too close, mixed
+            label = "mixed"
+            penalty = -0.10
+
         final_conf = max(base_conf + penalty, 0.0)
 
         return {
             "label": label,
             "confidence": final_conf,
             "rationale": {
-                "rule": "disagree_gap_select",
+                "rule": "disagree_fallback",
                 "support_mean": support_mean,
                 "challenge_mean": challenge_mean,
                 "delta": delta,
                 "base_conf": base_conf,
-                "bonus_or_penalty": penalty
-            },
-            "agreement": agreement
-        }
-
-    # Too close - mixed
-    penalty = -0.10
-    final_conf = max(base_conf + penalty, 0.0)
-
-    return {
-        "label": "mixed",
-        "confidence": final_conf,
-        "rationale": {
-            "rule": "disagree_mixed",
-            "support_mean": support_mean,
-            "challenge_mean": challenge_mean,
-            "delta": delta,
-            "base_conf": base_conf,
             "bonus_or_penalty": penalty
         },
         "agreement": agreement
