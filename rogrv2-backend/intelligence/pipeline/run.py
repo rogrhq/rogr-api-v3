@@ -149,6 +149,13 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
 
     # Early exit for unverifiable claims
     if classification.get("verifiability") == "UNVERIFIABLE":
+        # Generate summary for unverifiable claim
+        summary = explanation_from_counts(
+            text.strip(),
+            {"support": 0, "refute": 0, "neutral": 0},
+            []
+        )
+
         # Return early with insufficient verdict
         return {
             "claims": [{
@@ -162,7 +169,8 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
                     "rationale": classification.get("note", "Unverifiable claim type")
                 },
                 "evidence": {},
-                "researchers": []
+                "researchers": [],
+                "summary": summary
             }],
             "run_manifest": {},
             "diversified": False,
@@ -298,6 +306,28 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
     else:
         manifest = {"replay_id": "error", "lanes": {}}
 
+    # Generate summary from evidence
+    evidence = dual_result.get("evidence", {})
+    arm_a = evidence.get("arm_A", [])
+    arm_b = evidence.get("arm_B", [])
+
+    # Count by stance
+    support_count = sum(1 for item in arm_a if item.get("stance") == "support")
+    refute_count = sum(1 for item in arm_b if item.get("stance") == "refute")
+    all_items = arm_a + arm_b
+    neutral_count = sum(1 for item in all_items if item.get("stance") in ["neutral", "unrelated"])
+
+    # Get top 3 sources by credibility
+    sorted_items = sorted(all_items, key=lambda x: x.get("credibility", 0), reverse=True)[:3]
+    top_sources = [(item.get("title", "Unknown"), item.get("domain", "unknown")) for item in sorted_items]
+
+    # Generate summary
+    summary = explanation_from_counts(
+        text.strip(),
+        {"support": support_count, "refute": refute_count, "neutral": neutral_count},
+        top_sources
+    )
+
     # Build response
     claim_obj = {
         "id": "c-0",
@@ -306,7 +336,8 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
         "verdict": dual_result.get("verdict", {}),
         "evidence": dual_result.get("evidence", {}),
         "researchers": researchers,
-        "consensus": consensus  # NEW
+        "consensus": consensus,  # NEW
+        "summary": summary
     }
 
     # Compute overall verdict from consensus
