@@ -1,8 +1,8 @@
 {
-    "completed": ["1.1", "1.2", "1.3", "1.4", "1.5", "2.1", "3.1", "3.2"],
-    "next": "3.2B",
-    "last_completed": "3.2 - Wire up quality multipliers in confidence",
-    "last_commit": "d35f2ba",
+    "completed": ["1.1", "1.2", "1.3", "1.4", "1.5", "2.1", "3.1", "3.2", "3.2B"],
+    "next": "3.3",
+    "last_completed": "3.2B - Apply quality multipliers to arm strength",
+    "last_commit": "23357b3",
     "status": "ready",
-    "timestamp": "2025-10-19T20:35:00"
+    "timestamp": "2025-10-19T20:40:00"
 }
