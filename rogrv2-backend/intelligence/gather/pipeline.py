@@ -155,6 +155,18 @@ async def build_evidence_for_claim(claim_text: str, plan: Dict[str, Any], claim_
     armA_norm = armA_filtered
     armB_norm = armB_filtered
 
+    # Phase 2.2: Quality gate - filter junk domains, PDFs, non-English (ADDED)
+    armA_quality, armA_junk = quality_gate(armA_norm)
+    armB_quality, armB_junk = quality_gate(armB_norm)
+
+    if diag.enabled():
+        diag.log("quality_gate_results",
+                 armA_kept=len(armA_quality), armA_junk=len(armA_junk),
+                 armB_kept=len(armB_quality), armB_junk=len(armB_junk))
+
+    armA_norm = armA_quality
+    armB_norm = armB_quality
+
     # P19 Reordering: Sort Arm B candidates by anchor match score
     if armB_norm:
         from intelligence.gather.counter_frames import reorder_by_anchor_score
