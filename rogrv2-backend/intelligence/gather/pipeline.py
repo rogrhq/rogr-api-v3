@@ -44,6 +44,28 @@ async def _exec_plan_for_arm(full_plan: Dict[str, Any], arm_def: Dict[str, Any],
 
     res = await online.run_plan(sub_plan, max_per_query=max_per_query)
     raw = (res or {}).get("candidates") or []
+
+    # Phase 7: Query validation (ADDED - full retry mode)
+    # NOTE: Part D1 implements re-search, so max_retries=2 now works correctly
+    claim_text = full_plan.get("claim_text", "")
+    claim_entities = full_plan.get("claim_entities", [])
+    claim_numbers = full_plan.get("claim_numbers", [])
+
+    queries = arm_def.get("queries", [])
+    if queries and raw and claim_text:
+        # Validate first query (most important)
+        first_query = queries[0]
+        refined_query, validated_results, refinement_count = await validate_query_results(
+            claim_text, claim_entities, claim_numbers, first_query, raw, max_retries=2  # Full retry mode
+        )
+
+        if diag.enabled() and refinement_count > 0:
+            diag.log("query_validation", query=first_query, refined=refined_query, needed_refinement=True, refinement_count=refinement_count)
+
+        # Use validated results
+        raw = validated_results
+
+    # Continue with original flow
     out: List[Dict[str, Any]] = []
     for c in raw:
         if isinstance(c, dict):
@@ -112,6 +134,11 @@ async def build_evidence_for_claim(claim_text: str, plan: Dict[str, Any], claim_
       5) Compute cross-arm consensus.
       6) Produce verdict (numeric & label) from evidence.
     """
+    # Store claim data in plan for validation
+    plan["claim_text"] = claim_text
+    plan["claim_entities"] = claim_entities if claim_entities else []
+    plan["claim_numbers"] = claim_numbers if claim_numbers else []
+
     # 1) Execute per arm and tag at source
     arm_defs = _extract_arm_defs(plan)
     labeled_cands: List[Dict[str, Any]] = []
@@ -457,7 +484,7 @@ def quality_gate(candidates: list) -> tuple:
 # PHASE 7.1: QUERY VALIDATION LOOP
 # ============================================================================
 
-def validate_query_results(claim_text: str, claim_entities: list, claim_numbers: list,
+async def validate_query_results(claim_text: str, claim_entities: list, claim_numbers: list,
                           query: str, results: list, max_retries: int = 2) -> tuple:
     """
     Check if query returned on-topic results; refine if not.
@@ -527,17 +554,41 @@ def validate_query_results(claim_text: str, claim_entities: list, claim_numbers:
     if max_retries > 0:
         refined_query = refine_query(claim_text, claim_entities, claim_numbers, query, sample)
 
-        # NOTE: Actual search would happen here
-        # For now, return original (search integration needed)
-        # new_results = search(refined_query)
-        # return validate_query_results(claim_text, claim_entities, claim_numbers,
-        #                              refined_query, new_results, max_retries - 1)
+        # Execute refined search
+        from intelligence.lib.diagnostics import diag
 
-        # Placeholder: return with note
-        return refined_query, results, 1  # Indicate refinement attempted
+        # Build mini-plan with refined query
+        refined_plan = {
+            "version": "v2",
+            "arms": [{
+                "name": "refined",
+                "intent": "support",
+                "queries": [refined_query]
+            }]
+        }
+
+        # Execute search (use same max_per_query)
+        new_res = await online.run_plan(refined_plan, max_per_query=len(results))
+        new_results = (new_res or {}).get("candidates", [])
+
+        if new_results and len(new_results) > 0:
+            if diag.enabled():
+                diag.log("query_refinement_search",
+                         refined_query=refined_query,
+                         new_result_count=len(new_results))
+
+            # Recursive call with refined query and new results
+            final_query, final_results, child_count = await validate_query_results(
+                claim_text, claim_entities, claim_numbers,
+                refined_query, new_results, max_retries - 1
+            )
+            return (final_query, final_results, child_count + 1)
+        else:
+            # Refinement failed, return original
+            return (refined_query, results, 1)
 
     # Out of retries, return what we have
-    return query, results, max_retries
+    return query, results, 0
 
 
 def refine_query(claim_text: str, claim_entities: list, claim_numbers: list,
