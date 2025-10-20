@@ -1,8 +1,8 @@
 {
-    "completed": ["1.1", "1.2", "1.3", "1.4", "1.5", "2.1", "3.1", "3.2", "3.2B", "3.3", "4.1", "4.2"],
-    "next": "4.3",
-    "last_completed": "4.2 - Add Phase 9 to evidence analysis",
-    "last_commit": "55a06bd",
+    "completed": ["1.1", "1.2", "1.3", "1.4", "1.5", "2.1", "3.1", "3.2", "3.2B", "3.3", "4.1", "4.2", "4.3"],
+    "next": "4.4",
+    "last_completed": "4.3 - Add temporal/geographic context to authority scoring",
+    "last_commit": "069c983",
     "status": "ready",
-    "timestamp": "2025-10-19T20:55:00"
+    "timestamp": "$(date -Iseconds)"
 }
