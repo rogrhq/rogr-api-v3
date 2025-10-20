@@ -76,8 +76,11 @@ def compute_consensus(r1_verdict: Dict[str, Any], r2_verdict: Dict[str, Any],
             r1_items_b = r1_evidence.get("arm_B", [])
             r2_items_a = r2_evidence.get("arm_A", [])
             r2_items_b = r2_evidence.get("arm_B", [])
-            quality_boost = compare_evidence_quality(r1_items_a, r1_items_b, r2_items_a, r2_items_b)
-            bonus = 0.10 + quality_boost
+            quality_comparison = compare_evidence_quality(r1_items_a, r1_items_b, r2_items_a, r2_items_b)
+            # Higher quality evidence = higher confidence boost
+            avg_quality = (quality_comparison['r1']['overall'] + quality_comparison['r2']['overall']) / 2
+            quality_boost = avg_quality * 0.10  # Scale to 0-0.10 bonus
+            bonus = 0.10 + quality_boost  # Total: 0.10-0.20
         else:
             bonus = 0.10
 
@@ -103,15 +106,21 @@ def compute_consensus(r1_verdict: Dict[str, Any], r2_verdict: Dict[str, Any],
     else:
         # Disagreement: resolve by evidence quality (Phase 6)
         if r1_evidence and r2_evidence:
-            resolution = resolve_disagreement(r1_verdict, r2_verdict, r1_evidence, r2_evidence)
+            r1_items_a = r1_evidence.get("arm_A", [])
+            r1_items_b = r1_evidence.get("arm_B", [])
+            r2_items_a = r2_evidence.get("arm_A", [])
+            r2_items_b = r2_evidence.get("arm_B", [])
+            quality_comparison = compare_evidence_quality(r1_items_a, r1_items_b, r2_items_a, r2_items_b)
+            resolution = resolve_disagreement(r1_verdict, r2_verdict, quality_comparison)
+
+            # Use confidence directly from resolution (not as adjustment)
             label = resolution["label"]
-            confidence_adjustment = resolution["confidence_adjustment"]
+            final_conf = resolution["confidence"]
 
             support_mean = (r1_arm.get("support", 0) + r2_arm.get("support", 0)) / 2
             challenge_mean = (r1_arm.get("challenge", 0) + r2_arm.get("challenge", 0)) / 2
             delta = abs(support_mean - challenge_mean)
             base_conf = max(r1_conf, r2_conf)
-            final_conf = max(base_conf + confidence_adjustment, 0.0)
 
             return {
                 "label": label,
@@ -122,7 +131,7 @@ def compute_consensus(r1_verdict: Dict[str, Any], r2_verdict: Dict[str, Any],
                     "challenge_mean": challenge_mean,
                     "delta": delta,
                     "base_conf": base_conf,
-                    "bonus_or_penalty": confidence_adjustment
+                    "bonus_or_penalty": final_conf - base_conf  # Store actual adjustment for transparency
                 },
                 "agreement": agreement
             }
