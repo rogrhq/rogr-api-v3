@@ -103,23 +103,44 @@ def aggregate_verdict(claim_text: str, arm_a_items: List[Dict[str,Any]], arm_b_i
     sa = _arm_strength(arm_a_items)
     sb = _arm_strength(arm_b_items)
 
-    # insufficient if both arms weak
-    if sa < 0.12 and sb < 0.12:
+    # Phase 4: Apply quality multipliers to arm strength (ADDED)
+    all_items = arm_a_items + arm_b_items
+    diversity = calculate_diversity_score(all_items)
+    consistency = calculate_consistency_score(all_items, claim_numbers)
+    breadth = calculate_breadth_score(all_items)
+
+    # Apply multipliers to arm strength (blueprint specification)
+    sa_enhanced = sa * diversity * consistency * breadth
+    sb_enhanced = sb * diversity * consistency * breadth
+
+    # Use enhanced strength for verdict calculation
+    if sa_enhanced < 0.12 and sb_enhanced < 0.12:
         label = "insufficient"
     else:
-        if (sa - sb) >= delta:
+        if (sa_enhanced - sb_enhanced) >= delta:
             label = "supports"
-        elif (sb - sa) >= delta:
+        elif (sb_enhanced - sa_enhanced) >= delta:
             label = "challenges"
         else:
             label = "mixed"
 
-    conf = _confidence_from_arms(sa, sb, len(arm_a_items), len(arm_b_items),
+    conf = _confidence_from_arms(sa_enhanced, sb_enhanced, len(arm_a_items), len(arm_b_items),
                                 arm_a_items, arm_b_items, claim_numbers)
     return {
         "label": label,
         "confidence": float(conf),
-        "arm_strength": {"support": float(sa), "challenge": float(sb), "balance": float(sa - sb)},
+        "arm_strength": {
+            "support": float(sa_enhanced),
+            "challenge": float(sb_enhanced),
+            "support_base": float(sa),  # Store base for comparison
+            "challenge_base": float(sb),
+            "balance": float(sa_enhanced - sb_enhanced)
+        },
+        "quality_multipliers": {
+            "diversity": float(diversity),
+            "consistency": float(consistency),
+            "breadth": float(breadth)
+        }
     }
 
 
