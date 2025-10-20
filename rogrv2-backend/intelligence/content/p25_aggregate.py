@@ -1,4 +1,5 @@
 from __future__ import annotations
+import sys
 from typing import Any, Dict, List, Tuple
 import math
 
@@ -17,8 +18,10 @@ def _item_strength(it: Dict[str, Any]) -> float:
             sc = float(m.get("score", 0.0))
             if sc > best_frame:
                 best_frame = sc
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"⚠️ WARNING in frame score parsing: {e}", file=sys.stderr)
+            print(f"   Frame data: {m}", file=sys.stderr)
+            # Continue with best_frame unchanged
 
     # item grade
     try:

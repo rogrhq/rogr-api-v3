@@ -11,6 +11,7 @@ Attaches fields to item:
 """
 
 from __future__ import annotations
+import sys
 from typing import Any, Dict, List, Tuple
 import re
 import math
@@ -175,8 +176,10 @@ def _credibility_from(url: str, text: str) -> float:
         host = (p.hostname or "").lower()
         if host.endswith(".gov") or host.endswith(".edu"):
             score += 0.25
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"⚠️ WARNING in domain authority bonus: {e}", file=sys.stderr)
+        print(f"   URL: {item.get('url', 'NO URL')}", file=sys.stderr)
+        # Continue without authority bonus
     if _AUTHZ_WORDS.search(text or ""):
         score += 0.15
     return max(0.0, min(1.0, score))

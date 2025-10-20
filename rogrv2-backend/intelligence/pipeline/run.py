@@ -1,4 +1,5 @@
 from __future__ import annotations
+import sys
 from typing import Any, Dict, List, Union, Tuple
 from intelligence.score.aggregate import overall_from_claims
 from intelligence.ifcn.labels import label_for_score, scale_spec, explanation_from_counts
@@ -81,15 +82,22 @@ async def run_single_lane_enrichment(
             # P20
             try:
                 attach_finding_to_item(claim_text, arm_label, item)
-            except:
-                pass
+            except Exception as e:
+                print(f"❌ ERROR in attach_finding_to_item (P20 grading): {e}", file=sys.stderr)
+                print(f"   Claim: {claim_text[:50]}...", file=sys.stderr)
+                print(f"   Item: {item.get('title', 'NO TITLE')[:50]}", file=sys.stderr)
+                import traceback
+                traceback.print_exc()
 
             # P21
             if item.get("content"):
                 try:
                     evaluate_full_evidence(claim_text, item, claim_classification)
-                except:
-                    pass
+                except Exception as e:
+                    print(f"❌ ERROR in evaluate_full_evidence (P21 authority): {e}", file=sys.stderr)
+                    print(f"   URL: {item.get('url', 'NO URL')}", file=sys.stderr)
+                    import traceback
+                    traceback.print_exc()
 
             # P23
             if item.get("content"):
@@ -97,8 +105,12 @@ async def run_single_lane_enrichment(
                     # Set threshold based on lane (R1=Skeptic strict, R2=Explorer lenient)
                     stance_threshold = 0.70 if lane_id == "R1" else 0.50
                     analyze_item(claim_text, item, window=3, stance_threshold=stance_threshold)
-                except:
-                    pass
+                except Exception as e:
+                    print(f"❌ ERROR in analyze_item (P23 stance): {e}", file=sys.stderr)
+                    print(f"   Claim: {claim_text[:50]}...", file=sys.stderr)
+                    print(f"   Title: {item.get('title', 'NO TITLE')[:50]}", file=sys.stderr)
+                    import traceback
+                    traceback.print_exc()
 
             # P24
             content = item.get("content") or ""
@@ -106,8 +118,11 @@ async def run_single_lane_enrichment(
                 try:
                     frames = analyze_frames(claim_text, content, window=3)
                     item.update(frames)
-                except:
-                    pass
+                except Exception as e:
+                    print(f"❌ ERROR in analyze_frames (P24 frames): {e}", file=sys.stderr)
+                    print(f"   Claim: {claim_text[:50]}...", file=sys.stderr)
+                    import traceback
+                    traceback.print_exc()
 
     # P25: Aggregate
     try:
