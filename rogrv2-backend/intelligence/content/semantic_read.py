@@ -11,6 +11,9 @@ from intelligence.content.shared.text_utils import (
 )
 from intelligence.content.shared.entities import extract_entities, entity_overlap
 from intelligence.content.shared.paraphrases import paraphrase_match_score, find_paraphrases_in_text
+# Phase 9: Semantic depth and numeric precision (ADDED)
+from intelligence.content.shared.semantic_depth import check_negation_agreement, detect_hedging
+from intelligence.content.shared.numeric_precision import extract_and_match_numbers
 
 _APOS = re.compile(r"['׳`´]")
 _PUNCT = re.compile(r"[^a-z0-9\s]")
@@ -199,6 +202,40 @@ def analyze_item(claim_text: str, item: Dict[str,Any], *, window: int = 3, stanc
     cov = item.get("coverage") or "snippet_only"
     cov_w = {"full": 1.0, "partial": 0.75, "snippet_only": 0.5}.get(cov, 0.5)
     item_grade = max(0.0, min(1.0, 0.6 * best + 0.4 * cov_w))
+
+    # Phase 9: Apply precision checks to grade (ADDED)
+    if findings:
+        # Use the best finding's window for Phase 9 checks
+        best_finding = findings[0]
+        evidence_window = best_finding.get("quote", "")
+
+        # Phase 9.1: Numeric precision check
+        # Extract numbers from claim (simple extraction)
+        claim_numbers = _percent_numbers(claim_norm) + [str(y) for y in _years(claim_norm)]
+        if claim_numbers:
+            number_match = extract_and_match_numbers(claim_text, evidence_window)
+            # Penalty for numeric mismatch
+            if number_match.get('unmatched_claim_count', 0) > 0:
+                item_grade = item_grade * 0.7
+                item["numeric_mismatch"] = True
+                item["numeric_precision"] = number_match
+
+        # Phase 9.2: Negation agreement check
+        negation_check = check_negation_agreement(claim_text, evidence_window)
+        if negation_check.get('semantic_flip'):
+            # Flip stance of best finding if negation mismatch
+            if best_finding.get('stance') == 'support':
+                best_finding['stance'] = 'challenge'
+            elif best_finding.get('stance') == 'challenge':
+                best_finding['stance'] = 'support'
+            item["negation_flip"] = True
+
+        # Phase 9.3: Hedging penalty
+        evidence_hedging = detect_hedging(evidence_window)
+        if evidence_hedging.get('has_hedging', False):
+            item_grade = item_grade * 0.9
+            item["hedging_detected"] = True
+
     item["item_grade"] = float(item_grade)
     item["grade_label"] = "high" if item_grade >= 0.67 else ("medium" if item_grade >= 0.4 else "low")
     return item
