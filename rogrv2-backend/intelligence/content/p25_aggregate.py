@@ -77,8 +77,8 @@ def _confidence_from_arms(sa: float, sb: float, n_items_a: int, n_items_b: int,
     diversity = calculate_diversity_score(all_items)
     consistency = calculate_consistency_score(all_items, claim_numbers)
 
-    # Calculate average authority using credibility (not authority_score which doesn't exist on items)
-    authorities = [item.get("credibility", 0.5) for item in all_items]
+    # Calculate average authority using authority score (now stored on items by grade.py)
+    authorities = [item.get("authority", 0.5) for item in all_items]
     avg_authority = sum(authorities) / len(authorities) if authorities else 0.5
 
     # 6-factor formula (OLD: 3-factor)
