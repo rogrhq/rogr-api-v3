@@ -261,6 +261,7 @@ def attach_finding_to_item(claim_text: str, arm: str, item: Dict[str, Any]) -> D
     finding = build_finding_v2(claim_text, arm, item)
     # annotate the item
     item["item_grade"] = finding["item_grade"]
+    item["authority"] = finding.get("features", {}).get("authority", {}).get("score", 0.5)
     item["stance"] = finding.get("features", {}).get("p23", {}).get("stance", "unrelated")
     item["finding"] = finding
     return item
@@ -402,6 +403,17 @@ def build_finding_v2(claim_text: str, arm: str, evidence_item: dict) -> dict:
     # Temporary: Just return features (fusion in step 1.2e)
     # For now, use P23's grade as primary (it's most tested)
     item_grade = fuse_module_grades(features, evidence_item)
+
+    # Store authority score for transparency and downstream use
+    credibility = features.get('p21', {}).get('credibility', 0.5) if features.get('p21_available') else 0.5
+    url = evidence_item.get('url', '')
+    authority = calculate_authority_score(url, credibility)
+
+    features['authority'] = {
+        'score': authority,
+        'credibility': credibility,
+        'domain': url,
+    }
 
     return {
         'item_grade': item_grade,
