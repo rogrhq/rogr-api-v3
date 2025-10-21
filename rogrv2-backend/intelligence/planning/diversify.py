@@ -116,13 +116,22 @@ def diversify_plan_for_lane(
         # Determine arm label (A or B)
         arm_label = "A" if "A" in arm_name.upper() else "B"
 
+        # Reconstruct full claim dict with concept/dimension from meta
+        claim_dict = {
+            "text": claim_text,
+            "entities": claim_entities,
+            "numbers": claim_data.get("numbers", {}),
+            "concept": diversified.get("meta", {}).get("concept", ""),
+            "dimension": diversified.get("meta", {}).get("dimension", "")
+        }
+
         # Generate queries based on lane strategy
         if lane_id == "R1":
-            # R1: Precision - quoted, exact, anchored
-            new_queries = generate_queries_r1(claim_text, claim_entities, claim_numbers, arm_label)
+            # R1: Precision - semantic queries, high similarity
+            new_queries = generate_queries_r1(claim_dict, arm_label, diversified)
         else:  # R2
-            # R2: Recall - broad, exploratory, paraphrased
-            new_queries = generate_queries_r2(claim_text, claim_entities, claim_numbers, arm_label)
+            # R2: Recall - semantic queries, broader exploration
+            new_queries = generate_queries_r2(claim_dict, arm_label, diversified)
 
         # Replace queries (not shuffle)
         arm["queries"] = new_queries

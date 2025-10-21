@@ -15,6 +15,12 @@ from intelligence.orchestration.dual_lane import run_dual_researchers
 from intelligence.planning.diversify import diversify_plan_for_lane
 from intelligence.telemetry.collect import LaneTelemetry, generate_manifest
 from intelligence.consensus.dual_lane import compute_consensus
+# FIX-7: Edge case handlers (ADDED)
+from intelligence.calibration.edge_cases import (
+    detect_ambiguous_claim,
+    detect_breaking_news,
+    handle_conflicting_experts
+)
 
 def _to_json_primitive(x: Any) -> Any:
     """
@@ -88,41 +94,6 @@ async def run_single_lane_enrichment(
                 print(f"   Item: {item.get('title', 'NO TITLE')[:50]}", file=sys.stderr)
                 import traceback
                 traceback.print_exc()
-
-            # P21
-            if item.get("content"):
-                try:
-                    evaluate_full_evidence(claim_text, item, claim_classification)
-                except Exception as e:
-                    print(f"❌ ERROR in evaluate_full_evidence (P21 authority): {e}", file=sys.stderr)
-                    print(f"   URL: {item.get('url', 'NO URL')}", file=sys.stderr)
-                    import traceback
-                    traceback.print_exc()
-
-            # P23
-            if item.get("content"):
-                try:
-                    # Set threshold based on lane (R1=Skeptic strict, R2=Explorer lenient)
-                    stance_threshold = 0.70 if lane_id == "R1" else 0.50
-                    analyze_item(claim_text, item, window=3, stance_threshold=stance_threshold)
-                except Exception as e:
-                    print(f"❌ ERROR in analyze_item (P23 stance): {e}", file=sys.stderr)
-                    print(f"   Claim: {claim_text[:50]}...", file=sys.stderr)
-                    print(f"   Title: {item.get('title', 'NO TITLE')[:50]}", file=sys.stderr)
-                    import traceback
-                    traceback.print_exc()
-
-            # P24
-            content = item.get("content") or ""
-            if content:
-                try:
-                    frames = analyze_frames(claim_text, content, window=3)
-                    item.update(frames)
-                except Exception as e:
-                    print(f"❌ ERROR in analyze_frames (P24 frames): {e}", file=sys.stderr)
-                    print(f"   Claim: {claim_text[:50]}...", file=sys.stderr)
-                    import traceback
-                    traceback.print_exc()
 
     # P25: Aggregate
     try:
@@ -279,6 +250,17 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
             "avg_authority": sum(arm_b_authorities) / len(arm_b_authorities) if arm_b_authorities else 0.5
         }
 
+        # FIX-7: Edge case detection (ADDED)
+        # Check for ambiguous claims
+        ambiguous_result = detect_ambiguous_claim(text, claim_entities, claim_numbers)
+
+        # Check for breaking news
+        all_evidence_items = arm_a_items + arm_b_items
+        breaking_news_result = detect_breaking_news(all_evidence_items)
+
+        # Check for conflicting experts
+        conflict_result = handle_conflicting_experts(arm_a_items, arm_b_items)
+
         # Calibrate confidence
         claim_classification = claim.get("classification", {
             "verifiability": "HIGHLY_VERIFIABLE",
@@ -312,6 +294,30 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
             consensus["label"] = final_verdict["label"]
             consensus["confidence"] = final_verdict["confidence"]
             consensus["calibration_note"] = final_verdict["rationale"]
+
+            # FIX-7: Apply edge case adjustments (ADDED)
+            edge_case_notes = []
+
+            # If ambiguous, reduce confidence
+            if ambiguous_result.get("ambiguous"):
+                consensus["confidence"] = consensus["confidence"] * 0.85
+                edge_case_notes.append(f"Ambiguous: {ambiguous_result.get('reason')}")
+
+            # If breaking news, reduce confidence
+            if breaking_news_result.get("breaking_news"):
+                consensus["confidence"] = consensus["confidence"] * 0.90
+                edge_case_notes.append("Breaking news: situation may be evolving")
+
+            # If conflicting experts, override verdict
+            if conflict_result.get("is_expert_conflict"):
+                consensus["label"] = "mixed"
+                consensus["confidence"] = 0.75
+                edge_case_notes.append("High-quality sources disagree")
+
+            # Add notes if any edge cases detected
+            if edge_case_notes:
+                existing_note = consensus.get("calibration_note", "")
+                consensus["calibration_note"] = existing_note + " | Edge cases: " + "; ".join(edge_case_notes)
 
     # Generate manifest (P29)
     if len(researchers) >= 2:

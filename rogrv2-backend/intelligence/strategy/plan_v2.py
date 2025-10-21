@@ -182,8 +182,11 @@ def build_search_plans_v2(claim: Dict[str, Any]) -> Dict[str, Any]:
 # PHASE 5.1: QUERY STRATEGY DIFFERENTIATION (ADDED)
 # ============================================================================
 
+# OLD IMPLEMENTATION - REPLACED 2025-10-20
+# Kept for reference, remove after validation period
+"""
 def generate_queries_r1(claim_text: str, entities: list, numbers: list, arm: str) -> list:
-    """
+    '''
     R1 (Precision) query strategy - quoted, anchored, exact.
 
     Characteristics:
@@ -200,7 +203,7 @@ def generate_queries_r1(claim_text: str, entities: list, numbers: list, arm: str
 
     Returns:
         List of query strings (3-5 queries)
-    """
+    '''
     queries = []
 
     # Query 1: Exact claim (quoted)
@@ -224,7 +227,7 @@ def generate_queries_r1(claim_text: str, entities: list, numbers: list, arm: str
 
 
 def generate_queries_r2(claim_text: str, entities: list, numbers: list, arm: str) -> list:
-    """
+    '''
     R2 (Recall) query strategy - paraphrased, exploratory, broad.
 
     Characteristics:
@@ -242,7 +245,7 @@ def generate_queries_r2(claim_text: str, entities: list, numbers: list, arm: str
 
     Returns:
         List of query strings (5-8 queries)
-    """
+    '''
     queries = []
 
     # Query 1: Natural language (no quotes)
@@ -269,4 +272,209 @@ def generate_queries_r2(claim_text: str, entities: list, numbers: list, arm: str
         queries.append(f"{entity_str} context factors")
 
     return queries[:8]  # Max 8 queries
+"""
+
+
+# ============================================================================
+# SEMANTIC QUERY GENERATION (Replaces broken Phase 5 templates)
+# ============================================================================
+
+def _generate_semantic_queries_internal(
+    claim: Dict[str, Any],
+    arm: str,
+    strategy: str,
+    base_plan: Dict[str, Any] = None
+) -> List[str]:
+    """
+    Generate semantic queries using compositional building + bi-encoder validation.
+
+    Uses enrichment data (concept, dimension, entities, numbers) to build
+    semantically meaningful queries, then validates with bi-encoder.
+
+    Args:
+        claim: Full enriched claim dict with text, entities, numbers
+        arm: "A" (support) or "B" (challenge)
+        strategy: "r1" (precision) or "r2" (recall)
+        base_plan: Base plan with meta.concept and meta.dimension
+
+    Returns:
+        List of 3-8 high-quality query strings
+
+    Raises:
+        Exception: If bi-encoder fails or critical data missing
+    """
+    from intelligence.content.shared.embeddings import get_embeddings
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    # Extract semantic components
+    text = claim.get("text", "").strip()
+    if not text:
+        raise ValueError("Claim text is empty")
+
+    concept = claim.get("concept", "")
+    dimension = claim.get("dimension", "")
+    entities = claim.get("entities", [])
+    numbers = claim.get("numbers", {})
+
+    # Extract concept/dimension from base_plan if not in claim
+    if base_plan and not concept:
+        concept = base_plan.get("meta", {}).get("concept", "")
+    if base_plan and not dimension:
+        dimension = base_plan.get("meta", {}).get("dimension", "")
+
+    # Extract numeric values with units
+    values = []
+    for num_unit in numbers.get("number_units", []):
+        if isinstance(num_unit, (list, tuple)) and len(num_unit) >= 2:
+            values.append(f"{num_unit[0]} {num_unit[1]}")
+
+    # Build query candidates compositionally
+    candidates = []
+
+    # 1. Full quoted claim (always high quality)
+    candidates.append(f'"{text}"')
+
+    # 2. Concept-based queries
+    if concept:
+        candidates.append(concept)
+
+        if values:
+            candidates.append(f"{concept} {values[0]}")
+
+        if dimension:
+            candidates.append(f"{concept} {dimension}")
+
+        if values and dimension:
+            candidates.append(f"{concept} {dimension} {values[0]}")
+
+    # 3. Entity + relationship queries
+    if entities:
+        entity = entities[0] if isinstance(entities[0], str) else entities[0].get('name', '')
+
+        if entity:
+            if values:
+                candidates.append(f"{entity} {values[0]}")
+
+            if dimension and values:
+                candidates.append(f"{entity} {dimension} {values[0]}")
+
+            if concept:
+                # Extract action verb from concept for natural phrasing
+                # "water boiling point" -> use "boiling"
+                concept_lower = concept.lower()
+                if "boiling" in concept_lower and values:
+                    candidates.append(f"{entity} boils at {values[0]}")
+                elif "melting" in concept_lower and values:
+                    candidates.append(f"{entity} melts at {values[0]}")
+                elif "freezing" in concept_lower and values:
+                    candidates.append(f"{entity} freezes at {values[0]}")
+
+    # 4. Rule-based paraphrases (structural transformations)
+    if concept and values:
+        # "water boiling point 100 degrees" -> "100 degrees water boiling point"
+        candidates.append(f"{values[0]} {concept}")
+
+    if entities and concept:
+        entity = entities[0] if isinstance(entities[0], str) else entities[0].get('name', '')
+        if entity:
+            # "water" + "boiling point" -> "boiling point of water"
+            candidates.append(f"{concept} of {entity}")
+
+    # 5. Add intent-specific terms (differentiate support vs challenge)
+    if arm == "A":
+        # Support: data, measurement, scientific, official
+        intent_terms = ["data", "measurement", "scientific report"]
+    else:
+        # Challenge: conditions, exceptions, variations
+        if strategy == "r1":
+            # R1 precision: specific counter-frames
+            intent_terms = ["actual value", "verify measurement"]
+        else:
+            # R2 recall: broad counter-frames
+            intent_terms = ["exceptions", "variations", "different conditions"]
+
+    # Append intent to concept-based queries
+    if concept:
+        for term in intent_terms[:2]:
+            candidates.append(f"{concept} {term}")
+
+    # 6. Validate with bi-encoder
+    emb = get_embeddings()  # Let this fail if embeddings not available
+
+    scored_queries = []
+    for candidate in candidates:
+        candidate = candidate.strip()
+        if not candidate or candidate == '""':
+            continue
+
+        # Score semantic similarity to original claim
+        similarity = emb.get_semantic_similarity(text, candidate)
+        scored_queries.append((candidate, similarity))
+
+    # Sort by similarity (highest first)
+    scored_queries.sort(key=lambda x: x[1], reverse=True)
+
+    # Filter: Keep queries with similarity > 0.4
+    filtered = [(q, s) for q, s in scored_queries if s >= 0.4]
+
+    if not filtered:
+        # If nothing passed threshold, this indicates a problem
+        logger.error(f"No queries passed similarity threshold for claim: {text}")
+        raise ValueError("Query generation failed: no valid candidates")
+
+    # Return top-N based on strategy
+    # R1 (precision): fewer queries
+    # R2 (recall): more queries
+    top_n = 5 if strategy == "r1" else 8
+
+    result = [q for q, s in filtered[:top_n]]
+
+    logger.info(f"Generated {len(result)} {strategy} queries for arm {arm}")
+    logger.debug(f"Top query similarity: {filtered[0][1]:.3f}")
+
+    return result
+
+
+def generate_queries_r1(
+    claim: Dict[str, Any],
+    arm: str,
+    base_plan: Dict[str, Any] = None
+) -> list:
+    """
+    R1 (Precision) query strategy - semantic queries with high similarity threshold.
+
+    Replaces broken Phase 5 template-based implementation.
+
+    Args:
+        claim: Enriched claim dict
+        arm: "A" (support) or "B" (challenge)
+        base_plan: Base plan with meta fields
+
+    Returns:
+        List of 3-5 high-quality query strings
+    """
+    return _generate_semantic_queries_internal(claim, arm, "r1", base_plan)
+
+
+def generate_queries_r2(
+    claim: Dict[str, Any],
+    arm: str,
+    base_plan: Dict[str, Any] = None
+) -> list:
+    """
+    R2 (Recall) query strategy - semantic queries with broader exploration.
+
+    Replaces broken Phase 5 template-based implementation.
+
+    Args:
+        claim: Enriched claim dict
+        arm: "A" (support) or "B" (challenge)
+        base_plan: Base plan with meta fields
+
+    Returns:
+        List of 5-8 high-quality query strings
+    """
+    return _generate_semantic_queries_internal(claim, arm, "r2", base_plan)
 
