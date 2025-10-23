@@ -1,0 +1,390 @@
+================================================================================
+PHASE 6 INVESTIGATION: Display & Output Issues
+================================================================================
+Timestamp: 2025-10-21
+Investigation focus: Issue #10 (Summary), Issue #11 (Quotes), Issue #12 (Lane IDs)
+
+================================================================================
+PART 1: SUMMARY GENERATION
+================================================================================
+
+SEARCH COMMAND:
+grep -rn "summary\|generate.*summary" intelligence/ --include="*.py" | grep -v ".backup"
+
+RESULTS:
+  intelligence/pipeline/run.py:138 - Generate summary for unverifiable claim
+  intelligence/pipeline/run.py:139 - summary = explanation_from_counts(...)
+  intelligence/pipeline/run.py:159 - "summary": summary
+  intelligence/pipeline/run.py:330 - # Generate summary from evidence
+  intelligence/pipeline/run.py:345 - # Generate summary
+  intelligence/pipeline/run.py:346 - summary = explanation_from_counts(...)
+  intelligence/pipeline/run.py:361 - "summary": summary
+
+SUMMARY GENERATION LOCATION:
+  File: intelligence/pipeline/run.py
+  Lines: 330-361
+
+CODE (lines 330-361):
+    # Generate summary from evidence
+    evidence = dual_result.get("evidence", {})
+    arm_a = evidence.get("arm_A", [])
+    arm_b = evidence.get("arm_B", [])
+
+    # Count by stance
+    support_count = sum(1 for item in arm_a if item.get("stance") == "support")
+    refute_count = sum(1 for item in arm_b if item.get("stance") == "refute")
+    all_items = arm_a + arm_b
+    neutral_count = sum(1 for item in all_items if item.get("stance") in ["neutral", "unrelated"])
+
+    # Get top 3 sources by credibility
+    sorted_items = sorted(all_items, key=lambda x: x.get("credibility", 0), reverse=True)[:3]
+    top_sources = [(item.get("title", "Unknown"), item.get("domain", "unknown")) for item in sorted_items]
+
+    # Generate summary
+    summary = explanation_from_counts(
+        text.strip(),
+        {"support": support_count, "refute": refute_count, "neutral": neutral_count},
+        top_sources
+    )
+
+    # Build response
+    claim_obj = {
+        "id": "c-0",
+        "text": text.strip(),
+        "tier": "primary",
+        "verdict": dual_result.get("verdict", {}),
+        "evidence": dual_result.get("evidence", {}),
+        "researchers": researchers,
+        "consensus": consensus,  # NEW
+        "summary": summary
+    }
+
+EXPLANATION FUNCTION:
+  Location: intelligence/ifcn/labels.py:24-40
+
+  def explanation_from_counts(claim_text: str, counts: Dict[str,int], top_sources: List[Tuple[str,str]]) -> str:
+      """
+      Build a short deterministic explanation for a verdict.
+      counts: {"support": X, "refute": Y, "neutral": Z}
+      top_sources: list of (title, publisher) for traceability
+      """
+      s = int(counts.get("support",0))
+      r = int(counts.get("refute",0))
+      n = int(counts.get("neutral",0))
+      parts = []
+      parts.append(f"Claim: {claim_text.strip()[:180]}")
+      parts.append(f"Evidence summary — support:{s}, refute:{r}, neutral:{n}.")
+      if top_sources:
+          listed = "; ".join([f"{t} — {p}" for (t,p) in top_sources[:3]])
+          parts.append(f"Top sources considered: {listed}.")
+      parts.append("Method: A/B search arms, deduplication, lexical ranking, stance and quality scoring, consensus aggregation.")
+      return " ".join(parts)
+
+DIAGNOSTIC OUTPUT:
+  From diagnostic_20251021_182457.md:
+    "Summary present: False"
+    "Summary: MISSING ❌"
+    "SUMMARY: NOT GENERATED"
+
+ISSUE ANALYSIS:
+
+  STATUS: Summary generation IS implemented
+
+  LOCATION: run_preview() function in run.py (lines 330-361)
+
+  PROBLEM: Summary not appearing in diagnostic output
+
+  POSSIBLE CAUSES:
+    1. Diagnostic script checking wrong field
+    2. Summary only generated in run_preview(), not in diagnostic path
+    3. Diagnostic using different execution path
+
+  EVIDENCE:
+    - Code exists and is active (lines 330-361)
+    - Function explanation_from_counts() exists (labels.py:24-40)
+    - Summary added to claim_obj["summary"] (line 361)
+    - But diagnostic shows "MISSING"
+
+  HYPOTHESIS:
+    Diagnostic test uses different code path that doesn't include summary generation
+    OR summary field not propagated to diagnostic output structure
+
+================================================================================
+PART 2: QUOTE EXTRACTION
+================================================================================
+
+SEARCH COMMANDS:
+grep -rn "extract.*quote\|top.*quote" intelligence/ --include="*.py"
+grep -rn "findings\|quotes" intelligence/pipeline/run.py intelligence/consensus/ --include="*.py"
+
+RESULTS:
+  No "extract.*quote" or "top.*quote" found in intelligence/
+
+DIAGNOSTIC OUTPUT:
+  From diagnostic_20251021_182457.md:
+
+    "Has top-level quote field: False"
+    "P23 nested quote: Water Boiling Point at Higher Pressures – Data & Calculator..."
+
+    "Quote extraction:
+      Items with top-level quote: 0/15
+      Items with nested quote: 11/15
+      ❌ Quotes not extracted to top level"
+
+DIAGNOSTIC CHECK CODE:
+  Location: tests/complete_pipeline_diagnostic.py:220-252
+
+  # Check for quote field
+  has_quote = 'quote' in item
+  print(f"    Has top-level quote field: {has_quote}")
+
+  # Check finding structure
+  finding = item.get('finding', {})
+  if finding:
+      features = finding.get('features', {})
+
+      # P23 Stance
+      if 'p23' in features:
+          p23 = features['p23']
+          findings = p23.get('findings', [])
+          if findings:
+              first_finding = findings[0]
+              quote = first_finding.get('quote', '')
+              print(f"    P23 nested quote: {truncate(quote, 80)}")
+
+CURRENT STRUCTURE:
+  Quotes stored in nested structure:
+    item → finding → features → p23 → findings → [0] → quote
+
+  Expected structure:
+    item → quote (top-level)
+
+ISSUE ANALYSIS:
+
+  STATUS: Quote extraction NOT implemented
+
+  CURRENT STATE:
+    - Quotes exist in P23 findings (nested 4 levels deep)
+    - P23 findings stored: item["finding"]["features"]["p23"]["findings"][0]["quote"]
+    - No extraction to top-level item["quote"]
+
+  INTENDED STATE:
+    - Top-level field: item["quote"]
+    - Should contain best quote from P23 findings
+
+  MISSING CODE:
+    No code found to extract P23 findings[0].quote to item.quote
+    Search for "extract.*quote" returned no results
+
+  LOCATION WHERE FIX NEEDED:
+    After P23 analysis, before returning evidence
+    Likely in: intelligence/content/grade.py (where P23 is called)
+    OR in: intelligence/gather/pipeline.py (after grading)
+
+================================================================================
+PART 3: LANE ID DISPLAY
+================================================================================
+
+SEARCH COMMANDS:
+grep -rn "lane_id\|lane.*=" intelligence/ --include="*.py" | grep -v ".backup"
+grep -n "lane\|R1\|R2" intelligence/pipeline/run.py
+
+RESULTS - LANE_ID USAGE:
+
+  intelligence/pipeline/run.py:49 - def run_single_lane_enrichment(..., lane_id: str, ...)
+  intelligence/pipeline/run.py:61 - lane_id: "R1" or "R2"
+  intelligence/pipeline/run.py:204-205 - lambda claim_text, plan, lane_id, telemetry: ...
+
+  intelligence/planning/diversify.py:19 - def _generate_seed(lane_id: str, claim_text: str)
+  intelligence/planning/diversify.py:26 - def _ordered_providers_for_lane(lane_id: str, ...)
+  intelligence/planning/diversify.py:45 - def diversify_plan_for_lane(..., lane_id: str, ...)
+  intelligence/planning/diversify.py:145 - "lane_id": lane_id (in config)
+
+  intelligence/orchestration/dual_lane.py:17 - enrichment_pipeline: async def(claim_text, plan, lane_id, telemetry)
+  intelligence/orchestration/dual_lane.py:88 - async def mock_pipeline(claim, plan, lane_id, telem)
+
+  intelligence/telemetry/collect.py:9-10 - self.lane_id = lane_id
+
+DUAL_LANE ORCHESTRATION:
+  Location: intelligence/orchestration/dual_lane.py:4-70
+
+  async def run_dual_researchers(...):
+      # Diversify plans
+      r1_plan, r1_config = diversify_fn(base_plan, "R1", claim_text, providers)
+      r2_plan, r2_config = diversify_fn(base_plan, "R2", claim_text, providers)
+
+      # Run R1
+      r1_telemetry = telemetry_class("R1")
+      r1_result = await enrichment_pipeline(claim_text, r1_plan, "R1", r1_telemetry)
+
+      # Run R2
+      r2_telemetry = telemetry_class("R2")
+      r2_result = await enrichment_pipeline(claim_text, r2_plan, "R2", r2_telemetry)
+
+      # Build researcher objects
+      researchers = [
+          {
+              "id": "R1",
+              "verdict": r1_result.get("verdict", {}),
+              "evidence": r1_result.get("evidence", {}),
+              "lane_config": r1_config,
+              "telemetry": r1_telemetry_data
+          },
+          {
+              "id": "R2",
+              "verdict": r2_result.get("verdict", {}),
+              "evidence": r2_result.get("evidence", {}),
+              "lane_config": r2_config,
+              "telemetry": r2_telemetry_data
+          }
+      ]
+
+DIAGNOSTIC CHECK CODE:
+  Location: tests/complete_pipeline_diagnostic.py:194
+
+  for researcher in researchers:
+      lane_id = researcher.get("lane_id", "UNKNOWN")
+      print_subsection(f"{lane_id} Results")
+
+DIAGNOSTIC OUTPUT:
+  From diagnostic_20251021_182457.md:
+    "--- UNKNOWN Results ---"
+    "--- UNKNOWN - First Arm A Item Details ---"
+
+ISSUE ANALYSIS:
+
+  STATUS: Lane ID IS set but field name mismatch
+
+  DUAL_LANE OUTPUT:
+    - Sets field: researcher["id"] = "R1" or "R2" (line 50, 57)
+    - NOT setting: researcher["lane_id"]
+
+  DIAGNOSTIC EXPECTATION:
+    - Reads field: researcher.get("lane_id", "UNKNOWN") (line 194)
+    - Field mismatch: looking for "lane_id", but field is "id"
+
+  ROOT CAUSE:
+    Field name inconsistency
+    - Code sets: "id"
+    - Test expects: "lane_id"
+
+  LOCATION OF BUG:
+    intelligence/orchestration/dual_lane.py:50, 57
+    Should be: "lane_id": "R1" (not "id": "R1")
+
+  OR:
+    tests/complete_pipeline_diagnostic.py:194
+    Should read: researcher.get("id", "UNKNOWN")
+
+  WHICH IS CORRECT?
+    Looking at dual_lane.py:50-61:
+      - Sets "id": "R1"/"R2"
+      - Sets "lane_config": {...} (which contains lane_id)
+      - lane_config["lane_id"] exists (from diversify.py:145)
+
+    Two possible fields:
+      1. researcher["id"] = "R1"
+      2. researcher["lane_config"]["lane_id"] = "R1"
+
+    Diagnostic expects: researcher["lane_id"]
+    Neither of the above matches
+
+================================================================================
+SEARCH COMMANDS LOG
+================================================================================
+
+1. grep -rn "summary\|generate.*summary" intelligence/ --include="*.py" | grep -v ".backup"
+2. grep -rn '"summary".*=' intelligence/ --include="*.py"
+3. grep -i "summary" diagnostic_20251021_182457.md
+4. grep -n "def explanation_from_counts" intelligence/pipeline/run.py
+5. grep -rn "def explanation_from_counts\|from.*explanation" intelligence/pipeline/run.py
+6. grep -n "def explanation_from_counts" intelligence/ifcn/labels.py
+7. grep -rn "extract.*quote\|top.*quote" intelligence/ --include="*.py"
+8. grep -rn "findings\|quotes" intelligence/pipeline/run.py intelligence/consensus/ --include="*.py"
+9. grep -B 5 -A 10 "findings\|quote" diagnostic_20251021_182457.md
+10. grep -n "quote.*extraction\|top-level quote\|Has top-level" test_week1_validation.py
+11. find tests -name "*.py" -exec grep -l "top-level quote" {} \;
+12. grep -n "top-level quote\|nested quote" tests/complete_pipeline_diagnostic.py
+13. grep -rn "lane_id\|lane.*=" intelligence/ --include="*.py" | grep -v ".backup"
+14. grep -n "lane\|R1\|R2" intelligence/pipeline/run.py
+15. grep "lane\|UNKNOWN" diagnostic_20251021_182457.md
+16. grep -n "UNKNOWN\|lane.*label\|researcher.*name" tests/complete_pipeline_diagnostic.py
+17. grep -n "lane_id" intelligence/orchestration/dual_lane.py
+
+================================================================================
+SUMMARY OF FINDINGS
+================================================================================
+
+ISSUE #10: SUMMARY NOT GENERATED
+
+  STATUS: IMPLEMENTED but not appearing in diagnostic
+
+  IMPLEMENTATION:
+    - Code: intelligence/pipeline/run.py:330-361
+    - Function: explanation_from_counts() in ifcn/labels.py:24-40
+    - Generates summary from evidence counts and top sources
+    - Adds to claim_obj["summary"]
+
+  PROBLEM:
+    - Diagnostic shows "MISSING"
+    - Likely different execution path in diagnostic
+    - OR summary not propagated to diagnostic output
+
+  NO CODE MISSING - Implementation exists
+
+--------------------------------------------------------------------------------
+
+ISSUE #11: QUOTES NOT AT TOP LEVEL
+
+  STATUS: NOT IMPLEMENTED
+
+  CURRENT STATE:
+    - Quotes exist in nested structure:
+      item["finding"]["features"]["p23"]["findings"][0]["quote"]
+    - Diagnostic confirms: "Items with nested quote: 11/15"
+
+  EXPECTED STATE:
+    - Top-level field: item["quote"]
+    - Direct access without nested traversal
+
+  MISSING CODE:
+    - No extraction function found
+    - Search for "extract.*quote" returned no results
+    - Needs code to copy P23 findings[0].quote to item.quote
+
+  LOCATION FOR FIX:
+    - After P23 analysis (intelligence/content/grade.py)
+    - OR after grading in pipeline (intelligence/gather/pipeline.py)
+
+--------------------------------------------------------------------------------
+
+ISSUE #12: LANE ID SHOWING "UNKNOWN"
+
+  STATUS: IMPLEMENTED but field name mismatch
+
+  IMPLEMENTATION:
+    - dual_lane.py sets: researcher["id"] = "R1" or "R2"
+    - Also sets: researcher["lane_config"]["lane_id"] = "R1" or "R2"
+
+  PROBLEM:
+    - Diagnostic reads: researcher.get("lane_id", "UNKNOWN")
+    - Field mismatch: expecting "lane_id", but code uses "id"
+    - Result: "UNKNOWN" displayed
+
+  ROOT CAUSE:
+    Inconsistent field naming
+    - Code uses: "id"
+    - Test expects: "lane_id"
+
+  FIX OPTIONS:
+    Option A: Change dual_lane.py:50,57 to use "lane_id" instead of "id"
+    Option B: Change diagnostic.py:194 to use "id" instead of "lane_id"
+    Option C: Add "lane_id" field in addition to "id" for backward compat
+
+  SIMPLEST FIX:
+    Add line in dual_lane.py after line 50 and 57:
+      "lane_id": "R1"  # (in addition to "id": "R1")
+
+================================================================================
+END OF INVESTIGATION
+================================================================================

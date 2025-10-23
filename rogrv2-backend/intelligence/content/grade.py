@@ -263,6 +263,9 @@ def attach_finding_to_item(claim_text: str, arm: str, item: Dict[str, Any]) -> D
     item["item_grade"] = finding["item_grade"]
     item["authority"] = finding.get("features", {}).get("authority", {}).get("score", 0.5)
     item["stance"] = finding.get("features", {}).get("p23", {}).get("stance", "unrelated")
+    item["credibility"] = finding.get("features", {}).get("p21", {}).get("credibility", 0.5)
+    item["credibility_tier"] = finding.get("features", {}).get("p21", {}).get("credibility_tier", 4)
+    item["credibility_category"] = finding.get("features", {}).get("p21", {}).get("credibility_category", "unknown")
     item["finding"] = finding
     return item
 
@@ -366,6 +369,8 @@ def build_finding_v2(claim_text: str, arm: str, evidence_item: dict) -> dict:
             'grade_full': p21_result.get('grade_full', 0.0),
             'stance_full': p21_result.get('stance_full', 'unrelated'),
             'credibility': p21_result.get('credibility', 0.5),
+            'credibility_tier': p21_result.get('credibility_tier', 4),
+            'credibility_category': p21_result.get('credibility_category', 'unknown'),
             'signals_full': p21_result.get('signals_full', {}),
         }
         features['p21_available'] = True

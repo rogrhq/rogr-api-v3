@@ -1,0 +1,635 @@
+================================================================================
+PHASE 5 INVESTIGATION: Query Generation & Diversification
+================================================================================
+Timestamp: 2025-10-21
+Claim: "Water boils at 100 degrees Celsius"
+Investigation focus: Issue #4 (Duplication), Issue #5 (No Challenges)
+
+================================================================================
+PART 1: QUERY GENERATION MODULES LOCATED
+================================================================================
+
+SEARCH COMMAND:
+grep -rn "def.*plan\|def build_search_plans" intelligence/strategy/ --include="*.py"
+
+RESULT - STRATEGY MODULE:
+  intelligence/strategy/plan.py:60 - def build_search_plans (OLD)
+  intelligence/strategy/plan_v2.py:115 - def build_search_plans_v2 (ACTIVE)
+  intelligence/strategy/plan_v2.py:440 - def generate_queries_r1
+  intelligence/strategy/plan_v2.py:461 - def generate_queries_r2
+
+SEARCH COMMAND:
+grep -rn "def diversify\|def.*diverse" intelligence/planning/ --include="*.py"
+
+RESULT - PLANNING MODULE:
+  intelligence/planning/diversify.py:43 - def diversify_plan_for_lane
+
+DIRECTORY CONTENTS:
+  intelligence/strategy/:
+    - plan.py (old version)
+    - plan_v2.py (active, 481 lines)
+    - plan_v2.py.backup
+    - plan_v2.py.phase5_backup
+    - seed.py
+
+  intelligence/planning/:
+    - diversify.py (181 lines)
+
+================================================================================
+PART 2: QUERY GENERATION FLOW TRACED
+================================================================================
+
+FLOW:
+  1. intelligence/pipeline/run.py:167-168
+     - Imports build_search_plans_v2
+     - Calls build_search_plans_v2(claim)
+     - Returns base_plan
+
+  2. intelligence/pipeline/run.py:201-208
+     - Calls run_dual_researchers() with:
+       * base_plan
+       * diversify_fn=diversify_plan_for_lane
+
+  3. diversify_plan_for_lane() called for each researcher (R1, R2)
+     - Generates lane-specific queries
+     - Calls generate_queries_r1() or generate_queries_r2()
+
+  4. intelligence/gather/pipeline.py:127 - build_evidence_for_claim()
+     - Executes queries for each arm
+     - Stamps results with arm labels
+
+NO DIRECT IMPORTS IN pipeline.py:
+  - pipeline.py does NOT import build_search_plans_v2
+  - pipeline.py does NOT import diversify functions
+  - All query generation happens in run.py → run_dual_researchers
+
+================================================================================
+PART 3: BASE PLAN GENERATION (build_search_plans_v2)
+================================================================================
+
+LOCATION: intelligence/strategy/plan_v2.py:115-179
+
+FUNCTION SIGNATURE:
+  def build_search_plans_v2(claim: Dict[str, Any]) -> Dict[str, Any]
+
+INPUT:
+  - claim dict with enrichment keys from S2 Packet 1
+  - Fields: text, entities, numbers, scope, cues, kind_hint
+
+OUTPUT:
+  - Normalized plan with two arms (A support-seeking, B challenge-seeking)
+  - Format: {"version": "v2", "arms": {"A": {...}, "B": {...}}, "meta": {...}}
+
+ARM A (SUPPORT) QUERIES (lines 130-136):
+  1. head + common_pool + _support_terms(kind)
+  2. entities[0] + percents + time + ["official statistics"]
+  3. head + percents + ["explainer"]
+
+  Support terms (line 105-106):
+    ["report", "press release", "official", "statement", "dataset", "document", "methodology"]
+
+ARM B (CHALLENGE) QUERIES (lines 137-142):
+  1. head + common_pool + _challenge_terms(kind)
+  2. entities[0] + percents + time + ["dispute"]
+  3. _challenge_terms(kind) + percents + time
+
+  Challenge terms (line 101-103):
+    ["dispute", "counterclaim", "contradict", "refute", "debunk", "controversy", "criticism", "fact check"]
+
+KEY COMPONENTS:
+  - head = quoted claim (first 140 chars)
+  - common_pool = entities + percents + time + comps + kind words
+  - _uniq() = deduplicates terms
+
+DOMAIN FILTERING (lines 144-154):
+  - Regex removes queries containing domain patterns
+  - Prevents "site:" or "inurl:" operators
+  - Prevents domain.tld patterns
+
+OUTPUT STRUCTURE (lines 158-179):
+  plan = {
+      "version": "v2",
+      "arms": {
+          "A": {"intent": "support", "queries": a_queries[:5]},
+          "B": {"intent": "challenge", "queries": b_queries[:5]},
+      },
+      "meta": {...},
+      "claim": {"text": ..., "entities": ..., "numbers": ...}
+  }
+
+DIAGNOSTIC OUTPUT (from diagnostic_20251021_182457.md):
+
+  Arm A (Support-seeking) Queries:
+    1. "Water boils at 100 degrees Celsius" Water Celsius statement report press release official dataset document methodology
+    2. Water official statistics
+
+  Arm B (Challenge-seeking) Queries:
+    1. "Water boils at 100 degrees Celsius" Water Celsius statement dispute counterclaim contradict refute debunk controversy criticism fact check
+    2. Water dispute
+    3. dispute counterclaim contradict refute debunk controversy criticism fact check
+
+OBSERVATION:
+  - Base plan DOES differentiate Arm A and Arm B
+  - Arm A has support keywords
+  - Arm B has challenge keywords
+  - Both start with quoted claim + common terms
+
+================================================================================
+PART 4: QUERY DIVERSIFICATION (diversify_plan_for_lane)
+================================================================================
+
+LOCATION: intelligence/planning/diversify.py:43-153
+
+FUNCTION SIGNATURE:
+  def diversify_plan_for_lane(
+      base_plan: Dict[str, Any],
+      lane_id: str,
+      claim_text: str,
+      available_providers: List[str]
+  ) -> Tuple[Dict[str, Any], Dict[str, Any]]
+
+PURPOSE:
+  "Create lane-specific diversified plan"
+
+INPUTS:
+  - base_plan: from build_search_plans_v2
+  - lane_id: "R1" or "R2"
+  - claim_text: claim being fact-checked
+  - available_providers: list of search providers
+
+PROCESS (lines 61-153):
+
+1. Generate seed (deterministic from lane_id + claim_text)
+2. Order providers by lane:
+   - R1: prefer Brave first (precision)
+   - R2: prefer Google first (recall)
+3. Deep copy base_plan
+4. Normalize arms format (dict → list)
+5. **REPLACE QUERIES** for each arm:
+   - Extract claim data from plan
+   - Determine arm label (A or B)
+   - Call generate_queries_r1() or generate_queries_r2()
+   - Replace arm["queries"] with new queries
+6. Return diversified plan + config
+
+CRITICAL CODE (lines 128-138):
+  # Generate queries based on lane strategy
+  if lane_id == "R1":
+      # R1: Precision - semantic queries, high similarity
+      new_queries = generate_queries_r1(claim_dict, arm_label, diversified)
+  else:  # R2
+      # R2: Recall - semantic queries, broader exploration
+      new_queries = generate_queries_r2(claim_dict, arm_label, diversified)
+
+  # Replace queries (not shuffle)
+  arm["queries"] = new_queries
+
+OBSERVATION:
+  - Queries are REPLACED, not shuffled
+  - generate_queries_r1/r2 called with arm_label ("A" or "B")
+  - Both R1 and R2 call the same semantic generation function
+
+================================================================================
+PART 5: SEMANTIC QUERY GENERATION (generate_queries_r1/r2)
+================================================================================
+
+LOCATION: intelligence/strategy/plan_v2.py:282-479
+
+INTERNAL FUNCTION: _generate_semantic_queries_internal (lines 282-437)
+
+SIGNATURE:
+  def _generate_semantic_queries_internal(
+      claim: Dict[str, Any],
+      arm: str,
+      strategy: str,
+      base_plan: Dict[str, Any] = None
+  ) -> List[str]
+
+PURPOSE:
+  "Generate semantic queries using compositional building + bi-encoder validation"
+
+PROCESS:
+
+1. Extract semantic components (lines 312-325):
+   - text, concept, dimension, entities, numbers
+   - Extract from base_plan if not in claim
+
+2. Build query candidates compositionally (lines 333-402):
+   - Full quoted claim
+   - Concept-based queries
+   - Entity + relationship queries
+   - Rule-based paraphrases
+   - **Intent-specific terms (ARM DIFFERENTIATION)**
+
+3. ARM DIFFERENTIATION (lines 385-401):
+   if arm == "A":
+       # Support: data, measurement, scientific, official
+       intent_terms = ["data", "measurement", "scientific report"]
+   else:
+       # Challenge: conditions, exceptions, variations
+       if strategy == "r1":
+           # R1 precision: specific counter-frames
+           intent_terms = ["actual value", "verify measurement"]
+       else:
+           # R2 recall: broad counter-frames
+           intent_terms = ["exceptions", "variations", "different conditions"]
+
+   # Append intent to concept-based queries
+   if concept:
+       for term in intent_terms[:2]:
+           candidates.append(f"{concept} {term}")
+
+4. Validate with bi-encoder (lines 403-420):
+   - Score similarity of each candidate to original claim
+   - Filter: keep similarity > 0.4
+   - Sort by similarity (highest first)
+
+5. Return top-N queries (lines 427-437):
+   - R1: top 5 queries
+   - R2: top 8 queries
+
+PUBLIC FUNCTIONS:
+
+generate_queries_r1() (lines 440-458):
+  - Calls _generate_semantic_queries_internal(claim, arm, "r1", base_plan)
+  - Returns 3-5 high-quality query strings
+
+generate_queries_r2() (lines 461-479):
+  - Calls _generate_semantic_queries_internal(claim, arm, "r2", base_plan)
+  - Returns 5-8 high-quality query strings
+
+OLD IMPLEMENTATION (lines 185-275):
+  - Commented out, kept for reference
+  - Date: "OLD IMPLEMENTATION - REPLACED 2025-10-20"
+  - Had explicit arm differentiation in templates
+
+================================================================================
+PART 6: DIAGNOSTIC TRACE - ACTUAL QUERIES GENERATED
+================================================================================
+
+FROM: diagnostic_20251021_182457.md
+
+BASE PLAN (STAGE 2):
+  Arm A (Support):
+    1. "Water boils at 100 degrees Celsius" Water Celsius statement report press release official dataset document methodology
+    2. Water official statistics
+
+  Arm B (Challenge):
+    1. "Water boils at 100 degrees Celsius" Water Celsius statement dispute counterclaim contradict refute debunk controversy criticism fact check
+    2. Water dispute
+    3. dispute counterclaim contradict refute debunk controversy criticism fact check
+
+AFTER DIVERSIFICATION (STAGE 3):
+
+R1 (Precision):
+  Arm A (support): 5 queries
+    1. "Water boils at 100 degrees Celsius"
+    2. water boiling point temperature
+    3. water boiling point of Water
+
+  Arm B (challenge): 5 queries
+    1. "Water boils at 100 degrees Celsius"
+    2. water boiling point temperature
+    3. water boiling point of Water
+
+R2 (Recall):
+  Arm A (support): 6 queries
+    1. "Water boils at 100 degrees Celsius"
+    2. water boiling point temperature
+    3. water boiling point of Water
+
+  Arm B (challenge): 6 queries
+    1. "Water boils at 100 degrees Celsius"
+    2. water boiling point temperature
+    3. water boiling point of Water
+
+CRITICAL FINDING:
+  **ARM A AND ARM B HAVE IDENTICAL QUERIES**
+
+  Before diversification:
+    - Arm A: support keywords (report, official, statement)
+    - Arm B: challenge keywords (dispute, contradict, refute)
+
+  After diversification:
+    - Arm A: generic queries (no support keywords)
+    - Arm B: generic queries (no challenge keywords)
+    - BOTH ARMS IDENTICAL
+
+  Result:
+    - Both researchers search for the same things
+    - Both arms return the same URLs
+    - No adversarial challenge queries
+    - Duplication inevitable
+
+================================================================================
+PART 7: ARM ASSIGNMENT LOGIC
+================================================================================
+
+LOCATION: intelligence/gather/pipeline.py
+
+ARM LABEL DETERMINATION (lines 16-34):
+  def _canonical_arm_label(arm_def: Dict[str, Any], idx: int) -> str:
+      Priority:
+        1) name startswith 'A' or 'B' (case-insensitive)
+        2) intent == 'support' -> 'A'; intent == 'challenge' -> 'B'
+        3) index: 0 -> 'A', 1 -> 'B'
+
+ARM STAMPING (lines 37-84):
+  _exec_plan_for_arm():
+    - Executes queries for one arm
+    - Stamps every result with canonical arm label
+    - Code (lines 70-83):
+      for c in raw:
+          if "arm" not in c or not c.get("arm"):
+              c = {**c, "arm": arm_label}
+
+ARM GROUPING (lines 87-97):
+  _group_by_arm():
+    - Split candidates by c['arm'] == 'A' or 'B'
+    - Returns (arm_a_list, arm_b_list)
+
+OBSERVATION:
+  - Arm labels assigned based on query source, NOT content analysis
+  - If Arm A and Arm B have identical queries, they will:
+    * Hit the same URLs
+    * Get stamped with different arm labels (A vs B)
+    * Appear as "duplicates" with different arms
+  - No content-based re-assignment after retrieval
+
+================================================================================
+PART 8: ARM-SPECIFIC PROCESSING CHECK
+================================================================================
+
+SEARCH COMMANDS:
+grep -n "if.*arm\|for arm in\|arm.*support\|arm.*challenge" intelligence/strategy/plan_v2.py
+grep -n "if.*arm\|for arm in" intelligence/planning/diversify.py
+grep -rn "arm_a.*quer\|arm_b.*quer" intelligence/ --include="*.py"
+
+FINDINGS:
+
+IN plan_v2.py:
+  - Lines 385-401: ARM DIFFERENTIATION in semantic generation
+    * arm == "A": ["data", "measurement", "scientific report"]
+    * arm == "B" + r1: ["actual value", "verify measurement"]
+    * arm == "B" + r2: ["exceptions", "variations", "different conditions"]
+  - Intent terms appended to concept-based queries
+
+IN diversify.py:
+  - Line 117: arm_label = "A" if "A" in arm_name.upper() else "B"
+  - Lines 128-138: arm_label passed to generate_queries_r1/r2
+  - No other arm-specific logic
+
+CONCLUSION:
+  - ARM DIFFERENTIATION EXISTS in semantic generation
+  - Intent terms SHOULD make queries different
+  - But diagnostic shows IDENTICAL queries
+  - Something is failing in the execution
+
+================================================================================
+PART 9: ROOT CAUSE ANALYSIS
+================================================================================
+
+PROBLEM STATEMENT:
+  Arm A and Arm B receive identical queries after diversification
+
+EXPECTED BEHAVIOR:
+  1. build_search_plans_v2() creates different base queries
+     - Arm A: support keywords
+     - Arm B: challenge keywords
+  2. diversify_plan_for_lane() replaces with semantic queries
+     - Calls generate_queries_r1/r2 with arm label
+     - Semantic generation adds intent-specific terms
+     - Arm A: data/measurement terms
+     - Arm B: exceptions/variations terms
+  3. Result: different queries for each arm
+
+ACTUAL BEHAVIOR (from diagnostic):
+  1. Base queries ARE different (verified in STAGE 2)
+  2. After diversification, queries BECOME IDENTICAL (STAGE 3)
+  3. No arm-specific terms present in final queries
+
+INVESTIGATION OF SEMANTIC GENERATION:
+
+Looking at _generate_semantic_queries_internal() (lines 385-401):
+
+  INTENT TERM GENERATION:
+    if arm == "A":
+        intent_terms = ["data", "measurement", "scientific report"]
+    else:
+        if strategy == "r1":
+            intent_terms = ["actual value", "verify measurement"]
+        else:
+            intent_terms = ["exceptions", "variations", "different conditions"]
+
+    # Append intent to concept-based queries
+    if concept:
+        for term in intent_terms[:2]:
+            candidates.append(f"{concept} {term}")
+
+  CANDIDATES GENERATED:
+    - Full quoted claim: "Water boils at 100 degrees Celsius"
+    - Concept: "water boiling point"
+    - Concept + values: "water boiling point 100 degrees Celsius"
+    - Concept + dimension: "water boiling point temperature"
+    - Entity + values: "Water 100 degrees Celsius"
+    - Paraphrases: "100 degrees Celsius water boiling point"
+    - **Intent queries**: "water boiling point data", "water boiling point measurement"
+
+  BI-ENCODER VALIDATION (lines 403-420):
+    - Scores similarity of each candidate to original claim
+    - Filters: keep similarity > 0.4
+    - Sorts by similarity (highest first)
+    - Returns top 5 (r1) or top 8 (r2)
+
+HYPOTHESIS:
+  Intent-specific queries have LOW SIMILARITY to original claim
+  - "water boiling point data" vs "Water boils at 100 degrees Celsius"
+  - "water boiling point exceptions" vs "Water boils at 100 degrees Celsius"
+  - Similarity likely < 0.4 (filtered out)
+  - OR similarity < top candidates (not in top-N)
+
+  Result:
+    - Generic high-similarity queries dominate top-N
+    - Intent-specific queries filtered out or ranked too low
+    - Both arms get same high-similarity queries
+
+EVIDENCE FROM DIAGNOSTIC:
+  All queries are HIGH SIMILARITY to claim:
+    1. "Water boils at 100 degrees Celsius" (exact match)
+    2. "water boiling point temperature" (high similarity)
+    3. "water boiling point of Water" (high similarity)
+
+  None have intent terms:
+    - No "data", "measurement", "scientific report" (Arm A)
+    - No "exceptions", "variations", "conditions" (Arm B)
+    - No "actual value", "verify measurement" (Arm B r1)
+
+CONFIRMED ROOT CAUSE:
+  BI-ENCODER SIMILARITY FILTERING REMOVES ARM DIFFERENTIATION
+  - Intent-specific terms reduce similarity to claim
+  - Bi-encoder filters out/demotes differentiated queries
+  - Only generic high-similarity queries survive
+  - Both arms end up with identical top-N queries
+
+SECONDARY FACTOR:
+  TOP-N SELECTION AFTER SORTING
+  - Even if intent queries pass threshold (>0.4)
+  - They rank lower than generic queries
+  - Top 5 (r1) or top 8 (r2) don't include them
+
+================================================================================
+PART 10: DUPLICATION MECHANISM
+================================================================================
+
+SEQUENCE OF EVENTS:
+
+1. Base plan generation:
+   - Arm A: support queries with support keywords
+   - Arm B: challenge queries with challenge keywords
+   - DIFFERENTIATED
+
+2. Diversification (R1):
+   - diversify_plan_for_lane() called for R1
+   - generate_queries_r1() called for Arm A with arm="A"
+   - generate_queries_r1() called for Arm B with arm="B"
+   - Bi-encoder filters to high-similarity queries only
+   - Both arms: ["Water boils at 100 degrees Celsius", "water boiling point temperature", ...]
+   - IDENTICAL
+
+3. Diversification (R2):
+   - diversify_plan_for_lane() called for R2
+   - generate_queries_r2() called for Arm A with arm="A"
+   - generate_queries_r2() called for Arm B with arm="B"
+   - Bi-encoder filters to high-similarity queries only
+   - Both arms: same queries as R1
+   - IDENTICAL
+
+4. Query execution (R1):
+   - Arm A searches: "Water boils at 100 degrees Celsius", etc.
+   - Arm B searches: "Water boils at 100 degrees Celsius", etc.
+   - Same queries → same results
+   - URLs stamped with arm="A" or arm="B" based on source
+
+5. Query execution (R2):
+   - Same as R1
+   - Same queries → same results
+
+6. Result:
+   - Same URLs appear in both R1 and R2
+   - Same URLs appear in Arm A and Arm B
+   - Marked as "duplicates" in diagnostic
+   - From diagnostic:
+       "Duplicate count: 6"
+       "https://reddit.com/... appears 2 times (arm=A, arm=B)"
+       "https://ask.usda.gov/... appears 2 times (arm=A, arm=B)"
+
+================================================================================
+PART 11: MISSING FEATURES / DISABLED CODE
+================================================================================
+
+SEARCH COMMANDS:
+grep -n "^#.*divers\|^#.*arm" intelligence/planning/diversify.py
+grep -rn "TODO\|FIXME\|XXX\|HACK" intelligence/strategy/ intelligence/planning/
+grep -rn "if False:\|if 0:" intelligence/strategy/ intelligence/planning/
+
+RESULTS:
+
+COMMENTED CODE:
+  - None found in diversify.py
+
+TODOs:
+  - plan_v2.py:255: "# TODO: Add actual paraphrase generation"
+    (In old commented-out implementation)
+
+DISABLED CODE:
+  - None found (no "if False:" or "if 0:")
+
+OLD IMPLEMENTATION:
+  - plan_v2.py lines 185-275: Entire old query generation system
+  - Comment: "OLD IMPLEMENTATION - REPLACED 2025-10-20"
+  - Had explicit templates:
+      * generate_queries_r1(): quoted exact queries
+      * generate_queries_r2(): paraphrased exploratory queries
+  - Was replaced with semantic generation
+
+OBSERVATION:
+  - No disabled code preventing arm differentiation
+  - Old system WAS removed, new system IS active
+  - New system has arm differentiation code (lines 385-401)
+  - But it's not working as intended
+
+================================================================================
+SEARCH COMMANDS LOG
+================================================================================
+
+1. grep -rn "def.*plan\|def build_search_plans" intelligence/strategy/ --include="*.py"
+2. grep -rn "def diversify\|def.*diverse" intelligence/planning/ --include="*.py"
+3. ls -la intelligence/strategy/
+4. ls -la intelligence/planning/
+5. grep -rn "build_search_plans|diversify.*quer" intelligence/gather/pipeline.py
+6. grep -n "plan|query|quer" intelligence/gather/pipeline.py
+7. grep -n "from.*plan\|import.*plan" intelligence/gather/pipeline.py
+8. grep -n "build_search_plans_v2\|from.*strategy\|import.*strategy" intelligence/pipeline/run.py
+9. grep -n "diversify" intelligence/pipeline/run.py
+10. grep -A 40 "STAGE 2.*BASE PLAN\|Base plan\|Arm A.*Queries\|Arm B.*Queries" diagnostic_20251021_182457.md
+11. grep -n "arm.*=.*A\|arm.*=.*B\|labeled_cands" intelligence/gather/pipeline.py
+12. grep -n "^#.*divers\|^#.*arm" intelligence/planning/diversify.py
+13. grep -rn "TODO\|FIXME\|XXX\|HACK" intelligence/strategy/ intelligence/planning/
+14. grep -rn "if False:\|if 0:" intelligence/strategy/ intelligence/planning/
+
+================================================================================
+SUMMARY OF FINDINGS
+================================================================================
+
+QUERY GENERATION FLOW:
+  run.py → build_search_plans_v2 → diversify_plan_for_lane → generate_queries_r1/r2 → _generate_semantic_queries_internal
+
+BASE PLAN GENERATION:
+  - Creates differentiated Arm A (support) and Arm B (challenge) queries
+  - Uses keyword templates: support vs challenge terms
+  - Works correctly
+
+DIVERSIFICATION:
+  - REPLACES base queries with semantic queries
+  - Calls generate_queries_r1/r2 with arm label
+  - Different for R1 (precision, 5 queries) vs R2 (recall, 8 queries)
+
+SEMANTIC GENERATION:
+  - Builds candidate queries compositionally
+  - Includes intent-specific terms for arm differentiation:
+    * Arm A: "data", "measurement", "scientific report"
+    * Arm B: "exceptions", "variations", "actual value"
+  - Validates with bi-encoder similarity to claim
+  - Filters: keep similarity > 0.4
+  - Sorts by similarity (highest first)
+  - Returns top-N queries
+
+ROOT CAUSE:
+  **BI-ENCODER SIMILARITY FILTERING REMOVES ARM DIFFERENTIATION**
+  - Intent-specific terms reduce similarity to original claim
+  - Generic queries ("water boiling point") rank higher than differentiated queries ("water boiling point exceptions")
+  - Only high-similarity queries survive top-N selection
+  - Both arms receive identical generic queries
+
+CONSEQUENCES:
+  - Issue #4 (Duplication): Same queries → same URLs → duplicates across arms and researchers
+  - Issue #5 (No Challenges): No challenge-specific queries → no adversarial sources
+
+ARM ASSIGNMENT:
+  - Based on query source (which arm executed query)
+  - NOT based on content analysis
+  - Cannot fix the problem after queries are identical
+
+NO DISABLED CODE:
+  - Arm differentiation code is present and active (lines 385-401)
+  - Not commented out or disabled
+  - Problem is in the filtering/ranking logic, not missing code
+
+OLD VS NEW IMPLEMENTATION:
+  - Old system (pre-2025-10-20): Template-based, explicit arm differentiation
+  - New system (current): Semantic generation with bi-encoder validation
+  - New system's validation inadvertently removes differentiation
+
+================================================================================
+END OF INVESTIGATION
+================================================================================

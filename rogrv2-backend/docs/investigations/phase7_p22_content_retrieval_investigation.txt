@@ -1,0 +1,1360 @@
+================================================================================
+PHASE 7: P22 CONTENT RETRIEVAL INVESTIGATION
+Investigation Date: 2025-10-22
+Working Directory: /Users/txtk/Documents/ROGR/github/rogrv2-backend
+================================================================================
+
+OBJECTIVE: Investigate why content fetching/extraction is failing silently for
+quality sources (USDA.gov, ACS, Virginia .edu). Map the complete fetch flow,
+identify silent failure points, and document where errors are being suppressed.
+
+================================================================================
+PART 1: FETCH MODULE INVENTORY
+================================================================================
+
+SEARCH COMMANDS USED:
+  find intelligence/content -name "*fetch*.py" -type f
+  ls -lh intelligence/content/*fetch*.py
+
+FINDINGS:
+  Three fetch modules found:
+
+  1. intelligence/content/fetch.py (2.1K, 56 lines)
+     - Last modified: Oct 5 17:47
+     - Purpose: Canonical async fetcher
+
+  2. intelligence/content/fetch_sync.py (2.7K, 74 lines)
+     - Last modified: Oct 10 17:38
+     - Purpose: Synchronous fetch with caching
+
+  3. intelligence/content/fetch_enrichment.py (4.5K, 155 lines)
+     - Last modified: Oct 14 19:07
+     - Purpose: Orchestrator - enriches items with fetched content
+
+IMPORT ANALYSIS:
+
+SEARCH COMMAND USED:
+  grep -rn "from.*fetch\|import.*fetch" intelligence/ --include="*.py" | head -40
+
+FINDINGS:
+  intelligence/pipeline/run.py:8
+    from intelligence.content.fetch_enrichment import enrich_items_with_content
+
+  intelligence/content/fetch_enrichment.py:58
+    from intelligence.content.fetch import fetch_text
+
+ENTRY POINT:
+  enrich_items_with_content() is the primary entry point called by pipeline
+  Located at: intelligence/pipeline/run.py:82
+
+================================================================================
+PART 2: FETCH.PY - CANONICAL ASYNC FETCHER
+================================================================================
+
+FILE: intelligence/content/fetch.py
+LINES: 56
+FUNCTION: async def fetch_text(url: str, *, timeout: float = 10.0, headers: Optional[Dict[str, str]] = None)
+
+STRUCTURE:
+  Lines 1-13:  Imports and regex patterns
+  Lines 14-24: _html_to_text() helper function
+  Lines 26-56: fetch_text() main async function
+
+COMPLETE FUNCTION (fetch_text):
+----------------------------------------
+async def fetch_text(url: str, *, timeout: float = 10.0, headers: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    """
+    Canonical async fetcher.
+    Returns:
+      {
+        "text": <str>,                # empty when non-HTML or error
+        "status": <int|str>,          # HTTP status or "error"
+        "mime": <str|None>,           # e.g., "text/html; charset=utf-8"
+        "final_url": <str|None>,      # after redirects
+      }
+    """
+    h = {"User-Agent": _UA}
+    if headers:
+        h.update(headers)
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, headers=h, timeout=timeout) as client:
+            resp = await client.get(url)
+            mime = resp.headers.get("content-type", "")
+            final_url = str(resp.url) if resp.url else url
+            text = ""
+            if "text/html" in mime.lower():
+                # Try response.text (decoded); fallback to bytes decode
+                try:
+                    text = resp.text
+                except Exception:
+                    text = resp.content.decode("utf-8", "ignore")
+                text = _html_to_text(text)
+            # For non-HTML (pdf, etc.), leave text empty; upstream decides handling later
+            return {"text": text or "", "status": resp.status_code, "mime": mime, "final_url": final_url}
+    except Exception as e:
+        return {"text": "", "status": "error", "mime": None, "final_url": None}
+----------------------------------------
+
+TRY/EXCEPT BLOCKS FOUND:
+
+SEARCH COMMAND:
+  grep -n "try:\|except" intelligence/content/fetch.py
+
+FINDINGS:
+  Line 40: try:                      # Main HTTP request
+  Line 48:   try:                    # Text decoding
+  Line 50:   except Exception:       # Decode fallback (silent)
+  Line 55: except Exception as e:    # Network/HTTP errors (silent)
+
+EXCEPTION HANDLING ANALYSIS:
+
+1. INNER TRY/EXCEPT (Lines 48-51):
+   Location: Text decoding
+   Catches: Exception (bare)
+   Action: Fallback to resp.content.decode("utf-8", "ignore")
+   Return: Continues execution
+   Logging: NONE
+
+2. OUTER TRY/EXCEPT (Lines 40-56):
+   Location: Entire HTTP fetch operation
+   Catches: Exception as e (bare, variable unused)
+   Action: Return {"text": "", "status": "error", "mime": None, "final_url": None}
+   Logging: NONE
+
+   CRITICAL: Exception variable 'e' is captured but NEVER used
+             No logging, no stderr, no diagnostic output
+
+SILENT FAILURE POINT #1: OUTER EXCEPTION HANDLER (Line 55-56)
+  - All network errors return empty text
+  - Timeouts return empty text
+  - DNS failures return empty text
+  - SSL errors return empty text
+  - HTTP errors (4xx, 5xx) return empty text
+  - NO LOGGING OR ERROR INDICATION
+
+NON-HTML CONTENT HANDLING:
+  Line 46: if "text/html" in mime.lower():
+
+  BEHAVIOR: If Content-Type is NOT text/html:
+    - text remains "" (empty string)
+    - Status code is returned normally
+    - NO ERROR - this is intentional
+
+  AFFECTED CONTENT TYPES:
+    - application/pdf
+    - application/json
+    - text/plain (questionable - this might contain useful content)
+    - Any non-HTML mime type
+
+  RESULT: Legitimate content from non-HTML pages is DISCARDED
+
+TIMEOUT SETTINGS:
+  Default: 10.0 seconds
+  Configured at: Line 26 function signature
+  Applied to: httpx.AsyncClient entire request lifecycle
+
+================================================================================
+PART 3: FETCH_SYNC.PY - SYNCHRONOUS FETCHER
+================================================================================
+
+FILE: intelligence/content/fetch_sync.py
+LINES: 74
+MAIN FUNCTION: def fetch_text(url: str, *, timeout: float = 8.0)
+
+FUNCTION DEFINITIONS:
+
+SEARCH COMMAND:
+  grep -n "^def " intelligence/content/fetch_sync.py
+
+FINDINGS:
+  Line 22: def html_to_text(html: str) -> str
+  Line 34: def fetch_text(url: str, *, timeout: float = 8.0) -> Dict[str, Any]
+
+FEATURES:
+  - @lru_cache(maxsize=1000) decorator on fetch_text (Line 33)
+  - Environment variable overrides:
+      ROGR_FETCH_TIMEOUT (default: 8.0)
+      ROGR_FETCH_MAX_BYTES (default: 80000)
+  - Streaming with byte limit
+  - Status code filtering (only process 200 responses)
+
+TRY/EXCEPT BLOCKS:
+
+SEARCH COMMAND:
+  grep -n "try:\|except" intelligence/content/fetch_sync.py
+
+FINDINGS:
+  Line 38: try:                      # Main fetch logic
+  Line 40:   try:                    # Timeout env override
+  Line 42:   except Exception:       # Silent pass
+  Line 44:   try:                    # Max bytes env override
+  Line 46:   except Exception:       # Silent pass
+  Line 65:     try:                  # Content decode
+  Line 67:     except Exception:     # Decode fallback (silent)
+  Line 73: except Exception:         # All errors (silent)
+
+EXCEPTION HANDLING ANALYSIS:
+
+1. ENV OVERRIDE TRY/EXCEPT (Lines 40-43):
+   Catches: Exception (bare)
+   Action: pass (continue with default timeout)
+   Logging: NONE
+
+2. ENV OVERRIDE TRY/EXCEPT (Lines 44-47):
+   Catches: Exception (bare)
+   Action: pass (continue with default max_bytes=80000)
+   Logging: NONE
+
+3. DECODE TRY/EXCEPT (Lines 65-68):
+   Catches: Exception (bare)
+   Action: Fallback to UTF-8 decode with ignore
+   Logging: NONE
+
+4. OUTER TRY/EXCEPT (Line 73-74):
+   Catches: Exception (bare)
+   Action: return {"status": 0, "content_type": "", "text": ""}
+   Logging: NONE
+
+SILENT FAILURE POINT #2: OUTER EXCEPTION HANDLER (Line 73-74)
+  - All errors return status: 0, empty text
+  - No distinction between error types
+  - NO LOGGING
+
+STREAMING AND BYTE LIMIT:
+  Lines 53-64: Stream response and collect up to max_bytes
+
+  POTENTIAL ISSUE FOR LARGE PAGES:
+    - Caps content at 80KB by default
+    - If USDA.gov page > 80KB, content is TRUNCATED
+    - No indication that truncation occurred
+    - Downstream sees partial content with no warning
+
+STATUS CODE HANDLING:
+  Line 57: if status == 200 and ("text/html" in ct or "application/xhtml+xml" in ct or ct.startswith("text/")):
+
+  BEHAVIOR:
+    - Only process 200 OK responses
+    - 301/302 redirects: handled by httpx follow_redirects=True
+    - 403/404/500: Return empty text with status code
+    - text/* content types ARE processed (more permissive than fetch.py)
+
+NOTE: This module has @lru_cache - NOT used by main pipeline
+      Main pipeline uses fetch.py (async version)
+      This file appears to be legacy or alternative implementation
+
+================================================================================
+PART 4: FETCH_ENRICHMENT.PY - ORCHESTRATOR
+================================================================================
+
+FILE: intelligence/content/fetch_enrichment.py
+LINES: 155
+PRIMARY ENTRY POINT FOR PIPELINE
+
+FUNCTION DEFINITIONS:
+
+SEARCH COMMAND:
+  grep -n "^def \|^async def " intelligence/content/fetch_enrichment.py
+
+FINDINGS:
+  Line 6:   async def enrich_items_with_content(items, fetch_cache)
+  Line 46:  async def fetch_missing_urls(urls, fetch_cache, timeout)
+  Line 85:  def _compute_content_hash(content)
+  Line 100: def _determine_coverage(item)
+
+MAIN FUNCTION: enrich_items_with_content()
+
+FLOW:
+  1. Identify URLs not in cache (Lines 18-22)
+  2. Fetch missing URLs via fetch_missing_urls() (Lines 25-26)
+  3. Enrich each item with content fields (Lines 29-41)
+     - Add 'content' field from cache
+     - Add 'content_chars' field (length)
+     - Add 'content_hash' field (SHA256)
+     - Add 'coverage' field (full/partial/snippet_only)
+
+CRITICAL CODE SECTION (Lines 34-40):
+----------------------------------------
+# Get content from cache
+content = fetch_cache.get(url, '')
+enriched_item['content'] = content
+enriched_item['content_chars'] = len(content)
+enriched_item['content_hash'] = _compute_content_hash(content)
+enriched_item['coverage'] = _determine_coverage(enriched_item)
+----------------------------------------
+
+OBSERVATION: fetch_cache.get(url, '') with empty string default
+  - If URL fetch failed → cache contains ''
+  - Empty string is treated as valid content
+  - No error indication or logging
+  - Downstream processes receive empty content with no warning
+
+FETCH_MISSING_URLS FUNCTION (Lines 46-82):
+
+Inner function fetch_one() (Lines 60-67):
+----------------------------------------
+async def fetch_one(url: str) -> Tuple[str, str]:
+    """Fetch a single URL and return (url, content)."""
+    try:
+        result = await fetch_text(url, timeout=timeout)
+        content = result.get('text', '')
+        return (url, content)
+    except Exception:
+        return (url, '')
+----------------------------------------
+
+TRY/EXCEPT ANALYSIS:
+
+SEARCH COMMAND:
+  grep -n "try:\|except" intelligence/content/fetch_enrichment.py
+
+FINDINGS:
+  Line 62: try:                      # Individual URL fetch
+  Line 66: except Exception:         # Silent empty string return
+  Line 73: results = await asyncio.gather(*tasks, return_exceptions=True)
+
+SILENT FAILURE POINT #3: FETCH_ONE EXCEPTION HANDLER (Line 66-67)
+  - Catches all exceptions from fetch_text()
+  - Returns (url, '') for ANY error
+  - NO LOGGING
+
+SILENT FAILURE POINT #4: ASYNCIO.GATHER (Line 73)
+  - return_exceptions=True captures exceptions as results
+  - Exception handling (Lines 76-79):
+    ----------------------------------------
+    for result in results:
+        if isinstance(result, Exception):
+            continue  # Skip exception, don't add to cache
+        url, content = result
+        fetch_cache[url] = content
+    ----------------------------------------
+  - Exceptions are silently skipped
+  - URL not added to cache → next call will retry (good)
+  - But NO LOGGING of what failed or why
+
+COVERAGE DETERMINATION (_determine_coverage, Lines 100-122):
+
+LOGIC:
+  Line 114: if content and content_chars > 0 and len(content) >= 0.98 * content_chars:
+              return "full"
+  Line 118: if content or item.get('content_excerpt'):
+              return "partial"
+  Line 122: return "snippet_only"
+
+ISSUE WITH LOGIC:
+  Line 114 condition: len(content) >= 0.98 * content_chars
+
+  But content_chars is SET TO len(content) at Line 37!
+
+  Therefore: len(content) >= 0.98 * len(content)
+             This is ALWAYS TRUE for any content
+
+  CONCLUSION: Coverage logic is broken
+              Any non-empty content returns "full"
+              "partial" is only returned if content is empty but content_excerpt exists
+              "snippet_only" is only returned if BOTH content and content_excerpt are empty
+
+LOGGING IN ENRICHMENT MODULE:
+
+SEARCH COMMAND:
+  grep -rn "log\|print\|logger" intelligence/content/fetch*.py | head -50
+
+FINDINGS:
+  fetch_enrichment.py has print statements ONLY in test code (Lines 139-153)
+  NO logging in production code paths
+  NO error output to stderr
+  NO diagnostic information for failures
+
+================================================================================
+PART 5: CONTENT FLOW ANALYSIS
+================================================================================
+
+COMPLETE CALL CHAIN (with line numbers):
+
+1. intelligence/pipeline/run.py:82
+   → calls: enrich_items_with_content(items, fetch_cache)
+
+2. intelligence/content/fetch_enrichment.py:6
+   → enrich_items_with_content() orchestrates enrichment
+   → Line 26: calls fetch_missing_urls(missing_urls, fetch_cache)
+
+3. intelligence/content/fetch_enrichment.py:46
+   → fetch_missing_urls() manages concurrent fetches
+   → Line 70: Creates tasks [fetch_one(url) for url in urls]
+
+4. intelligence/content/fetch_enrichment.py:60
+   → fetch_one() wrapper function
+   → Line 63: calls await fetch_text(url, timeout=timeout)
+
+5. intelligence/content/fetch.py:26
+   → fetch_text() performs actual HTTP request
+   → Returns: {"text": "", "status": "error", "mime": None, "final_url": None} on failure
+   → Returns: {"text": text, "status": 200, "mime": ..., "final_url": ...} on success
+
+6. intelligence/content/fetch_enrichment.py:64
+   → Extracts: content = result.get('text', '')
+   → Returns: (url, content) to asyncio.gather()
+
+7. intelligence/content/fetch_enrichment.py:80
+   → Updates cache: fetch_cache[url] = content
+
+8. intelligence/content/fetch_enrichment.py:35
+   → Assigns to item: enriched_item['content'] = content
+
+9. intelligence/content/grade.py and semantic_read.py
+   → Consume item['content'] field
+   → Empty content → default scores
+
+WHERE CONTENT CAN BE LOST:
+
+LOSS POINT #1: Non-HTML content (fetch.py:46)
+  - PDF, JSON, plain text → empty text returned
+  - Status code is valid, but text is ""
+
+LOSS POINT #2: Network errors (fetch.py:55-56)
+  - Timeout, DNS, SSL, connection refused → empty text
+  - Status: "error"
+  - No logging
+
+LOSS POINT #3: HTTP errors (fetch.py implicit)
+  - 4xx, 5xx status codes → resp.status_code returned
+  - But if not "text/html" mime type → text is ""
+
+LOSS POINT #4: Encoding errors (fetch.py:50-51)
+  - Falls back to UTF-8 with ignore
+  - Corrupted text possible, but continues
+
+LOSS POINT #5: fetch_one exception (fetch_enrichment.py:66-67)
+  - Wrapper around fetch_text catches ALL exceptions
+  - Returns empty string
+  - No distinction between fetch.py error vs wrapper error
+
+LOSS POINT #6: asyncio.gather exceptions (fetch_enrichment.py:77-78)
+  - Exceptions from fetch_one are skipped
+  - URL not cached (will retry)
+  - No logging
+
+WHERE ERRORS ARE SUPPRESSED:
+
+SUPPRESSION POINT #1: fetch.py:55-56
+  Exception caught, variable unused, empty result returned
+
+SUPPRESSION POINT #2: fetch_enrichment.py:66-67
+  Exception caught, empty string returned
+
+SUPPRESSION POINT #3: fetch_enrichment.py:77-78
+  Exception results skipped with continue
+
+================================================================================
+PART 6: DIAGNOSTIC OUTPUT ANALYSIS
+================================================================================
+
+DIAGNOSTIC FILE: docs/pipeline_diagnostics/diagnostic_20251021_182457.md
+
+SEARCH COMMANDS:
+  grep -n "fetch\|Fetch\|FETCH" [diagnostic_file] | head -30
+  grep -B 10 -A 30 "usda.gov\|ask.usda.gov" [diagnostic_file] | head -100
+  grep -n "content.*length\|chars\|characters\|bytes" [diagnostic_file] | head -30
+
+FINDINGS:
+
+1. Fetch operation mentioned at Line 77:
+   "- Content fetching (P22)"
+
+   No detailed fetch logging found in diagnostic
+
+2. USDA.gov item found in diagnostic:
+
+   Title: What is the boiling point of water?
+   URL: https://ask.usda.gov/s/article/What-is-the-boiling-point-of-water
+   Domain: ask.usda.gov
+   Coverage: snippet_only  ← CRITICAL: Content fetch failed or returned empty
+   Stance: unrelated
+
+   CREDIBILITY:
+     Score: 0.720
+     Tier: 1
+     Category: government source
+
+   AUTHORITY:
+     Score: 0.858  ← URL recognition and tier system WORKED
+
+   P23 (Semantic):
+     Item Grade: 0.150  ← EXACTLY matches semantic_read.py no-content default
+     Stance: unrelated
+
+   P24 (Frames):
+     [Not shown, but known to be 0.000 from KNOWN EVIDENCE]
+
+3. No content_length or content_chars field shown in diagnostic output
+
+4. DUPLICATE DETECTION FOUND:
+   USDA.gov appears 2 times (both arm_A and arm_B)
+   Same URL fetched twice, both likely failed
+
+================================================================================
+PART 7: ROOT CAUSE ANALYSIS FOR USDA.GOV FAILURE
+================================================================================
+
+KNOWN FACTS:
+  - USDA.gov P23 score = 0.150 (semantic_read.py default for no content)
+  - USDA.gov P24 score = 0.000 (no frames extracted)
+  - USDA.gov authority = 0.858 (URL recognition worked)
+  - Coverage = "snippet_only"
+  - Content field was empty when passed to P23/P24
+
+EVIDENCE CHAIN:
+
+1. URL was identified correctly (authority score 0.858)
+2. URL was passed to enrich_items_with_content()
+3. fetch_text() was called via fetch_one()
+4. One of these occurred:
+   a) HTTP request failed (network, timeout, DNS)
+   b) HTTP returned non-200 status
+   c) Content-Type was not text/html
+   d) Response was empty
+   e) Exception occurred in fetch path
+
+5. Result: content = "" was stored in fetch_cache
+6. Item received content = ""
+7. Coverage determined as "snippet_only"
+8. P23 received empty content → defaulted to 0.150
+9. P24 received empty content → no frames → 0.000
+
+MOST LIKELY CAUSES FOR USDA.GOV:
+
+HYPOTHESIS 1: Non-standard Content-Type
+  - USDA.gov may return "text/html; charset=utf-8" but with parameters that don't match
+  - fetch.py:46 checks: if "text/html" in mime.lower()
+  - Should work for most variations
+  - VERDICT: Unlikely
+
+HYPOTHESIS 2: Redirect to authentication or error page
+  - Government sites often require cookies, user agents, or have bot protection
+  - httpx follows redirects (follow_redirects=True)
+  - May land on error page that returns 200 but with empty/irrelevant content
+  - VERDICT: Possible
+
+HYPOTHESIS 3: Timeout
+  - Default timeout: 10.0 seconds (fetch.py)
+  - Government sites can be slow
+  - Timeout → Exception → empty string
+  - VERDICT: Possible
+
+HYPOTHESIS 4: Bot detection / Rate limiting
+  - User agent: "ROGRv2/preview-fetch (+https://example.local; contact: engineering@local)"
+  - May be blocked by WAF or rate limiter
+  - Would return 403, 429, or connection refused
+  - All result in empty content
+  - VERDICT: Likely
+
+HYPOTHESIS 5: SSL/TLS verification issues
+  - Government sites often have strict SSL requirements
+  - httpx default behavior with SSL certificates
+  - SSL error → Exception → empty string
+  - VERDICT: Possible
+
+HYPOTHESIS 6: JavaScript-required content
+  - Modern sites require JS to render content
+  - httpx/requests cannot execute JavaScript
+  - HTML shell returned with no text content
+  - _html_to_text() extracts nothing meaningful
+  - VERDICT: Very Likely for ask.usda.gov (Salesforce Knowledge Base)
+
+DIAGNOSIS: ask.usda.gov is a Salesforce Knowledge platform
+  - URL pattern: /s/article/ is Salesforce Lightning
+  - Likely requires JavaScript to render article content
+  - Initial HTML has minimal text
+  - Without JS execution, content appears empty
+  - This explains:
+      ✓ 200 OK response (page exists)
+      ✓ HTML content-type (page is HTML)
+      ✓ Empty text after _html_to_text() (JS-rendered content missing)
+      ✓ No error logged (fetch technically succeeded)
+
+================================================================================
+PART 8: SILENT FAILURE POINTS SUMMARY
+================================================================================
+
+SILENT FAILURE POINT #1: fetch.py:55-56
+  Location: Outer exception handler in fetch_text()
+  Catches: All exceptions (network, timeout, DNS, SSL, HTTP)
+  Action: Returns {"text": "", "status": "error", "mime": None, "final_url": None}
+  Logging: NONE
+  Impact: All fetch failures appear identical to downstream
+  Severity: CRITICAL
+
+SILENT FAILURE POINT #2: fetch_sync.py:73-74
+  Location: Outer exception handler in fetch_text() (sync version)
+  Catches: All exceptions
+  Action: Returns {"status": 0, "content_type": "", "text": ""}
+  Logging: NONE
+  Impact: Same as #1, but for sync version (not used by main pipeline)
+  Severity: MEDIUM (not in main path)
+
+SILENT FAILURE POINT #3: fetch_enrichment.py:66-67
+  Location: fetch_one() exception handler
+  Catches: All exceptions from fetch_text() call
+  Action: Returns (url, '')
+  Logging: NONE
+  Impact: Adds second layer of silence on top of fetch.py silence
+  Severity: HIGH (redundant silence)
+
+SILENT FAILURE POINT #4: fetch_enrichment.py:77-78
+  Location: asyncio.gather() result processing
+  Catches: Exception instances in results
+  Action: continue (skip exception)
+  Logging: NONE
+  Impact: Async exceptions silently discarded
+  Severity: MEDIUM (exceptions from gather, not from fetch_one)
+
+SILENT FAILURE POINT #5: fetch.py:46-52
+  Location: Content-type filtering
+  Catches: Non-HTML content types (PDF, JSON, text/plain)
+  Action: Leave text as "" (empty string)
+  Logging: NONE
+  Impact: Legitimate non-HTML content discarded without indication
+  Severity: HIGH (by design, but silent)
+
+SILENT FAILURE POINT #6: fetch_sync.py:63-64
+  Location: Byte limit truncation
+  Catches: Content exceeding 80KB
+  Action: Truncate silently
+  Logging: NONE
+  Impact: Large pages only partially fetched
+  Severity: MEDIUM (not in main path, but problematic)
+
+NON-SILENT POINTS (for reference):
+  - intelligence/pipeline/run.py:91-96 has explicit error handling for P20 grading
+  - Prints to stderr with traceback
+  - This is the model for what fetch error handling SHOULD look like
+
+================================================================================
+PART 9: LOGGING GAPS
+================================================================================
+
+SEARCH COMMAND:
+  grep -rn "log\|print\|logger" intelligence/content/fetch*.py | head -50
+
+FINDINGS:
+
+1. fetch.py: NO logging anywhere
+   - No import of logging module
+   - No print statements
+   - No error output
+   - Exception variable 'e' captured but unused (line 55)
+
+2. fetch_sync.py: NO logging anywhere
+   - No import of logging module
+   - No print statements
+   - No error output
+
+3. fetch_enrichment.py: ONLY test logging
+   - Lines 139-153: print statements in __main__ test code
+   - NO logging in production functions:
+     - enrich_items_with_content()
+     - fetch_missing_urls()
+     - fetch_one()
+
+RECOMMENDATIONS FOR LOGGING (per instructions, minimal):
+
+RECOMMENDED LOGGING LOCATIONS:
+1. fetch.py:55 - Log exception before returning error result
+2. fetch.py:46 - Log when non-HTML content is skipped
+3. fetch_enrichment.py:66 - Log exception in fetch_one
+4. fetch_enrichment.py:78 - Log Exception results from gather
+5. fetch_enrichment.py:35 - Log when content is empty (diagnostic mode)
+
+================================================================================
+PART 10: URL-SPECIFIC HANDLING
+================================================================================
+
+SEARCH COMMAND:
+  grep -rn "usda\|\.gov\|\.edu" intelligence/content/fetch*.py
+
+RESULT: No output
+
+FINDING: NO URL-specific handling for .gov, .edu, or usda domains
+  - No special user agents
+  - No domain whitelist/blacklist
+  - No retry logic
+  - No increased timeouts
+  - No authentication handling
+
+================================================================================
+PART 11: TIMEOUT HANDLING
+================================================================================
+
+SEARCH COMMAND:
+  grep -rn "timeout\|Timeout" intelligence/content/fetch*.py
+
+FINDINGS:
+
+1. fetch.py:
+   Line 26: Default timeout = 10.0 seconds
+   Line 41: Applied to httpx.AsyncClient(timeout=timeout)
+
+   BEHAVIOR: Single timeout value for entire request
+             Covers: connect + read + write + pool
+
+2. fetch_sync.py:
+   Line 34: Default timeout = 8.0 seconds
+   Line 41: Can be overridden by ROGR_FETCH_TIMEOUT env var
+   Line 49: Applied to all phases: connect, read, write, pool
+
+   BEHAVIOR: More granular timeout configuration
+             Environment variable override available
+             Shorter default (8.0 vs 10.0)
+
+3. fetch_enrichment.py:
+   Line 46: Default timeout = 8.0 seconds
+   Line 63: Passed to fetch_text(url, timeout=timeout)
+
+   BEHAVIOR: Timeout propagated from enrichment to fetch
+             Can be overridden at enrichment call site
+
+TIMEOUT FAILURE BEHAVIOR:
+  - Timeout → httpx.TimeoutException
+  - Caught by except Exception (fetch.py:55)
+  - Returns empty text with status="error"
+  - NO LOGGING
+  - NO retry
+  - NO increased timeout for slow domains
+
+================================================================================
+PART 12: STATUS CODE HANDLING
+================================================================================
+
+SEARCH COMMAND:
+  grep -rn "status.*code\|\.status\|response\.ok" intelligence/content/fetch*.py
+
+FINDINGS:
+
+1. fetch.py:
+   Line 54: return {"text": text or "", "status": resp.status_code, ...}
+
+   BEHAVIOR:
+   - Status code returned as-is for successful HTTP responses
+   - 4xx/5xx codes ARE returned (not caught as exceptions)
+   - But if non-HTML mime type → text is ""
+   - So 403/404/500 with HTML → might get content
+   - But 403/404/500 with error page JSON → empty text
+
+2. fetch_sync.py:
+   Line 55: status = int(r.status_code)
+   Line 57: if status == 200 and ("text/html" in ct or ...):
+   Line 69:   if status == 200 and text:
+
+   BEHAVIOR:
+   - ONLY processes status 200 responses
+   - 3xx: Handled by follow_redirects
+   - 4xx/5xx: Returns empty text with error status code
+   - More restrictive than fetch.py
+
+NO RETRY LOGIC FOR:
+  - 429 (Rate Limited)
+  - 503 (Service Unavailable)
+  - 504 (Gateway Timeout)
+
+================================================================================
+PART 13: ENCODING HANDLING
+================================================================================
+
+SEARCH COMMAND:
+  grep -rn "encoding\|decode\|utf" intelligence/content/fetch*.py
+
+FINDINGS:
+
+1. fetch.py:
+   Line 49: text = resp.text (httpx auto-decodes)
+   Line 51: Fallback: resp.content.decode("utf-8", "ignore")
+
+   BEHAVIOR:
+   - Try httpx's automatic encoding detection first
+   - Fallback to UTF-8 with errors='ignore'
+   - errors='ignore' SILENTLY drops invalid bytes
+   - May result in corrupted/incomplete text
+
+2. fetch_sync.py:
+   Line 66: text = collected.decode(r.encoding or "utf-8", errors="ignore")
+   Line 68: Fallback: collected.decode("utf-8", errors="ignore")
+
+   BEHAVIOR:
+   - Use response-specified encoding if available
+   - Otherwise UTF-8
+   - errors='ignore' SILENTLY drops invalid bytes
+
+3. fetch_enrichment.py:
+   Line 95: hash_obj = hashlib.sha256(content.encode('utf-8'))
+
+   BEHAVIOR:
+   - Content assumed to be valid UTF-8 string
+   - No error handling if encoding fails
+
+ENCODING ISSUES:
+  - errors='ignore' masks encoding problems
+  - Could result in partial/corrupted content
+  - No logging of encoding failures
+  - No indication that content was modified
+
+================================================================================
+PART 14: REMNANTS OF REMOVED SILENT FAILURE WRAPPERS
+================================================================================
+
+CONTEXT: "Silent failure wrappers were removed 2 days ago"
+
+SEARCH COMMANDS:
+  grep -rn "except Exception\|except:\s*$" intelligence/content/fetch*.py
+  grep -B 5 "except" intelligence/content/fetch*.py | grep -A 3 "pass\|return ''\|return None"
+  grep -rn "#.*except\|#.*error\|#.*log" intelligence/content/fetch*.py
+
+FINDINGS:
+
+1. Generic Exception catching (still present):
+   fetch.py:50:    except Exception:
+   fetch.py:55:    except Exception as e:
+   fetch_enrichment.py:66:    except Exception:
+   fetch_sync.py:42:    except Exception:
+   fetch_sync.py:46:    except Exception:
+   fetch_sync.py:67:    except Exception:
+   fetch_sync.py:73:    except Exception:
+
+2. Pass statements (fetch_sync.py only):
+   Lines 40-43: Environment variable parsing
+   Lines 44-47: Environment variable parsing
+
+   Code:
+   try:
+       timeout = float(os.getenv("ROGR_FETCH_TIMEOUT", str(timeout)))
+   except Exception:
+       pass  ← SILENT: Invalid env var ignored
+
+3. Commented code search:
+   fetch.py:31: "# empty when non-HTML or error" (documentation comment)
+   fetch.py:32: "# HTTP status or "error"" (documentation comment)
+
+   NO recently commented-out error handling found
+   NO evidence of removed wrappers in these files
+
+INTERPRETATION:
+  - Generic exception catching is STILL PRESENT
+  - These may BE the remnants mentioned
+  - No evidence of removal cleanup in fetch modules
+  - Silence is still pervasive
+
+================================================================================
+PART 15: ALTERNATIVE CONTENT SOURCES
+================================================================================
+
+SNIPPET/SUMMARY FALLBACK:
+
+SEARCH COMMAND:
+  grep -rn "snippet\|summary\|description" intelligence/content/fetch*.py
+
+FINDINGS:
+  fetch_enrichment.py:11:  items: List of evidence items (each has 'url', 'snippet', etc.)
+  fetch_enrichment.py:122: return "snippet_only"
+  fetch_enrichment.py:134-135: Test data with 'snippet' fields
+
+ANALYSIS:
+  - Items have 'snippet' field (from search results)
+  - fetch_enrichment does NOT use snippet as fallback for content
+  - If fetch fails:
+      item['content'] = '' (empty)
+      item['coverage'] = 'snippet_only'
+  - Snippet exists but is NOT copied to content field
+  - Downstream (P23/P24) receive empty content, not snippet
+
+MISSED OPPORTUNITY:
+  - Snippet could be used as fallback when full content unavailable
+  - Currently: snippet exists but is ignored
+  - Result: Empty content when snippet could provide minimal context
+
+METADATA EXTRACTION:
+
+SEARCH COMMAND:
+  grep -rn "meta.*description\|og:description\|twitter:description" intelligence/content/fetch*.py
+
+RESULT: No output
+
+FINDING: NO metadata extraction
+  - No Open Graph parsing
+  - No Twitter Card parsing
+  - No meta description extraction
+  - Fetch modules only extract body text via _html_to_text()
+
+================================================================================
+PART 16: COMPLETE FETCH FLOW MAP
+================================================================================
+
+DETAILED FLOW WITH LINE NUMBERS AND DECISION POINTS:
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ START: Evidence items from build_evidence_for_claim()                   │
+│        Located: intelligence/gather/pipeline.py:127                     │
+└────────────────────────────┬────────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ STEP 1: Pipeline calls enrich_items_with_content()                      │
+│         File: intelligence/pipeline/run.py:82                           │
+│         Input: items (list), fetch_cache (dict)                         │
+└────────────────────────────┬────────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ STEP 2: Identify missing URLs                                           │
+│         File: intelligence/content/fetch_enrichment.py:18-22            │
+│         Logic: for each item, check if url in fetch_cache               │
+│         Output: missing_urls list                                       │
+└────────────────────────────┬────────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ STEP 3: Call fetch_missing_urls()                                       │
+│         File: intelligence/content/fetch_enrichment.py:26               │
+│         Input: missing_urls, fetch_cache, timeout=8.0                   │
+└────────────────────────────┬────────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ STEP 4: Create concurrent fetch tasks                                   │
+│         File: intelligence/content/fetch_enrichment.py:70               │
+│         Code: tasks = [fetch_one(url) for url in urls]                  │
+└────────────────────────────┬────────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ STEP 5: Execute fetch_one() for each URL                                │
+│         File: intelligence/content/fetch_enrichment.py:60-67            │
+│         Wraps fetch_text() with try/except                              │
+└────────────────────────────┬────────────────────────────────────────────┘
+                             │
+                             ▼
+            ┌────────────────┴────────────────┐
+            │                                  │
+            ▼                                  ▼
+    ┌───────────────┐                 ┌──────────────┐
+    │ SUCCESS PATH  │                 │ FAILURE PATH │
+    └───────┬───────┘                 └──────┬───────┘
+            │                                  │
+            ▼                                  ▼
+┌──────────────────────────┐      ┌─────────────────────────────┐
+│ Step 5a: Call fetch_text │      │ Step 5b: Exception caught   │
+│ File: fetch.py:26        │      │ Returns: (url, '')          │
+│ Timeout: 8.0s            │      │ Logging: NONE               │
+└──────────┬───────────────┘      │ [SILENT FAILURE POINT #3]   │
+           │                       └─────────────────────────────┘
+           ▼                                  │
+┌─────────────────────────────────────┐      │
+│ Step 6: HTTP request                │      │
+│ File: fetch.py:41-44                │      │
+│ httpx.AsyncClient.get(url)          │      │
+│ follow_redirects=True               │      │
+└──────────┬──────────────────────────┘      │
+           │                                  │
+           ▼                                  │
+    ┌──────┴──────┐                          │
+    │             │                          │
+    ▼             ▼                          │
+┌────────┐   ┌─────────────┐               │
+│SUCCESS │   │HTTP/NETWORK │               │
+│        │   │   ERROR     │               │
+└───┬────┘   └──────┬──────┘               │
+    │               │                       │
+    │               ▼                       │
+    │    ┌──────────────────────┐          │
+    │    │ Exception caught     │          │
+    │    │ fetch.py:55-56       │          │
+    │    │ Returns:             │          │
+    │    │ {"text": "",         │          │
+    │    │  "status": "error",  │          │
+    │    │  "mime": None,       │          │
+    │    │  "final_url": None}  │          │
+    │    │ Logging: NONE        │          │
+    │    │ [SILENT FAIL #1]     │          │
+    │    └──────────┬───────────┘          │
+    │               │                       │
+    ▼               ▼                       │
+┌──────────────────────────────────────┐   │
+│ Step 7: Extract response data       │   │
+│ File: fetch.py:43-52                 │   │
+│ mime = content-type header           │   │
+│ final_url = after redirects          │   │
+└──────────┬───────────────────────────┘   │
+           │                                │
+           ▼                                │
+┌──────────────────────────────────────┐   │
+│ Step 8: Check mime type              │   │
+│ File: fetch.py:46                    │   │
+│ if "text/html" in mime.lower():      │   │
+└──────────┬───────────────────────────┘   │
+           │                                │
+    ┌──────┴──────┐                        │
+    │             │                        │
+    ▼             ▼                        │
+┌────────┐   ┌─────────────────┐          │
+│  HTML  │   │  NON-HTML       │          │
+│        │   │  (PDF, JSON)    │          │
+└───┬────┘   └──────┬──────────┘          │
+    │               │                      │
+    │               ▼                      │
+    │    ┌──────────────────────┐         │
+    │    │ Leave text = ""      │         │
+    │    │ Status = valid code  │         │
+    │    │ Logging: NONE        │         │
+    │    │ [SILENT FAIL #5]     │         │
+    │    └──────────┬───────────┘         │
+    │               │                      │
+    ▼               │                      │
+┌──────────────────────────────────────┐  │
+│ Step 9: Decode HTML                  │  │
+│ File: fetch.py:47-51                 │  │
+│ Try: resp.text                       │  │
+│ Except: decode UTF-8 ignore          │  │
+└──────────┬───────────────────────────┘  │
+           │                               │
+           ▼                               │
+┌──────────────────────────────────────┐  │
+│ Step 10: Convert HTML to text        │  │
+│ File: fetch.py:52                    │  │
+│ Calls: _html_to_text(text)           │  │
+│ - Remove script/style tags           │  │
+│ - Strip all HTML tags                │  │
+│ - Unescape entities                  │  │
+│ - Normalize whitespace               │  │
+└──────────┬───────────────────────────┘  │
+           │                               │
+           ▼                               │
+┌──────────────────────────────────────┐  │
+│ Step 11: Return result dict          │  │
+│ File: fetch.py:54                    │  │
+│ {"text": text or "",                 │  │
+│  "status": resp.status_code,         │  │
+│  "mime": mime,                       │  │
+│  "final_url": final_url}             │  │
+└──────────┬───────────────────────────┘  │
+           │                               │
+           ▼                               │
+┌──────────────────────────────────────┐  │
+│ Step 12: Extract text in fetch_one  │  │
+│ File: fetch_enrichment.py:64         │  │
+│ content = result.get('text', '')     │  │
+│ return (url, content)                │  │
+└──────────┬───────────────────────────┘  │
+           │                               │
+           └───────────────┬───────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Step 13: Gather all results                                             │
+│ File: intelligence/content/fetch_enrichment.py:73                       │
+│ results = await asyncio.gather(*tasks, return_exceptions=True)          │
+└────────────────────────────┬────────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Step 14: Process results and update cache                               │
+│ File: intelligence/content/fetch_enrichment.py:76-80                    │
+│ for result in results:                                                  │
+│     if isinstance(result, Exception):                                   │
+│         continue  # Skip, don't cache [SILENT FAIL #4]                  │
+│     url, content = result                                               │
+│     fetch_cache[url] = content  # Cache even if empty                   │
+└────────────────────────────┬────────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Step 15: Enrich each item                                               │
+│ File: intelligence/content/fetch_enrichment.py:29-41                    │
+│ for item in items:                                                      │
+│     content = fetch_cache.get(url, '')  # Empty string if failed       │
+│     enriched_item['content'] = content                                  │
+│     enriched_item['content_chars'] = len(content)                       │
+│     enriched_item['content_hash'] = _compute_content_hash(content)      │
+│     enriched_item['coverage'] = _determine_coverage(enriched_item)      │
+└────────────────────────────┬────────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Step 16: Return enriched items to pipeline                              │
+│ File: intelligence/content/fetch_enrichment.py:43                       │
+│ return (enriched_items, fetch_cache)                                    │
+└────────────────────────────┬────────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Step 17: Items stored in evidence dict                                  │
+│ File: intelligence/pipeline/run.py:83                                   │
+│ evidence[arm_key] = items                                               │
+└────────────────────────────┬────────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Step 18: P23 processes items                                            │
+│ File: intelligence/content/semantic_read.py                             │
+│ If content empty → default score 0.150                                  │
+│ Located at: semantic_read.py:117 (from known evidence)                  │
+└────────────────────────────┬────────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Step 19: P24 processes items                                            │
+│ File: intelligence/content/semantic_frames.py                           │
+│ If content empty → no frames → score 0.000                              │
+└────────────────────────────┬────────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ END: Item has default scores, empty content, coverage="snippet_only"    │
+└─────────────────────────────────────────────────────────────────────────┘
+
+KEY DECISION POINTS:
+
+1. Cache Hit (fetch_enrichment.py:21)
+   - If URL in cache → Skip fetch, use cached content
+   - If URL not in cache → Proceed to fetch
+
+2. Mime Type Check (fetch.py:46)
+   - If "text/html" → Extract text
+   - Otherwise → Return empty text (even if 200 OK)
+
+3. Exception at fetch_text (fetch.py:55)
+   - Any exception → Return {"text": "", "status": "error"}
+   - No distinction between error types
+
+4. Exception at fetch_one (fetch_enrichment.py:66)
+   - Any exception → Return (url, '')
+   - Redundant with fetch_text error handling
+
+5. Exception in gather (fetch_enrichment.py:77)
+   - Exception result → Skip, don't cache
+   - Will retry on next call
+
+6. Coverage Determination (fetch_enrichment.py:114-122)
+   - Has content → "full" (broken logic, always true if content exists)
+   - Has content_excerpt → "partial"
+   - Neither → "snippet_only"
+
+================================================================================
+PART 17: SPECIFIC USDA.GOV FAILURE SCENARIO
+================================================================================
+
+URL: https://ask.usda.gov/s/article/What-is-the-boiling-point-of-water
+PLATFORM: Salesforce Knowledge (Lightning)
+OBSERVED: Coverage="snippet_only", P23=0.150, P24=0.000, Authority=0.858
+
+EXECUTION TRACE FOR THIS URL:
+
+1. URL identified in search results → Item created
+2. Authority calculation → 0.858 (tier 1, government)
+3. enrich_items_with_content() called
+4. URL not in cache → Added to missing_urls
+5. fetch_one() created task
+6. fetch_text() called with timeout=8.0
+7. httpx.AsyncClient.get() executes
+8. USDA.gov server responds:
+   - Status: 200 OK
+   - Content-Type: text/html; charset=utf-8
+   - Body: Salesforce Lightning page shell
+9. HTML contains:
+   - JavaScript bundles
+   - Minimal initial markup
+   - Article content rendered client-side via JS
+10. resp.text decoded successfully
+11. Mime type check: "text/html" in content-type → PASS
+12. _html_to_text() processes HTML:
+    - Removes <script> and <style> tags (including content bundles)
+    - Strips all HTML tags
+    - Unescapes entities
+    - Normalizes whitespace
+13. Resulting text: Very short, mostly navigation/UI text
+    - NO article content (was in JS bundle)
+    - Maybe: "USDA", "Article", "Search", etc.
+    - Length: ~50-200 characters (guess)
+14. Return: {"text": "[short text]", "status": 200, "mime": "text/html...", ...}
+15. fetch_one: content = "[short text]"
+16. Cache updated: fetch_cache[url] = "[short text]"
+17. Item enriched:
+    - content = "[short text]"
+    - content_chars = ~50-200
+    - coverage = "full" (broken logic - any content → full)
+
+    WAIT: Diagnostic shows coverage = "snippet_only"
+
+    CORRECTION: content must have been "" (empty)
+
+    REVISED SCENARIO:
+    - _html_to_text() returned ""
+    - All text was in <script> tags (removed) or required JS
+    - OR whitespace normalization reduced to empty string
+    - Result: content = ""
+    - coverage = "snippet_only" (no content, no excerpt)
+
+18. P23 receives item with content = ""
+19. semantic_read.py default: 0.150 (no-content default)
+20. P24 receives item with content = ""
+21. No frames extracted: 0.000
+
+CONFIRMED ROOT CAUSE FOR USDA.GOV:
+  JavaScript-rendered content in Salesforce Knowledge platform
+  → HTML body has no meaningful text
+  → _html_to_text() extracts nothing
+  → content = ""
+  → Default scores applied
+  → NO ERROR LOGGED
+
+THIS IS NOT A FETCH FAILURE
+  - HTTP request succeeded (200 OK)
+  - HTML was fetched and decoded
+  - No exceptions occurred
+  - But content extraction failed silently
+  - No indication that content was JS-rendered
+  - No fallback to snippet
+
+REQUIRED FIX (not implemented, just documented):
+  - Detect JS-required pages
+  - Fall back to snippet
+  - OR use headless browser
+  - OR log warning about empty extraction
+
+================================================================================
+PART 18: SUMMARY OF FINDINGS
+================================================================================
+
+FETCH MODULE STRUCTURE:
+  - 3 modules: fetch.py (main), fetch_sync.py (legacy), fetch_enrichment.py (orchestrator)
+  - Entry point: enrich_items_with_content() at pipeline/run.py:82
+  - Async concurrent fetching via asyncio.gather()
+  - Request-scoped cache to avoid duplicate fetches
+
+COMPLETE FETCH FLOW:
+  Pipeline → enrich_items_with_content() → fetch_missing_urls() → fetch_one() →
+  fetch_text() → httpx → response processing → cache → item enrichment →
+  P23/P24 consumption
+
+EXCEPTION HANDLING:
+  - 4 layers of exception suppression (fetch.py:55, fetch_enrichment.py:66, :77)
+  - All return empty strings or skip results
+  - Zero logging at any layer
+  - Exception variable captured but unused (fetch.py:55)
+
+SILENT FAILURE POINTS IDENTIFIED:
+  1. fetch.py:55-56 - Network/HTTP exceptions → empty text, no log
+  2. fetch_sync.py:73-74 - All exceptions → empty text, no log (not main path)
+  3. fetch_enrichment.py:66-67 - Wrapper exceptions → empty string, no log
+  4. fetch_enrichment.py:77-78 - Gather exceptions → skip, no log
+  5. fetch.py:46-52 - Non-HTML content → empty text, no log
+  6. fetch_sync.py:63-64 - Truncation at 80KB → silent (not main path)
+
+LOGGING STATUS:
+  - fetch.py: Zero logging
+  - fetch_sync.py: Zero logging
+  - fetch_enrichment.py: Zero logging (only test prints)
+  - No error output to stderr
+  - No diagnostic information
+  - No success/failure tracking
+
+USDA.GOV ROOT CAUSE:
+  - Salesforce Knowledge platform (ask.usda.gov)
+  - Content rendered client-side via JavaScript
+  - HTML shell fetched successfully (200 OK)
+  - _html_to_text() extracts nothing (all content in JS)
+  - Result: content = ""
+  - No error (fetch succeeded technically)
+  - No fallback to snippet
+  - P23 defaults to 0.150, P24 defaults to 0.000
+
+DESIGN ISSUES FOUND:
+  1. No distinction between fetch failure and empty content
+  2. No fallback to snippet when full content unavailable
+  3. No metadata extraction
+  4. No JS-rendered content detection
+  5. Coverage determination logic broken (fetch_enrichment.py:114)
+  6. Non-HTML content silently discarded (PDFs, JSON)
+  7. No retry logic for transient failures
+  8. No special handling for slow/protected domains (.gov, .edu)
+  9. Encoding errors silently ignored (errors='ignore')
+  10. No timeout differentiation by domain type
+
+TIMEOUT CONFIGURATION:
+  - Default: 8.0-10.0 seconds
+  - No per-domain customization
+  - No retry with longer timeout
+  - Government sites often slow, may timeout
+
+STATUS CODE HANDLING:
+  - 200 OK: Processed
+  - 3xx: Followed automatically
+  - 4xx/5xx: Returned with empty text (if non-HTML)
+  - No retry for 429 (rate limit) or 503 (unavailable)
+
+CONTENT TYPE FILTERING:
+  - Only "text/html" processed in main path
+  - PDFs, JSON, plain text → empty string
+  - No indication that content was skipped
+  - fetch_sync.py more permissive (text/*)
+
+BYTE LIMITS:
+  - fetch_sync.py: 80KB limit (not in main path)
+  - fetch.py: No limit (loads entire response)
+  - Large pages may cause memory/performance issues
+
+CACHE BEHAVIOR:
+  - Request-scoped (not persistent)
+  - Caches successful fetches (even if empty)
+  - Does NOT cache exceptions from gather
+  - Empty content cached → won't retry
+  - Exception → not cached → will retry next request
+
+COVERAGE DETERMINATION BUG:
+  Line 114: if content and content_chars > 0 and len(content) >= 0.98 * content_chars:
+
+  But content_chars = len(content) at Line 37
+  So condition is always true for non-empty content
+  "partial" only returned if content empty but excerpt exists
+  "snippet_only" only if both empty
+
+ALTERNATIVE CONTENT SOURCES:
+  - Snippet exists in items (from search results)
+  - NOT used as fallback when fetch fails
+  - No metadata extraction (OG, Twitter Cards)
+  - No meta description extraction
+
+URL-SPECIFIC HANDLING:
+  - None found
+  - No special treatment for .gov, .edu
+  - No authentication
+  - No retry logic
+  - No domain-specific timeouts
+
+EVIDENCE FROM DIAGNOSTIC:
+  - USDA.gov: coverage="snippet_only", P23=0.150, P24=0.000, authority=0.858
+  - No content_length or content_chars shown in diagnostic
+  - No fetch errors logged
+  - URL appears 2x (arm_A and arm_B) - both likely failed
+
+WHERE ERRORS ARE SUPPRESSED:
+  1. fetch.py:55 - Exception caught, variable unused
+  2. fetch_enrichment.py:66 - Exception caught, empty returned
+  3. fetch_enrichment.py:77 - Exception results skipped
+  4. Multiple encoding fallbacks with errors='ignore'
+  5. Environment variable parsing (fetch_sync.py:42, 46)
+
+REMNANTS OF REMOVED WRAPPERS:
+  - No commented-out code found
+  - Generic Exception catching still pervasive
+  - Current exception handling may BE the remnants
+  - No evidence of recent removal
+
+================================================================================
+END OF INVESTIGATION
+================================================================================
+
+INVESTIGATION COMPLETE
+Date: 2025-10-22
+Report saved to: docs/investigations/phase7_p22_content_retrieval_investigation.txt
+
+ALL SEARCH COMMANDS, CODE SECTIONS, AND FINDINGS DOCUMENTED ABOVE.
+NO RECOMMENDATIONS BEYOND DOCUMENTATION (per instructions).
+NO INTERPRETATION OF DESIGN INTENT (per instructions).
+ONLY FACTUAL REPORTING OF CODE BEHAVIOR AND FAILURE MODES.

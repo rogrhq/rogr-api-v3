@@ -1,0 +1,450 @@
+PHASE 2 INVESTIGATION: Credibility/Authority Domain Matching Issues
+================================================================================
+Date: 2025-10-21
+Goal: Investigate why quality sources (Wikipedia, ACS, educational sites) are
+      not being recognized by tier/credibility system
+Issues: #6 (Wikipedia), #7 (ACS journals), #8 (Master Organic Chemistry)
+================================================================================
+
+SEARCH COMMANDS EXECUTED:
+================================================================================
+
+1. grep -rn "tier" intelligence/content/fullread.py | head -20
+2. grep -rn "def.*credibility" intelligence/content/fullread.py
+3. grep -rn "whitelist\|WHITELIST" intelligence/content/
+4. grep -rn "def.*domain" intelligence/content/fullread.py
+5. grep -rn "extract.*domain\|get.*domain" intelligence/
+6. grep -rn "wikipedia.org" intelligence/
+7. grep -rn "TIER_1\|TIER_2\|TIER_3" intelligence/content/
+8. grep -A 5 "in _ESTABLISHED_REFERENCES" intelligence/content/fullread.py
+9. find intelligence/content/ -name "*.py" -exec grep -l "credibility" {} \;
+10. grep -rn "credibility_tier\|tier.*credibility" intelligence/content/
+11. grep -B 5 -A 10 "def.*credibility" intelligence/content/grade.py
+12. grep -rn "evaluate_full_evidence" intelligence/content/fullread.py -A 5
+13. grep -n "def evaluate_full_evidence" intelligence/content/fullread.py
+14. grep -rn "\.split\|replace.*www\|strip.*subdomain" intelligence/content/fullread.py
+15. sed -n '236,246p' intelligence/content/fullread.py
+16. grep -rn "urlparse\|urllib" intelligence/content/fullread.py | head -10
+17. grep -rn "acs.org\|pubs.acs" intelligence/
+18. grep -rn "\.edu\|educational" intelligence/content/fullread.py
+19. grep -rn "peer.*review\|journal\|doi" intelligence/content/fullread.py
+
+FILES EXAMINED:
+================================================================================
+
+PRIMARY FILES:
+1. intelligence/content/fullread.py
+   - Line 18: urlparse import
+   - Lines 68-86: _ESTABLISHED_REFERENCES whitelist
+   - Lines 219-289: _credibility_from() function (tier-based)
+   - Lines 236-241: Domain extraction logic
+   - Lines 244-246: Whitelist matching logic
+   - Lines 252-255: Peer-review text detection
+   - Lines 257-262: .edu domain detection
+   - Lines 300-319: evaluate_full_evidence() function
+   - Lines 395-402: Credibility assignment
+
+2. intelligence/content/grade.py
+   - Lines 453-529: calculate_authority_score() function
+   - Lines 457-467: extract_domain() function
+   - Lines 472-519: DOMAIN_SCORES whitelist
+   - Lines 522-523: Domain matching logic
+
+3. intelligence/gather/normalize.py
+   - Lines 22-30: _extract_domain() function
+
+BACKUP FILES (not active):
+- intelligence/content/fullread.py.backup_before_tier_model
+- intelligence/content/grade.py.backup_before_authority_storage
+- Multiple .backup, .bak, .phase* files
+
+CODE ANALYSIS:
+================================================================================
+
+1. DOMAIN EXTRACTION METHOD
+--------------------------------------------------------------------------------
+Location: intelligence/content/fullread.py, lines 236-241
+
+Code:
+```python
+p = urlparse(url or "")
+host = (p.hostname or "").lower()
+
+# Remove www. prefix for matching
+if host.startswith('www.'):
+    host = host[4:]
+```
+
+Behavior:
+- Uses urllib.parse.urlparse (Python standard library)
+- Extracts p.hostname property (full hostname with ALL subdomains)
+- Converts to lowercase
+- Removes ONLY "www." prefix
+- Does NOT remove other subdomains
+
+Examples:
+- https://en.wikipedia.org/wiki/Boiling_point → "en.wikipedia.org"
+- https://www.wikipedia.org/ → "wikipedia.org" (www. removed)
+- https://pubs.acs.org/doi/10.1021/... → "pubs.acs.org"
+- https://masterorganicchemistry.com/... → "masterorganicchemistry.com"
+
+2. DOMAIN MATCHING METHOD
+--------------------------------------------------------------------------------
+Location: intelligence/content/fullread.py, lines 244-246
+
+Code:
+```python
+if host in _ESTABLISHED_REFERENCES:
+    tier, score, category = _ESTABLISHED_REFERENCES[host]
+    return (tier, score, category)
+```
+
+Matching logic:
+- Exact dictionary key lookup using Python 'in' operator
+- NOT substring matching
+- NOT regex matching
+- NOT fuzzy/partial matching
+- Requires EXACT string equality
+
+Examples:
+- "wikipedia.org" in {"wikipedia.org": ...} → TRUE (match)
+- "en.wikipedia.org" in {"wikipedia.org": ...} → FALSE (no match)
+- "pubs.acs.org" in {"acs.org": ...} → FALSE (no match, and acs.org not in list anyway)
+
+3. WHITELIST STRUCTURE
+--------------------------------------------------------------------------------
+Location: intelligence/content/fullread.py, lines 68-86
+
+Whitelist name: _ESTABLISHED_REFERENCES
+Format: {domain: (tier, score, category)}
+
+Complete contents:
+```python
+_ESTABLISHED_REFERENCES = {
+    # Science & Academic Publishing (Tier 1)
+    'nature.com': (1, 0.85, 'peer-reviewed journal'),
+    'science.org': (1, 0.85, 'peer-reviewed journal'),
+    'pnas.org': (1, 0.90, 'peer-reviewed journal'),
+
+    # Medical & Health (Tier 1-2)
+    'mayoclinic.org': (2, 0.75, 'medical institution'),
+    'who.int': (1, 0.90, 'international health org'),
+
+    # Technical & Standards (Tier 2)
+    'engineeringtoolbox.com': (2, 0.65, 'technical reference'),
+    'iso.org': (2, 0.70, 'standards organization'),
+
+    # Reference & Education (Tier 2-3)
+    'britannica.com': (2, 0.70, 'encyclopedia'),
+    'khanacademy.org': (2, 0.70, 'educational non-profit'),
+    'wikipedia.org': (3, 0.55, 'collaborative reference'),
+}
+```
+
+Total entries: 10 domains
+
+Tier definitions:
+- Tier 1 (0.85-0.90): Government, peer-reviewed, fact-checkers
+- Tier 2 (0.65-0.75): Educational, established references
+- Tier 3 (0.45-0.55): Has credentials, methodology
+- Tier 4 (0.20-0.30): No credibility signals
+
+4. DUPLICATE AUTHORITY SCORING SYSTEM
+--------------------------------------------------------------------------------
+Location: intelligence/content/grade.py, lines 453-529
+
+Function: calculate_authority_score()
+Whitelist: DOMAIN_SCORES
+
+Partial contents (showing relevant entries):
+```python
+DOMAIN_SCORES = {
+    # US Government
+    'nih.gov': 1.0,
+    'cdc.gov': 1.0,
+    'census.gov': 0.98,
+    'nasa.gov': 0.98,
+
+    # ... many more ...
+
+    # Encyclopedias
+    'britannica.com': 0.80,
+    'wikipedia.org': 0.70,  # Lower due to editability
+
+    # Fact-checkers
+    'snopes.com': 0.90,
+    'factcheck.org': 0.92,
+    'politifact.com': 0.88,
+}
+```
+
+Domain extraction (lines 457-467):
+```python
+def extract_domain(url):
+    """Extract clean domain from URL"""
+    try:
+        parsed = urlparse(url)
+        domain = parsed.netloc.lower()
+        # Remove www. prefix
+        if domain.startswith('www.'):
+            domain = domain[4:]
+        return domain
+    except:
+        return ''
+```
+
+Note: Uses .netloc instead of .hostname (same result in practice)
+
+Matching logic (lines 522-523):
+```python
+if domain in DOMAIN_SCORES:
+    domain_score = DOMAIN_SCORES[domain]
+```
+
+Same exact matching approach as credibility system.
+
+5. FALLBACK DETECTION MECHANISMS
+--------------------------------------------------------------------------------
+
+Government domains (fullread.py, lines 248-250):
+```python
+if host.endswith('.gov'):
+    return (1, 0.90, 'government source')
+```
+
+Peer-reviewed text detection (fullread.py, lines 252-255):
+```python
+text_lower = (text or "").lower()
+if 'peer-reviewed' in text_lower or 'peer reviewed' in text_lower:
+    return (1, 0.85, 'peer-reviewed')
+```
+
+Educational domains (fullread.py, lines 257-262):
+```python
+if host.endswith('.edu'):
+    # Check for personal pages (lower tier)
+    if '~' in url or '/~' in url or '/people/' in url:
+        return (3, 0.50, 'educational personal page')
+    return (2, 0.70, 'educational institution')
+```
+
+ISSUE ANALYSIS:
+================================================================================
+
+ISSUE #6: Wikipedia (en.wikipedia.org) gets Tier 4 instead of Tier 3
+--------------------------------------------------------------------------------
+
+Input URL: https://en.wikipedia.org/wiki/Boiling_point
+Expected: Tier 3 (whitelist entry 'wikipedia.org')
+Actual: Tier 4 (no credibility signals)
+
+Trace:
+1. Domain extraction: "en.wikipedia.org"
+2. Whitelist lookup: "en.wikipedia.org" in _ESTABLISHED_REFERENCES
+3. Result: FALSE (key is 'wikipedia.org', not 'en.wikipedia.org')
+4. Falls through all other checks
+5. Defaults to Tier 4
+
+Root cause: Subdomain "en." is preserved, causing exact match to fail
+
+ISSUE #7: ACS peer-reviewed journal (pubs.acs.org) not recognized as Tier 1
+--------------------------------------------------------------------------------
+
+Input URL: https://pubs.acs.org/doi/10.1021/je60074a023
+Expected: Tier 1 (peer-reviewed journal)
+Actual: Tier 4 (no credibility signals)
+
+Trace:
+1. Domain extraction: "pubs.acs.org"
+2. Whitelist lookup: "pubs.acs.org" in _ESTABLISHED_REFERENCES
+3. Result: FALSE (acs.org not in whitelist at all)
+4. Text check: depends on whether "peer-reviewed" appears in content
+5. If not in content, defaults to Tier 4
+
+Root causes:
+- ACS not in whitelist
+- Subdomain "pubs." would prevent match even if "acs.org" was added
+- Peer-review detection relies on text content, not URL structure
+
+ISSUE #8: Master Organic Chemistry not tiered as educational reference
+--------------------------------------------------------------------------------
+
+Input URL: https://masterorganicchemistry.com/2010/10/25/3-trends-that-affect-boiling-points/
+Expected: Tier 2-3 (educational reference)
+Actual: Tier 4 (no credibility signals)
+
+Trace:
+1. Domain extraction: "masterorganicchemistry.com"
+2. Whitelist lookup: "masterorganicchemistry.com" in _ESTABLISHED_REFERENCES
+3. Result: FALSE (not in whitelist)
+4. .gov check: FALSE
+5. Peer-review text check: depends on content
+6. .edu check: FALSE (not a .edu domain)
+7. Defaults to Tier 4
+
+Root causes:
+- Not in whitelist
+- Not a .edu domain (so doesn't benefit from educational detection)
+- No mechanism to identify educational content by domain patterns
+
+SYSTEMATIC PATTERN:
+================================================================================
+
+Common pattern across all 3 issues:
+
+1. SUBDOMAIN PRESERVATION
+   - Domain extraction keeps ALL subdomains except "www."
+   - Examples: en., pubs., mobile., m., www2., etc. all preserved
+   - This breaks matching for any subdomain variations
+
+2. EXACT MATCHING REQUIREMENT
+   - Whitelist matching uses exact string equality
+   - No fuzzy matching, no partial matching, no subdomain stripping
+   - "en.wikipedia.org" ≠ "wikipedia.org" → no match
+
+3. SMALL WHITELIST SIZE
+   - Only 10 domains in _ESTABLISHED_REFERENCES
+   - Many authoritative sources not included (ACS, JSTOR, IEEE, etc.)
+   - No wildcard or pattern-based matching
+
+4. LIMITED FALLBACK DETECTION
+   - .gov domains: Works (suffix match)
+   - .edu domains: Works (suffix match)
+   - Peer-reviewed: Works only if text contains phrase "peer-reviewed"
+   - No URL pattern recognition (e.g., /doi/, /article/, pubs., journals.)
+
+IMPACT ASSESSMENT:
+--------------------------------------------------------------------------------
+
+Affected patterns:
+- Language-specific Wikipedia: en., es., fr., de., etc.
+- Publication subdomains: pubs., journals., www., link.
+- Mobile versions: m., mobile.
+- Regional variants: uk., ca., au.
+- Content delivery networks: cdn., static.
+
+Severity:
+- HIGH: Common pattern affecting many high-quality sources
+- Wikipedia alone has 300+ language editions (all affected)
+- Major journal publishers use subdomains (ACS, Springer, Elsevier, etc.)
+
+MULTIPLE IMPLEMENTATIONS:
+================================================================================
+
+TWO separate scoring systems found:
+
+System 1: Tier-based credibility (_credibility_from)
+- Location: intelligence/content/fullread.py
+- Returns: (tier, score, category)
+- Whitelist: _ESTABLISHED_REFERENCES (10 domains)
+- Status: ACTIVE (called at lines 315, 399)
+- Usage: Primary credibility scoring
+
+System 2: Authority scoring (calculate_authority_score)
+- Location: intelligence/content/grade.py
+- Returns: float authority score 0-1
+- Whitelist: DOMAIN_SCORES (30+ domains)
+- Status: ACTIVE (called from grade.py)
+- Usage: Separate authority metric
+
+Both systems:
+- Use exact domain matching
+- Have separate whitelists
+- Both include 'wikipedia.org' (would both fail on 'en.wikipedia.org')
+- Have minimal normalization (only www. removal)
+
+NO NORMALIZATION STRATEGY:
+================================================================================
+
+Current normalization:
+- Removes "www." prefix only
+- Does nothing for other subdomains
+
+What is NOT normalized:
+- Language codes: en., es., fr., de., zh., ja., etc.
+- Functional subdomains: pubs., journals., blog., shop., support.
+- Platform variants: mobile., m., amp.
+- Regional variants: uk., ca., au., nz.
+- Infrastructure: cdn., static., www2., www3.
+
+This is the PRIMARY ROOT CAUSE of all three issues.
+
+FACTUAL ANSWERS TO INVESTIGATION QUESTIONS:
+================================================================================
+
+QUESTION 1: How are domains extracted from URLs?
+ANSWER:
+Function: _credibility_from() at line 219, intelligence/content/fullread.py
+Method: Lines 236-241
+- urlparse(url) extracts p.hostname (full hostname with ALL subdomains)
+- Converts to lowercase
+- Removes ONLY "www." prefix if present
+- Preserves all other subdomains (en., pubs., mobile., etc.)
+
+QUESTION 2: How are domains matched against whitelists?
+ANSWER:
+Line 244, intelligence/content/fullread.py
+- Exact dictionary key lookup: if host in _ESTABLISHED_REFERENCES
+- Requires perfect string equality
+- No substring, fuzzy, or partial matching
+- No wildcard support
+
+QUESTION 3: Why does en.wikipedia.org not match wikipedia.org?
+ANSWER:
+- Extracted: "en.wikipedia.org" (subdomain preserved)
+- Whitelist key: "wikipedia.org" (no subdomain)
+- Match: "en.wikipedia.org" in {"wikipedia.org": ...} → FALSE
+- Cause: Exact string comparison, subdomain not stripped
+- Code location: Line 244 match check fails
+
+QUESTION 4: Are there multiple credibility implementations?
+ANSWER: YES - TWO implementations found
+1. _credibility_from() in fullread.py (tier-based, 10 domains) - ACTIVE
+2. calculate_authority_score() in grade.py (authority 0-1, 30+ domains) - ACTIVE
+Both use exact domain matching, both have same subdomain issue
+
+QUESTION 5: Is domain normalization happening?
+ANSWER: NO (minimal only)
+- Only "www." prefix removed (lines 240-241)
+- No other subdomain normalization
+- This is the root cause of matching failures
+
+QUESTION 6: Are ACS journals and educational sites in whitelists?
+ANSWER:
+- pubs.acs.org: NOT IN WHITELIST (neither system)
+- masterorganicchemistry.com: NOT IN WHITELIST (neither system)
+- .edu detection exists but doesn't apply (neither is .edu)
+
+QUESTION 7: What is the systematic pattern?
+ANSWER: SUBDOMAIN MISMATCH PATTERN
+- All 3 issues involve subdomain variations
+- Domain extraction preserves subdomains (except www.)
+- Exact matching requires perfect string match
+- Subdomains (en., pubs., etc.) prevent whitelist matches
+- Small whitelist size (10 entries) compounds the problem
+
+OLD vs NEW CODE DISTINCTION:
+================================================================================
+
+NEW CODE (currently active):
+- intelligence/content/fullread.py: Tier-based credibility system
+- Added: October 21, 2025 (based on file comments and backup dates)
+- Uses _credibility_from() returning (tier, score, category)
+- Whitelist: _ESTABLISHED_REFERENCES (10 domains)
+
+OLD CODE (in backups, not active):
+- intelligence/content/fullread.py.backup_before_tier_model
+- Previous credibility system (different implementation)
+- Not currently being called
+
+PARALLEL SYSTEM (also active):
+- intelligence/content/grade.py: Authority scoring
+- Separate from tier-based credibility
+- Uses calculate_authority_score()
+- Whitelist: DOMAIN_SCORES (30+ domains)
+- Same matching problems as tier system
+
+INVESTIGATION COMPLETE
+================================================================================
+All search commands executed, all files examined, all questions answered.
+Root cause identified: Subdomain preservation + exact matching + small whitelist

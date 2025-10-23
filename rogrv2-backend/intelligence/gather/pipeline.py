@@ -160,6 +160,33 @@ async def build_evidence_for_claim(claim_text: str, plan: Dict[str, Any], claim_
 
         labeled_cands.extend(await _exec_plan_for_arm(plan, arm_def, label, max_per_query=2))
 
+    print(f"\n=== DUPLICATION DIAGNOSTIC ===")
+    print(f"Total items in labeled_cands: {len(labeled_cands)}")
+
+    # Count unique URLs
+    urls = [item.get('url', '') for item in labeled_cands]
+    unique_urls = set(urls)
+    print(f"Unique URLs: {len(unique_urls)}")
+    print(f"Duplicate count: {len(urls) - len(unique_urls)}")
+
+    # Find duplicates
+    from collections import Counter
+    url_counts = Counter(urls)
+    duplicates = {url: count for url, count in url_counts.items() if count > 1}
+
+    if duplicates:
+        print(f"\nDUPLICATE URLs FOUND:")
+        for url, count in duplicates.items():
+            print(f"  {url}: appears {count} times")
+            # Show arm values for each duplicate
+            items_with_url = [item for item in labeled_cands if item.get('url') == url]
+            for idx, item in enumerate(items_with_url):
+                print(f"    Instance {idx+1}: arm={item.get('arm')}, query={item.get('query_used', 'unknown')}")
+    else:
+        print("NO DUPLICATES FOUND")
+
+    print("=== END DIAGNOSTIC ===\n")
+
     # 2) Group by explicit arm, then normalize
     armA_raw, armB_raw = _group_by_arm(labeled_cands)
     armA_norm = normalize_candidates(armA_raw)

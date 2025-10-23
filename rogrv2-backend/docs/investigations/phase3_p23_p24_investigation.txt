@@ -1,0 +1,789 @@
+================================================================================
+PHASE 3 INVESTIGATION: P23 Semantic Scoring & P24 Frame Detection Issues
+================================================================================
+Timestamp: 2025-10-21
+Claim: "Water boils at 100 degrees Celsius"
+Investigation focus: Why USDA.gov gets low scores from P23/P24
+
+================================================================================
+PART 1: P23 SEMANTIC ANALYSIS LOCATION
+================================================================================
+
+SEARCH COMMAND:
+grep -rn "def analyze_item" intelligence/content/semantic_read.py
+
+RESULT:
+- Function: analyze_item
+- Location: intelligence/content/semantic_read.py:107
+- Signature: def analyze_item(claim_text: str, item: Dict[str,Any], *, window: int = 3, stance_threshold: float = 0.60) -> Dict[str,Any]
+
+CALLED FROM:
+- intelligence/content/grade.py:383
+  Code: p23_result = analyze_item(claim_text, evidence_item.copy(), window=3)
+
+================================================================================
+PART 2: P23 SCORING MECHANISM (COMPLETE FUNCTION)
+================================================================================
+
+COMPLETE analyze_item() FUNCTION (lines 107-254):
+
+def analyze_item(claim_text: str, item: Dict[str,Any], *, window: int = 3, stance_threshold: float = 0.60) -> Dict[str,Any]:
+    """
+    Deterministic semantic pass for a single item.
+    Returns an updated item with `findings` (list), `item_grade` (0..1), `grade_label`.
+    Non-destructive: existing fields preserved.
+    """
+    content = item.get("content") or item.get("content_excerpt") or ""
+    if not content:
+        # still attach empty findings with low grade
+        item.setdefault("findings", [])
+        item.setdefault("item_grade", 0.15)
+        item.setdefault("grade_label", "low")
+        return item
+
+    claim_norm = _norm(claim_text)
+    c_toks = _tokens(claim_text)
+    c_tris = _trigrams(c_toks)
+    # pull simple "entities": longest proper-ish tokens from claim
+    entities = [t for t in c_toks if len(t) > 2][:8]
+    pct_targets = _percent_numbers(claim_norm)  # e.g., ["8%"]
+    year_targets = _years(claim_norm)
+
+    sents = _split_sentences(content)
+    findings: List[Dict[str,Any]] = []
+    best = 0.0
+
+    # Handle short evidence: create at least one window
+    if len(sents) < window:
+        windows = [sents] if sents else []
+    else:
+        windows = [sents[i:i + window] for i in range(len(sents) - window + 1)]
+
+    for win_sents in windows:
+        win = " ".join(win_sents).strip()
+        win_norm = _norm(win)
+        w_toks = _tokens(win_norm)
+        w_tris = _trigrams(w_toks)
+
+        ent_hit = any(e in w_toks for e in entities)
+        num_hit = False
+        if pct_targets:
+            # accept either exact percent string present or number+percent word nearby
+            for p in pct_targets:
+                n = p.rstrip("%")
+                if n in w_toks or p in win_norm:
+                    num_hit = True; break
+        else:
+            # any percent-like in window
+            num_hit = bool(_percent_numbers(win_norm))
+        year_hit = bool(set(year_targets) & set(_years(win_norm))) if year_targets else False
+
+        stance = _stance_for_window(win_norm)
+        j = _jaccard(c_tris, w_tris)
+
+        # Enhanced: Add paraphrase matching
+        para_score = paraphrase_match_score(claim_text, win)
+
+        # score:
+        # base from signals
+        base = 0.0
+        if ent_hit: base += 0.25
+        if num_hit: base += 0.25
+        if year_hit: base += 0.15
+        # similarity: 70% jaccard, 30% paraphrase
+        base += min(0.35, (0.7 * j + 0.3 * para_score) * 0.7)  # cap contribution
+        # stance adjustment (we keep both; stance used downstream)
+        if stance == "mixed":
+            base += 0.05
+        score = max(0.0, min(1.0, base))
+
+        snippet = win[:320]
+        off_s, off_e = _best_offset(content, snippet)
+
+        sigs: List[str] = []
+        if ent_hit: sigs.append("entity")
+        if num_hit: sigs.append("number")
+        if year_hit: sigs.append("year")
+        if stance in ("support","challenge","mixed"): sigs.append(f"stance:{stance}")
+
+        findings.append({
+            "quote": snippet,
+            "offset_start": off_s,
+            "offset_end": off_e,
+            "stance": stance,
+            "signals": sigs,
+            "score": float(score),
+        })
+        if score > best:
+            best = score
+
+    # pick top findings (stable order by score desc then first occurrence)
+    findings.sort(key=lambda f: f.get("score", 0.0), reverse=True)
+    findings = findings[:5]
+
+    # Re-compute stance on top findings using cross-encoder entailment
+    for finding in findings:
+        quote = finding.get("quote", "")
+        if quote and quote.strip():
+            entailment_result = get_entailment_stance(claim_text, quote)
+            stance_value = entailment_result.get("stance", "unrelated")
+            # Map contextual_support to support for downstream compatibility
+            if stance_value == "contextual_support":
+                stance_value = "support"
+            finding["stance"] = stance_value
+
+    item["findings"] = findings
+
+    # item grade blends best score with coverage
+    cov = item.get("coverage") or "snippet_only"
+    cov_w = {"full": 1.0, "partial": 0.75, "snippet_only": 0.5}.get(cov, 0.5)
+    item_grade = max(0.0, min(1.0, 0.6 * best + 0.4 * cov_w))
+
+    # Phase 9: Apply precision checks to grade (ADDED)
+    if findings:
+        # Use the best finding's window for Phase 9 checks
+        best_finding = findings[0]
+        evidence_window = best_finding.get("quote", "")
+
+        # Phase 9.1: Numeric precision check
+        # Extract numbers from claim (simple extraction)
+        claim_numbers = _percent_numbers(claim_norm) + [str(y) for y in _years(claim_norm)]
+        if claim_numbers:
+            number_match = extract_and_match_numbers(claim_text, evidence_window)
+            # Penalty for numeric mismatch
+            if number_match.get('unmatched_claim_count', 0) > 0:
+                item_grade = item_grade * 0.7
+                item["numeric_mismatch"] = True
+                item["numeric_precision"] = number_match
+
+        # Phase 9.2: Negation agreement check
+        negation_check = check_negation_agreement(claim_text, evidence_window)
+        if negation_check.get('semantic_flip'):
+            # Flip stance of best finding if negation mismatch
+            if best_finding.get('stance') == 'support':
+                best_finding['stance'] = 'challenge'
+            elif best_finding.get('stance') == 'challenge':
+                best_finding['stance'] = 'support'
+            item["negation_flip"] = True
+
+        # Phase 9.3: Hedging penalty
+        evidence_hedging = detect_hedging(evidence_window)
+        if evidence_hedging.get('has_hedging', False):
+            item_grade = item_grade * 0.9
+            item["hedging_detected"] = True
+
+    item["item_grade"] = float(item_grade)
+    item["grade_label"] = "high" if item_grade >= 0.67 else ("medium" if item_grade >= 0.4 else "low")
+    return item
+
+--------------------------------------------------------------------------------
+P23 SCORING FORMULA BREAKDOWN:
+--------------------------------------------------------------------------------
+
+WINDOW SCORING (per 3-sentence window):
+  base = 0.0
+  + 0.25 if entity match (entities = tokens > 2 chars from claim)
+  + 0.25 if number match (percent or number in window)
+  + 0.15 if year match
+  + min(0.35, (0.7 * jaccard + 0.3 * paraphrase_score) * 0.7)  [capped at 0.35]
+  + 0.05 if stance == "mixed"
+  score = clamp(base, 0.0, 1.0)
+
+ITEM GRADE FORMULA:
+  item_grade = 0.6 * best_window_score + 0.4 * coverage_weight
+  where coverage_weight:
+    - "full": 1.0
+    - "partial": 0.75
+    - "snippet_only": 0.5
+
+PENALTIES:
+  - Numeric mismatch: item_grade *= 0.7
+  - Hedging detected: item_grade *= 0.9
+
+DEFAULT WHEN NO CONTENT:
+  - item_grade = 0.15
+  - grade_label = "low"
+
+THRESHOLDS:
+  - stance_threshold parameter: 0.60 (defined but not actually used in code)
+  - Grade labels:
+    - "high": >= 0.67
+    - "medium": >= 0.4
+    - "low": < 0.4
+
+STANCE DETERMINATION:
+  1. Initial stance from _stance_for_window (keyword-based):
+     - checks for NEG_TOKENS and SUPPORT_VERBS in window
+     - returns "support", "challenge", "mixed", or "unrelated"
+  2. After windowing, stance re-computed using cross-encoder entailment:
+     - Calls get_entailment_stance(claim_text, quote)
+     - Returns: "support", "challenge", "contextual_support", "unrelated"
+     - "contextual_support" mapped to "support"
+  3. Can be flipped by negation check (Phase 9.2)
+
+================================================================================
+PART 3: P23 ENTAILMENT MODEL DETAILS
+================================================================================
+
+MODEL LOADING:
+- Location: intelligence/content/shared/embeddings.py
+- Model: CrossEncoder('cross-encoder/nli-deberta-v3-base')
+- Bi-encoder: SentenceTransformer('all-MiniLM-L6-v2')
+
+ENTAILMENT STANCE DETECTION (lines 63-138):
+  Input: claim text, evidence text
+  Process:
+    1. CrossEncoder.predict returns [contradiction, neutral, entailment] logits
+    2. Softmax applied to normalize to probabilities 0-1
+    3. Stance determined by max score:
+       - If entailment is max:
+         - entailment > 0.7 → "support"
+         - else → "contextual_support"
+       - If contradiction is max:
+         - contradiction > 0.6 → "challenge"
+         - else → "contextual_support"
+       - If neutral is max:
+         - neutral > 0.5 → "unrelated"
+         - else → "contextual_support"
+  Output: {stance, confidence, entailment_score, contradiction_score, neutral_score, reasoning}
+
+THRESHOLDS IN ENTAILMENT:
+  - Support threshold: 0.7 (entailment score)
+  - Challenge threshold: 0.6 (contradiction score)
+  - Unrelated threshold: 0.5 (neutral score)
+
+NO DIRECT MODEL CALLS IN P23:
+  - semantic_read.py does not load models directly
+  - Imports get_entailment_stance from shared/embeddings.py
+  - Models loaded once in singleton pattern
+
+================================================================================
+PART 4: P24 FRAME DETECTION LOCATION
+================================================================================
+
+SEARCH COMMAND:
+grep -rn "def analyze_frames" intelligence/content/semantic_frames.py
+
+RESULT:
+- Function: analyze_frames
+- Location: intelligence/content/semantic_frames.py:202
+- Signature: def analyze_frames(claim_text: str, content: str, *, window: int = 3, max_windows: int = 500) -> Dict[str, Any]
+
+CALLED FROM:
+- intelligence/content/grade.py:398
+  Code: p24_result = analyze_frames(claim_text, content, window=3, max_windows=500)
+
+================================================================================
+PART 5: P24 FRAME SCORING MECHANISM (COMPLETE FUNCTION)
+================================================================================
+
+COMPLETE analyze_frames() FUNCTION (lines 202-284):
+
+def analyze_frames(claim_text: str, content: str, *, window: int = 3, max_windows: int = 500) -> Dict[str, Any]:
+    """
+    Return:
+      {
+        "item_frame": {entity[], action, quantity[], year[], scope},
+        "frame_matches": [{label, score, slots[], rules[], quote, offset_start, offset_end}],
+        "frame_confidence": float
+      }
+    """
+    claim = extract_claim_frame(claim_text)
+    sents = _split_sentences(content)
+    ctoks = _tokens(claim_text)
+    ctris = _trigrams(ctoks)
+
+    matches: List[Dict[str,Any]] = []
+    best_score = 0.0
+    best_frame: Dict[str,Any] = {"entity": [], "action": "unknown", "quantity": [], "year": [], "scope": "unknown"}
+
+    # Handle short evidence: create at least one window
+    if len(sents) < window:
+        windows = [sents] if sents else []
+    else:
+        num_windows = min(len(sents) - window + 1, max_windows)
+        windows = [sents[i:i + window] for i in range(num_windows)]
+
+    for win_sents in windows:
+        win_text = " ".join(win_sents).strip()
+        wframe = extract_window_frame(win_text)
+        wtris = _trigrams(_tokens(win_text))
+        sim = _jaccard_tris(ctris, wtris)
+
+        # Check for paraphrase similarity in text
+        paraphrase_score = paraphrase_match_score(claim_text, win_text)
+        # Boost similarity score if paraphrases detected
+        if paraphrase_score > 0.3:
+            sim = max(sim, paraphrase_score * 0.8)  # Boost similarity with paraphrase score
+
+        label, rules = _entail_contradict(claim, wframe, sim)
+
+        # slots matched count
+        slots = []
+        if (set(claim["entity"]) & set(wframe["entity"])): slots.append("entity")
+        if wframe["action"] != "unknown": slots.append("action")
+        if wframe["quantity"]: slots.append("quantity")
+        if wframe["year"]: slots.append("year")
+        if wframe["scope"] == "budget": slots.append("scope")
+
+        # score combines similarity + slot coverage; contradiction doesn't zero score (we want strong contradict too)
+        coverage = len(slots) / 5.0
+        base = min(0.6, sim * 0.8) + 0.4 * coverage
+        score = max(0.0, min(1.0, base))
+
+        quote = win_text[:360]
+        off_s, off_e = _best_offset(content, quote)
+
+        matches.append({
+            "label": label,             # entail/contradict/mixed/unrelated
+            "score": float(score),
+            "slots": slots,
+            "rules": rules,
+            "quote": quote,
+            "offset_start": off_s,
+            "offset_end": off_e,
+        })
+        if score > best_score:
+            best_score = score
+            best_frame = {
+                "entity": wframe["entity"],
+                "action": wframe["action"],
+                "quantity": wframe["quantity"],
+                "year": wframe["year"],
+                "scope": wframe["scope"],
+            }
+
+    # keep top 5 matches by score
+    matches.sort(key=lambda m: m.get("score", 0.0), reverse=True)
+    matches = matches[:5]
+    conf = float(best_score)
+    return {
+        "item_frame": best_frame,
+        "frame_matches": matches,
+        "frame_confidence": conf,
+    }
+
+--------------------------------------------------------------------------------
+P24 SCORING FORMULA BREAKDOWN:
+--------------------------------------------------------------------------------
+
+FRAME EXTRACTION:
+  Claim frame: {entity[], action, quantity[], year[], scope}
+  Window frame: {entity[], action, quantity[], year[], scope, neg, toks}
+
+  - entity: tokens > 2 chars from text
+  - action: detected from token matching (e.g., "increase", "decrease")
+  - quantity: extracted percent numbers
+  - year: extracted 4-digit years
+  - scope: "budget" if budget context words present, else "unknown"
+
+SLOT MATCHING:
+  slots = []
+  + "entity" if claim entities ∩ window entities
+  + "action" if window action != "unknown"
+  + "quantity" if window has quantity
+  + "year" if window has year
+  + "scope" if window scope == "budget"
+
+SCORE FORMULA (per window):
+  similarity = jaccard(claim_trigrams, window_trigrams)
+  if paraphrase_score > 0.3:
+    similarity = max(similarity, paraphrase_score * 0.8)
+
+  coverage = len(slots) / 5.0
+  base = min(0.6, similarity * 0.8) + 0.4 * coverage
+  score = clamp(base, 0.0, 1.0)
+
+FRAME CONFIDENCE:
+  frame_confidence = best_score (highest score across all windows)
+
+WHY 0.00 SCORES OCCUR:
+  - If similarity is 0.0 (no trigram overlap) AND
+  - coverage is 0.0 (no slots matched)
+  - Then: base = min(0.6, 0.0 * 0.8) + 0.4 * 0.0 = 0.0
+  - Result: frame_confidence = 0.0
+
+NO ML MODELS IN P24:
+  - All frame detection is rule-based
+  - Uses regex for entity/quantity/year extraction
+  - Uses token matching for action detection
+  - No transformer models loaded or called
+
+================================================================================
+PART 6: DIAGNOSTIC EVIDENCE - P23 SCORES
+================================================================================
+
+CLAIM: "Water boils at 100 degrees Celsius"
+
+USDA.GOV ARTICLE SCORES:
+  URL: https://ask.usda.gov/s/article/What-is-the-boiling-point-of-water
+  Domain: ask.usda.gov
+  Coverage: snippet_only
+
+  P23 (Semantic):
+    Item Grade: 0.150
+    Stance: unrelated
+    Grade Label: low
+
+  P24 (Frames):
+    Frame Confidence: 0.000
+
+  FINAL ITEM GRADE: 0.272
+
+  FORMULA: 0.40×semantic + 0.30×frame + 0.20×authority + 0.10×coverage
+         = 0.40×0.150 + 0.30×0.000 + 0.20×0.858 + 0.10×0.400
+         = 0.060 + 0.000 + 0.172 + 0.040
+         = 0.272
+
+AUTHORITY/CREDIBILITY:
+  Credibility: 0.720 (from P21)
+  Authority: 0.858
+  Tier: 1 (government source)
+
+OTHER ITEMS WITH HIGH SCORES:
+  Some items achieved:
+    - P23 item_grade: 0.619771648645401
+    - P23 stance: support
+    - P24 frame_confidence: 0.5788241958618164
+
+PATTERN OBSERVED:
+  - USDA.gov got 0.150 (P23) and 0.000 (P24)
+  - Other sources got 0.619 (P23) and 0.579 (P24)
+  - USDA.gov marked "unrelated" by P23
+
+ITEMS WITH 0.00 FRAME SCORES:
+  Multiple items in diagnostic show "Frame Confidence: 0.000"
+  Including:
+    - ask.usda.gov (appeared multiple times, all with 0.000)
+    - Other sources also showing 0.000 in several cases
+
+  Pattern: Frame score 0.00 often correlates with:
+    - P23 stance: unrelated
+    - P23 item_grade: low (0.150-0.410 range)
+    - But not always - some have medium P23 grades with 0.00 frame
+
+================================================================================
+PART 7: P21 vs P23 STANCE CONFLICTS
+================================================================================
+
+P21 STANCE DETECTION (intelligence/content/fullread.py):
+  Location: evaluate_full_evidence, line 300
+  Method:
+    1. Try frame-based detection first (_frame_based_stance)
+       - Uses extract_frame and compare_frames
+       - Returns "support", "challenge", "mixed", "unrelated"
+    2. Falls back to keyword-based detection (_stance_for_chunk)
+       - Regex search for _SUPPORT and _CHALLENGE patterns
+       - Returns "support", "challenge", "mixed", "unrelated"
+  Output field: item["stance_full"]
+
+P23 STANCE DETECTION (intelligence/content/semantic_read.py):
+  Location: analyze_item, lines 158-210
+  Method:
+    1. Initial keyword-based (_stance_for_window)
+       - Token set intersection with NEG_TOKENS and SUPPORT_VERBS
+       - Used for initial scoring
+    2. Cross-encoder entailment (get_entailment_stance)
+       - Applied AFTER windowing to top findings
+       - Uses NLI model for precise stance
+       - Returns "support", "challenge", "contextual_support", "unrelated"
+       - "contextual_support" mapped to "support"
+  Output: stored in finding["stance"] for each finding
+
+WHICH STANCE WINS?
+  Location: intelligence/content/grade.py:265
+  Code: item["stance"] = finding.get("features", {}).get("p23", {}).get("stance", "unrelated")
+
+  ANSWER: P23 stance is used as the final item stance
+  - P21 produces stance_full
+  - P23 produces stance (from first finding)
+  - Final item["stance"] comes from P23
+
+CONFLICT POTENTIAL:
+  - P21 uses frame-based + keyword fallback (simpler)
+  - P23 uses cross-encoder NLI model (more sophisticated)
+  - P23 can detect contextual support (nuanced)
+  - P21 cannot distinguish contextual from direct support
+
+  Conflict example from diagnostic:
+    - P21 stance_full: "unrelated" (USDA.gov)
+    - P23 stance: "unrelated" (USDA.gov)
+    - In this case: no conflict, both agree
+
+  But P21 and P23 CAN produce different stances because:
+    - P21 uses sliding window over full content (4 sentences, max 80 sentences)
+    - P23 uses sliding window over snippet (3 sentences)
+    - P21 has frame-based logic + keyword fallback
+    - P23 has keyword initial + entailment refinement
+
+================================================================================
+PART 8: MODEL DEPENDENCIES
+================================================================================
+
+P23 MODEL USAGE:
+  DIRECT MODEL LOADING IN semantic_read.py: NO
+  - No SentenceTransformer loaded
+  - No CrossEncoder loaded
+
+  INDIRECT MODEL USAGE: YES
+  - Imports: from intelligence.content.shared.embeddings import get_entailment_stance
+  - Imports: from intelligence.content.shared.paraphrases import paraphrase_match_score
+
+  MODELS LOADED (via embeddings.py):
+    1. Bi-encoder: SentenceTransformer('all-MiniLM-L6-v2')
+       - Used by: paraphrase_match_score indirectly
+       - Purpose: semantic similarity for paraphrase detection
+    2. Cross-encoder: CrossEncoder('cross-encoder/nli-deberta-v3-base')
+       - Used by: get_entailment_stance
+       - Purpose: stance detection via entailment
+
+  WHERE MODELS ARE CALLED:
+    Line 162: para_score = paraphrase_match_score(claim_text, win)
+    Line 205: entailment_result = get_entailment_stance(claim_text, quote)
+
+P24 MODEL USAGE:
+  DIRECT MODEL LOADING IN semantic_frames.py: NO
+  - No SentenceTransformer loaded
+  - No CrossEncoder loaded
+
+  INDIRECT MODEL USAGE: YES
+  - Imports: from intelligence.content.shared.paraphrases import paraphrase_match_score
+
+  MODELS LOADED (via paraphrases.py → embeddings.py):
+    1. Bi-encoder: SentenceTransformer('all-MiniLM-L6-v2')
+       - Used by: paraphrase_match_score
+       - Purpose: boost similarity score if paraphrase detected
+
+  WHERE MODELS ARE CALLED:
+    Line 234: paraphrase_score = paraphrase_match_score(claim_text, win_text)
+
+MODEL INITIALIZATION:
+  - Singleton pattern in embeddings.py (lines 175-183)
+  - Global _embeddings_instance created once
+  - Models loaded at first call to get_embeddings()
+  - Embedding cache maintained for performance
+
+================================================================================
+PART 9: ERROR HANDLING AND DEFAULTS
+================================================================================
+
+P23 ERROR HANDLING:
+  TRY/EXCEPT BLOCKS: NONE in semantic_read.py
+  - No explicit try/except in analyze_item
+  - No error catching in scoring logic
+
+  FALLBACK TO grade.py:
+    Location: grade.py:381-393
+    Code:
+      try:
+          p23_result = analyze_item(...)
+          features['p23'] = {...}
+          features['p23_available'] = True
+      except Exception as e:
+          features['p23'] = {'error': str(e)}
+
+    If P23 fails:
+      - Error stored in features['p23']['error']
+      - p23_available flag NOT set
+      - Fusion formula would skip P23 component
+
+  DEFAULT VALUES IN P23:
+    - No content: item_grade = 0.15 (line 117)
+    - Initial best score: 0.0 (line 131)
+    - Initial window base: 0.0 (line 166)
+    - Default stance: "unrelated" (from _stance_for_window)
+    - Empty findings: [] (line 116)
+
+P24 ERROR HANDLING:
+  TRY/EXCEPT BLOCKS: YES (limited)
+    Lines 82-83, 85-86, 92-93: Silent pass on float/int conversion
+    Lines 141-147: _quantity_compatible returns False on exception
+
+  FALLBACK TO grade.py:
+    Location: grade.py:396-406
+    Code:
+      try:
+          p24_result = analyze_frames(...)
+          features['p24'] = {...}
+          features['p24_available'] = True
+      except Exception as e:
+          features['p24'] = {'error': str(e)}
+
+    If P24 fails:
+      - Error stored in features['p24']['error']
+      - p24_available flag NOT set
+      - Fusion formula would skip P24 component
+
+  DEFAULT VALUES IN P24:
+    - Initial best_score: 0.0 (line 217)
+    - Initial best_frame: all empty/unknown (line 218)
+    - Window score clamped: max(0.0, min(1.0, base)) (line 252)
+    - Empty windows: [] if no content (line 222)
+    - frame_confidence: float(best_score) (line 279)
+
+SILENT FAILURE POTENTIAL:
+  P23: If entailment model fails, error would propagate up
+       - BUT: Models loaded at startup, so likely would fail earlier
+       - No silent 0.00 return on model failure
+
+  P24: If frame extraction fails, returns 0.0
+       - Quantity parsing: silently passes on error
+       - Year parsing: silently passes on error
+       - Frame comparison errors: caught and return False
+       - Result: Could return 0.0 frame_confidence without error
+
+USDA.GOV CASE:
+  - P23 returned 0.150 (not 0.0, so not empty content)
+  - P24 returned 0.000 (could be legitimate low score OR silent failure)
+  - No error messages in diagnostic
+  - Conclusion: Likely legitimate low scores, not errors
+
+================================================================================
+PART 10: ROOT CAUSE ANALYSIS - WHY USDA.GOV SCORED LOW
+================================================================================
+
+USDA.GOV ARTICLE ANALYSIS:
+  URL: https://ask.usda.gov/s/article/What-is-the-boiling-point-of-water
+  Coverage: snippet_only
+  P23 score: 0.150 (low)
+  P24 score: 0.000 (zero)
+  P23 stance: unrelated
+
+P23 LOW SCORE (0.150) ROOT CAUSES:
+
+1. COVERAGE PENALTY:
+   - Coverage: "snippet_only" → coverage_weight = 0.5
+   - Formula: item_grade = 0.6 * best_window + 0.4 * 0.5
+   - Even if best_window = 0.25, result = 0.6*0.25 + 0.4*0.5 = 0.35
+   - With best_window near 0, result approaches 0.4*0.5 = 0.20
+   - USDA got 0.150, suggesting best_window was very low
+
+2. PROBABLE WINDOW SCORING BREAKDOWN:
+   Window score formula:
+     base = 0.0
+     + 0.25 if entity_hit (entities = tokens > 2 chars)
+     + 0.25 if num_hit (100 would be detected)
+     + 0.15 if year_hit (no year in claim)
+     + min(0.35, (0.7*jaccard + 0.3*paraphrase) * 0.7)
+
+   Likely USDA.gov window:
+     - entity_hit: YES (water, celsius probably matched) → +0.25
+     - num_hit: POSSIBLY (if "100" detected) → +0.25
+     - year_hit: NO (no year in claim) → +0.00
+     - jaccard/paraphrase: LOW (different wording) → ~0.05
+     - Total: ~0.25 or ~0.50, but likely closer to 0.25
+
+   But 0.25 window → 0.6*0.25 + 0.4*0.5 = 0.35 item_grade
+   USDA got 0.150, so window must have been even lower
+
+   Revised calculation:
+     If best_window = 0.125:
+       0.6*0.125 + 0.4*0.5 = 0.075 + 0.20 = 0.275
+     If best_window = 0.0:
+       0.6*0.0 + 0.4*0.5 = 0.20
+
+     USDA got 0.150, which is BELOW the minimum expected with snippet_only (0.20)
+     This suggests content might have been empty or near-empty
+
+     But code shows: if no content → 0.15 default (line 117)
+     USDA score = 0.150 EXACTLY matches no-content default
+
+3. CONCLUSION FOR P23:
+   USDA.gov content was EMPTY or missing
+   - Got default score of 0.15 for no content
+   - Stance defaulted to "unrelated"
+   - No actual semantic analysis performed
+
+P24 ZERO SCORE (0.000) ROOT CAUSES:
+
+1. FRAME SCORE FORMULA:
+   base = min(0.6, similarity * 0.8) + 0.4 * coverage
+   coverage = len(slots) / 5.0
+
+   For 0.000:
+     - similarity must be 0.0 (no trigram overlap)
+     - coverage must be 0.0 (no slots matched)
+     - Result: base = min(0.6, 0) + 0.4*0 = 0.0
+
+2. WHY ZERO SIMILARITY:
+   - Trigram overlap between claim and window = 0
+   - Paraphrase score <= 0.3 (threshold for boost)
+   - No shared n-grams between texts
+
+3. WHY ZERO COVERAGE:
+   Slots:
+     - entity: claim entities ∩ window entities = empty
+     - action: window action = "unknown"
+     - quantity: window has no quantity extracted
+     - year: window has no year extracted
+     - scope: window scope != "budget"
+   Result: len(slots) = 0
+
+4. MOST LIKELY CAUSE:
+   If content was empty or snippet-only with minimal text:
+     - Few/no trigrams to match
+     - Entity extraction failed (tokens > 2 chars)
+     - No numbers extracted
+     - No action words detected
+     - Result: 0.000 frame confidence
+
+COMBINED ANALYSIS:
+  P23 score of 0.150 = NO CONTENT DEFAULT
+  P24 score of 0.000 = NO FRAME MATCHES (consistent with no content)
+
+  ROOT CAUSE: USDA.gov content field was empty or insufficient
+  - Coverage marked as "snippet_only"
+  - But even snippet was likely empty/missing
+  - P23 defaulted to 0.15 (no content path)
+  - P24 found no frames (expected with no content)
+
+ISSUE #1 EXPLANATION: "USDA marked unrelated despite being on-topic"
+  - Not a semantic analysis failure
+  - Content retrieval issue
+  - No text to analyze → default low score + "unrelated"
+  - Authority score (0.858) was high, but no content to grade
+
+ISSUE #2 EXPLANATION: "Quality sources getting 0.00 frame scores"
+  - If content is empty/minimal: expected behavior
+  - If content is present: frame extraction may be too strict
+  - P24 requires trigram overlap OR slot matches
+  - Zero score indicates both failed
+
+================================================================================
+SEARCH COMMANDS LOG
+================================================================================
+
+1. grep -rn "def analyze_item" intelligence/content/semantic_read.py
+2. grep -rn "analyze_item\(" intelligence/ --include="*.py"
+3. grep -rn "semantic.*score|entailment|similarity" intelligence/content/semantic_read.py
+4. grep -rn "threshold|THRESHOLD" intelligence/content/semantic_read.py
+5. grep -rn "entailment|nli|cross.*encoder" intelligence/content/semantic_read.py
+6. grep -rn "stance|support|challenge|unrelated" intelligence/content/semantic_read.py
+7. grep -n "semantic.*score.*=" intelligence/content/semantic_read.py
+8. grep -rn "def analyze_frames" intelligence/content/semantic_frames.py
+9. grep -rn "analyze_frames\(" intelligence/ --include="*.py"
+10. grep -rn "frame.*detect|extract.*frame" intelligence/content/semantic_frames.py
+11. grep -rn "frame.*confidence|frame.*score" intelligence/content/semantic_frames.py
+12. grep -rn "window|sliding" intelligence/content/semantic_frames.py
+13. grep -A 20 "P23 semantic analysis" diagnostic_20251021_182457.md
+14. grep -A 20 "semantic_score|analyze_item" diagnostic_20251021_182457.md
+15. grep -i "p23|item_grade" diagnostic_20251021_182457.md
+16. grep -B 5 -A 15 "usda.gov|ask.usda.gov" diagnostic_20251021_182457.md
+17. grep -i "P24|frame.*score|frame_confidence" diagnostic_20251021_182457.md
+18. grep -B 10 "Frame Confidence: 0\.000" diagnostic_20251021_182457.md
+19. grep -rn "def evaluate_full_evidence" intelligence/content/fullread.py
+20. grep -n "stance.*=" intelligence/content/fullread.py
+21. grep -n "stance.*=" intelligence/content/semantic_read.py
+22. grep -A 5 -B 5 'item\["stance"\]' intelligence/content/grade.py
+23. grep -rn "load.*model|SentenceTransformer|CrossEncoder" semantic_read.py
+24. grep -rn "load.*model|SentenceTransformer|CrossEncoder" semantic_frames.py
+25. grep -rn "\.encode\(|\.predict\(|\.score\(" semantic_read.py
+26. grep -rn "\.encode\(|\.predict\(|\.score\(" semantic_frames.py
+27. grep -n "try:|except" semantic_read.py
+28. grep -n "try:|except" semantic_frames.py
+29. grep -rn "default|fallback|0\.0|0\.00" semantic_read.py
+30. grep -rn "default|fallback|0\.0|0\.00" semantic_frames.py
+
+================================================================================
+END OF INVESTIGATION
+================================================================================
