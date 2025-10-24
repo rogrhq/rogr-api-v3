@@ -55,39 +55,67 @@ async def enrich_items_with_content(items: List[Dict[str, Any]], fetch_cache: Di
 
 async def fetch_missing_urls(urls: List[str], fetch_cache: Dict[str, str], timeout: float = 8.0) -> Dict[str, str]:
     """
-    Fetch URLs not in cache using async.
+    Fetch URLs not in cache using async with Selenium fallback.
+
+    Fallback chain:
+    1. httpx (fast, works for static content)
+    2. Selenium (slower, works for JS-rendered content)
+    3. Return empty and log error
 
     Args:
         urls: List of URLs to fetch
-        fetch_cache: Current cache to update
-        timeout: Timeout for each fetch
+        fetch_cache: Current cache
+        timeout: Timeout for httpx (default: 8.0s)
 
     Returns:
         Updated fetch_cache
     """
     from intelligence.content.fetch import fetch_text
 
+    missing = [u for u in urls if u not in fetch_cache]
+
+    if not missing:
+        return fetch_cache
+
+    LOG.info(f"[Fetch] Fetching {len(missing)} URLs")
+
+    # Stage 1: Try httpx for all URLs
     async def fetch_one(url: str) -> Tuple[str, str]:
         """Fetch a single URL and return (url, content)."""
         try:
-            result = await fetch_text(url, timeout=timeout)  # Fix 1: keyword argument
-            content = result.get('text', '')  # Fix 2: extract text from dict
+            result = await fetch_text(url, timeout=timeout)
+            content = result.get('text', '')
             return (url, content)
-        except Exception:
+        except Exception as e:
+            LOG.warning(f"[Fetch] httpx failed for {url}: {type(e).__name__}")
             return (url, '')
 
-    # Create tasks for all URLs
-    tasks = [fetch_one(url) for url in urls]
-
-    # Fetch all concurrently
+    tasks = [fetch_one(url) for url in missing]
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    # Update cache with results
+    # Stage 2: Check results and apply Selenium fallback
     for result in results:
         if isinstance(result, Exception):
             continue
+
         url, content = result
-        fetch_cache[url] = content
+
+        # Check content length
+        if len(content) < 100:
+            # Minimal content - try Selenium
+            LOG.warning(f"[Fetch] Minimal content ({len(content)} chars), trying Selenium: {url}")
+            content = await fetch_with_selenium(url, timeout=20)
+
+            if len(content) > 100:
+                LOG.info(f"[Fetch] Selenium success: {url} ({len(content)} chars)")
+                fetch_cache[url] = content
+            else:
+                LOG.error(f"[Fetch] Selenium also minimal ({len(content)} chars): {url}")
+                fetch_cache[url] = content  # May be empty
+        else:
+            # httpx succeeded with good content
+            LOG.info(f"[Fetch] httpx success: {url} ({len(content)} chars)")
+            fetch_cache[url] = content
 
     return fetch_cache
 
