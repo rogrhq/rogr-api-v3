@@ -15,7 +15,7 @@ LOG = logging.getLogger(__name__)
 
 async def enrich_items_with_content(items: List[Dict[str, Any]], fetch_cache: Dict[str, str]) -> Tuple[List[Dict[str, Any]], Dict[str, str]]:
     """
-    Enrich evidence items with full-text content.
+    Enrich evidence items with full-text content and fetch metadata.
 
     Args:
         items: List of evidence items (each has 'url', 'snippet', etc.)
@@ -35,7 +35,7 @@ async def enrich_items_with_content(items: List[Dict[str, Any]], fetch_cache: Di
     if missing_urls:
         fetch_cache = await fetch_missing_urls(missing_urls, fetch_cache)
 
-    # Enrich each item with content fields
+    # Enrich each item with content fields and metadata
     enriched_items = []
     for item in items:
         enriched_item = item.copy()
@@ -43,10 +43,27 @@ async def enrich_items_with_content(items: List[Dict[str, Any]], fetch_cache: Di
 
         # Get content from cache
         content = fetch_cache.get(url, '')
+
+        # Existing fields
         enriched_item['content'] = content
         enriched_item['content_chars'] = len(content)
-        enriched_item['content_hash'] = _compute_content_hash(content)
+        enriched_item['content_hash'] = _compute_content_hash(content) if content else ""
         enriched_item['coverage'] = _determine_coverage(enriched_item)
+
+        # NEW: Add fetch metadata based on content length
+        if len(content) > 100:
+            enriched_item['fetch_status'] = "success"
+            enriched_item['fetch_method'] = "httpx"  # Or "selenium" if that was used
+            enriched_item['fetch_error'] = None
+        elif len(content) > 0:
+            enriched_item['fetch_status'] = "minimal"
+            enriched_item['fetch_method'] = "httpx_or_selenium"
+            enriched_item['fetch_error'] = "Content length below threshold (100 chars)"
+        else:
+            enriched_item['fetch_status'] = "failed"
+            enriched_item['fetch_method'] = "unknown"
+            enriched_item['fetch_error'] = "Empty content returned"
+            LOG.error(f"⚠️  CONTENT EMPTY: {url}")
 
         enriched_items.append(enriched_item)
 
