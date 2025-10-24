@@ -5,6 +5,9 @@ import httpx
 import re
 import html as _html
 import os
+import logging
+
+LOG = logging.getLogger(__name__)
 
 __all__ = ["fetch_text", "html_to_text"]
 
@@ -61,6 +64,8 @@ def fetch_text(url: str, *, timeout: float = 8.0) -> Dict[str, Any]:
                             break
                         collected.extend(chunk)
                         if len(collected) >= max_bytes:
+                            # Location 6: Log truncation
+                            LOG.warning(f"[fetch_text] Truncating content: {url} ({len(collected)} chars, limit: {max_bytes})")
                             break
                     try:
                         text = collected.decode(r.encoding or "utf-8", errors="ignore")
@@ -70,5 +75,7 @@ def fetch_text(url: str, *, timeout: float = 8.0) -> Dict[str, Any]:
                 text = html_to_text(text)
             res = {"status": status, "content_type": ct, "text": text}
             return res
-    except Exception:
+    except Exception as e:
+        # Location 2: Add logging to exception handler
+        LOG.error(f"[fetch_text] Failed: {url} - {type(e).__name__}: {str(e)}")
         return {"status": 0, "content_type": "", "text": ""}
