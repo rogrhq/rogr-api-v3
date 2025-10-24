@@ -28,6 +28,9 @@ implementing full redesign.
 from __future__ import annotations
 from typing import List, Dict, Any, Tuple
 import math
+import logging
+
+LOG = logging.getLogger(__name__)
 
 from intelligence.content.extract_facts import (
     extract_fact_view, has_any, jaccard_trigrams,
@@ -286,6 +289,13 @@ def fuse_module_grades(features: dict, evidence_item: dict) -> float:
     - 20% credibility (P21)
     - 10% coverage quality
     """
+
+    # Check for failed fetch status - skip scoring
+    fetch_status = evidence_item.get('fetch_status')
+    if fetch_status == 'failed':
+        url = evidence_item.get('url', 'unknown')
+        LOG.warning(f"⏭️  Skipping failed fetch item: {url}")
+        return 0.0
 
     # Extract components
     # P23: Semantic similarity
