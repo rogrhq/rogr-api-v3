@@ -330,75 +330,95 @@ def _generate_semantic_queries_internal(
         if isinstance(num_unit, (list, tuple)) and len(num_unit) >= 2:
             values.append(f"{num_unit[0]} {num_unit[1]}")
 
-    # Build query candidates compositionally
+    # Build query candidates with ARM-SPECIFIC logic (NO shared queries)
     candidates = []
 
-    # 1. Full quoted claim (always high quality)
-    candidates.append(f'"{text}"')
+    if arm == "A":
+        # ========================================================================
+        # ARM A: SUPPORT QUERIES - seeking confirmation and evidence
+        # ========================================================================
+        logger.debug(f"Generating ARM A (support) queries for: {text}")
 
-    # 2. Concept-based queries
-    if concept:
-        candidates.append(concept)
+        # 1. Restate claim as exact phrase (seeking confirmation)
+        candidates.append(text)
 
-        if values:
-            candidates.append(f"{concept} {values[0]}")
-
-        if dimension:
+        # 2. Factual queries (neutral fact-seeking)
+        if concept and dimension:
             candidates.append(f"{concept} {dimension}")
+        elif concept:
+            candidates.append(concept)
 
-        if values and dimension:
-            candidates.append(f"{concept} {dimension} {values[0]}")
+        # 3. Evidence-seeking queries (explicitly support-oriented)
+        if concept:
+            candidates.append(f"{concept} evidence scientific")
+            candidates.append(f"{concept} confirmed established")
+            candidates.append(f"official {concept} standard")
+            candidates.append(f"{concept} data research")
 
-    # 3. Entity + relationship queries
-    if entities:
-        entity = entities[0] if isinstance(entities[0], str) else entities[0].get('name', '')
-
-        if entity:
-            if values:
+        # 4. Entity + value queries (factual references)
+        if entities and values:
+            entity = entities[0] if isinstance(entities[0], str) else entities[0].get('name', '')
+            if entity:
                 candidates.append(f"{entity} {values[0]}")
 
-            if dimension and values:
-                candidates.append(f"{entity} {dimension} {values[0]}")
+        # 5. Study/authority queries
+        if concept and dimension:
+            candidates.append(f"studies {concept} {dimension}")
 
-            if concept:
-                # Extract action verb from concept for natural phrasing
-                # "water boiling point" -> use "boiling"
-                concept_lower = concept.lower()
-                if "boiling" in concept_lower and values:
-                    candidates.append(f"{entity} boils at {values[0]}")
-                elif "melting" in concept_lower and values:
-                    candidates.append(f"{entity} melts at {values[0]}")
-                elif "freezing" in concept_lower and values:
-                    candidates.append(f"{entity} freezes at {values[0]}")
+    elif arm == "B":
+        # ========================================================================
+        # ARM B: CHALLENGE QUERIES - seeking exceptions and counterevidence
+        # ========================================================================
+        logger.debug(f"Generating ARM B (challenge) queries for: {text}")
 
-    # 4. Rule-based paraphrases (structural transformations)
-    if concept and values:
-        # "water boiling point 100 degrees" -> "100 degrees water boiling point"
-        candidates.append(f"{values[0]} {concept}")
+        # 1. Direct negation queries
+        if concept and dimension:
+            candidates.append(f"{concept} NOT {dimension}")
+        elif concept:
+            candidates.append(f"{concept} not always true")
 
-    if entities and concept:
-        entity = entities[0] if isinstance(entities[0], str) else entities[0].get('name', '')
-        if entity:
-            # "water" + "boiling point" -> "boiling point of water"
-            candidates.append(f"{concept} of {entity}")
+        # 2. Exception-seeking queries
+        if concept:
+            candidates.append(f"{concept} exceptions variations")
+            candidates.append(f"when {concept} different")
+            candidates.append(f"{concept} depends on conditions")
+            candidates.append(f"{concept} varies circumstances")
+            candidates.append(f"{concept} not always {dimension}" if dimension else f"{concept} not always")
 
-    # 5. Add intent-specific terms (differentiate support vs challenge)
-    if arm == "A":
-        # Support: data, measurement, scientific, official
-        intent_terms = ["data", "measurement", "scientific report"]
+        # 3. Context-specific challenge queries
+        # Try to identify domain-specific factors
+        if concept:
+            concept_lower = concept.lower()
+
+            # Physical properties: check for environmental factors
+            if any(x in concept_lower for x in ["boiling", "melting", "freezing", "temperature"]):
+                candidates.append(f"{concept} altitude pressure affect")
+                candidates.append(f"{concept} atmospheric conditions")
+
+            # Biological/chemical: check for variability
+            elif any(x in concept_lower for x in ["dosage", "effect", "reaction"]):
+                candidates.append(f"{concept} individual differences")
+                candidates.append(f"{concept} varies by person")
+
+            # Geographic/demographic: check for regional differences
+            elif any(x in concept_lower for x in ["population", "rate", "percentage"]):
+                candidates.append(f"{concept} regional differences")
+                candidates.append(f"{concept} varies by location")
+
+        # 4. Entity + challenge queries
+        if entities:
+            entity = entities[0] if isinstance(entities[0], str) else entities[0].get('name', '')
+            if entity and concept:
+                candidates.append(f"{entity} {concept} exceptions")
+
     else:
-        # Challenge: conditions, exceptions, variations
-        if strategy == "r1":
-            # R1 precision: specific counter-frames
-            intent_terms = ["actual value", "verify measurement"]
-        else:
-            # R2 recall: broad counter-frames
-            intent_terms = ["exceptions", "variations", "different conditions"]
-
-    # Append intent to concept-based queries
-    if concept:
-        for term in intent_terms[:2]:
-            candidates.append(f"{concept} {term}")
+        # Fallback for unknown arm (should not happen, but handle gracefully)
+        logger.warning(f"Unknown arm '{arm}', generating generic queries")
+        candidates.append(text)
+        if concept:
+            candidates.append(concept)
+        if concept and dimension:
+            candidates.append(f"{concept} {dimension}")
 
     # 6. Validate with bi-encoder
     emb = get_embeddings()  # Let this fail if embeddings not available
@@ -431,8 +451,9 @@ def _generate_semantic_queries_internal(
 
     result = [q for q, s in filtered[:top_n]]
 
-    logger.info(f"Generated {len(result)} {strategy} queries for arm {arm}")
-    logger.debug(f"Top query similarity: {filtered[0][1]:.3f}")
+    logger.info(f"✅ Generated {len(result)} {strategy} queries for arm {arm}")
+    logger.debug(f"   Top query similarity: {filtered[0][1]:.3f}")
+    logger.debug(f"   Queries: {result[:3]}...")  # Log first 3 queries for verification
 
     return result
 
