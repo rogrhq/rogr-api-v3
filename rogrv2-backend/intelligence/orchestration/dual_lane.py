@@ -1,5 +1,8 @@
 from typing import Dict, Any, Callable, Type
 import asyncio
+import logging
+
+LOG = logging.getLogger(__name__)
 
 async def run_dual_researchers(
     claim_text: str,
@@ -9,7 +12,7 @@ async def run_dual_researchers(
     telemetry_class: Type
 ) -> Dict[str, Any]:
     """
-    Orchestrate R1 and R2 independent runs.
+    Orchestrate R1 and R2 independent runs in parallel.
 
     Args:
         claim_text: Claim being fact-checked
@@ -34,15 +37,38 @@ async def run_dual_researchers(
     r1_plan, r1_config = diversify_fn(base_plan, "R1", claim_text, providers)
     r2_plan, r2_config = diversify_fn(base_plan, "R2", claim_text, providers)
 
-    # Run R1
-    r1_telemetry = telemetry_class("R1")
-    r1_result = await enrichment_pipeline(claim_text, r1_plan, "R1", r1_telemetry)
-    r1_telemetry_data = r1_telemetry.finalize()
+    LOG.info("🔀 Starting parallel researcher execution...")
 
-    # Run R2
+    # Create telemetry objects
+    r1_telemetry = telemetry_class("R1")
     r2_telemetry = telemetry_class("R2")
-    r2_result = await enrichment_pipeline(claim_text, r2_plan, "R2", r2_telemetry)
+
+    # Run R1 and R2 in parallel using asyncio.gather()
+    r1_task = enrichment_pipeline(claim_text, r1_plan, "R1", r1_telemetry)
+    r2_task = enrichment_pipeline(claim_text, r2_plan, "R2", r2_telemetry)
+
+    # Wait for both to complete, capturing exceptions
+    results = await asyncio.gather(r1_task, r2_task, return_exceptions=True)
+
+    # Handle R1 result
+    r1_result = results[0]
+    if isinstance(r1_result, Exception):
+        LOG.error(f"❌ R1 failed: {r1_result}")
+        raise r1_result
+
+    # Handle R2 result
+    r2_result = results[1]
+    if isinstance(r2_result, Exception):
+        LOG.error(f"❌ R2 failed: {r2_result}")
+        raise r2_result
+
+    # Finalize telemetry after both complete
+    r1_telemetry_data = r1_telemetry.finalize()
     r2_telemetry_data = r2_telemetry.finalize()
+
+    LOG.info(f"✅ Parallel execution complete")
+    LOG.info(f"   R1: {len(r1_result.get('evidence', {}).get('arm_A', []) + r1_result.get('evidence', {}).get('arm_B', []))} items")
+    LOG.info(f"   R2: {len(r2_result.get('evidence', {}).get('arm_A', []) + r2_result.get('evidence', {}).get('arm_B', []))} items")
 
     # Build researcher objects
     researchers = [
