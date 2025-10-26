@@ -443,40 +443,11 @@ def build_finding_v2(claim_text: str, arm: str, evidence_item: dict) -> dict:
 # ============================================================================
 
 def calculate_authority_score(url: str, credibility: float = 0.5) -> float:
-    """
-    Score source authority 0-1 based on domain.
+    """Calculate authority score from domain and credibility."""
+    from intelligence.content.fullread import _extract_base_domain
 
-    Authority tiers:
-    - Government (.gov): 1.0
-    - Education (.edu): 0.9
-    - Peer-reviewed journals: 0.85
-    - International organizations: 0.90-0.95
-    - Trusted news (Tier 1): 0.85 (Reuters, AP)
-    - Trusted news (Tier 2): 0.75 (NYT, BBC)
-    - Default: 0.5
-
-    Args:
-        url: Source URL
-        credibility: Existing credibility score (0-1) from P21
-
-    Returns:
-        Authority score 0-1 (combined domain + credibility)
-    """
-    from urllib.parse import urlparse
-
-    def extract_domain(url):
-        """Extract clean domain from URL"""
-        try:
-            parsed = urlparse(url)
-            domain = parsed.netloc.lower()
-            # Remove www. prefix
-            if domain.startswith('www.'):
-                domain = domain[4:]
-            return domain
-        except:
-            return ''
-
-    domain = extract_domain(url)
+    # Use shared base domain extraction (fixes subdomain bug)
+    domain = _extract_base_domain(url)
 
     # Domain-specific scores (most authoritative first)
     DOMAIN_SCORES = {
@@ -528,26 +499,19 @@ def calculate_authority_score(url: str, credibility: float = 0.5) -> float:
         'politifact.com': 0.88,
     }
 
-    # Check direct match
+    # Check DOMAIN_SCORES
     if domain in DOMAIN_SCORES:
         domain_score = DOMAIN_SCORES[domain]
+    elif domain.endswith('.gov'):
+        domain_score = 0.95
+    elif domain.endswith('.edu'):
+        domain_score = 0.85
+    elif domain.endswith('.org'):
+        domain_score = 0.60
     else:
-        # Check domain patterns
-        if domain.endswith('.gov'):
-            domain_score = 0.95  # Any .gov
-        elif domain.endswith('.edu'):
-            domain_score = 0.85  # Any .edu
-        elif domain.endswith('.org'):
-            domain_score = 0.60  # Generic .org (could be nonprofit or advocacy)
-        else:
-            domain_score = 0.50  # Default for unknown
+        domain_score = 0.50
 
-    # Combine domain score with existing credibility
-    # Domain = 60%, Credibility = 40%
+    # Calculate authority
     authority = 0.6 * domain_score + 0.4 * credibility
-
-    # Ensure 0-1 range
-    authority = max(0.0, min(1.0, authority))
-
-    return round(authority, 3)
+    return round(authority, 2)
 

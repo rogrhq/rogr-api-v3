@@ -16,6 +16,10 @@ from typing import Any, Dict, List, Tuple
 import re
 import math
 from urllib.parse import urlparse
+import tldextract
+import logging
+
+LOG = logging.getLogger(__name__)
 
 # Shared advanced text processing utilities
 from intelligence.content.shared.text_utils import normalize_text_advanced as _norm, tokenize_advanced as _tokens
@@ -216,77 +220,86 @@ def _entity_overlap(claim: str, text: str) -> float:
     inter = len(ct & tt)
     return inter / float(len(ct))
 
-def _credibility_from(url: str, text: str) -> Tuple[int, float, str]:
+def _extract_base_domain(url: str) -> str:
     """
-    Tier-based credibility scoring (IFCN compliant).
+    Extract base domain from URL for whitelist matching.
+
+    This function removes subdomains (www., en., m., mobile., etc.) and
+    returns only the base domain + TLD, properly handling compound TLDs.
+
+    Examples:
+        "https://en.wikipedia.org/..." → "wikipedia.org"
+        "https://m.wikipedia.org/..." → "wikipedia.org"
+        "https://www.bbc.co.uk/..." → "bbc.co.uk"
+        "https://news.bbc.co.uk/..." → "bbc.co.uk"
+
+    Args:
+        url: Full URL
 
     Returns:
-        (tier, score, category) where:
-        - tier: 1-4 (1=highest, 4=lowest)
-        - score: 0.30-0.90 (credibility score)
-        - category: Human-readable tier description
-
-    Tiers:
-        Tier 1 (0.85-0.90): Government, peer-reviewed, fact-checkers
-        Tier 2 (0.65-0.75): Educational, established references
-        Tier 3 (0.45-0.55): Has credentials, methodology
-        Tier 4 (0.20-0.30): No credibility signals
+        Base domain (e.g., "wikipedia.org")
     """
     try:
-        p = urlparse(url or "")
-        host = (p.hostname or "").lower()
+        # Use tldextract to handle compound TLDs
+        extracted = tldextract.extract(url)
 
-        # Remove www. prefix for matching
-        if host.startswith('www.'):
-            host = host[4:]
+        # Combine domain + suffix (TLD)
+        base_domain = f"{extracted.domain}.{extracted.suffix}"
 
-        # TIER 1: Check whitelist first for high-tier sources
-        if host in _ESTABLISHED_REFERENCES:
-            tier, score, category = _ESTABLISHED_REFERENCES[host]
-            return (tier, score, category)
-
-        # TIER 1: Government domains (.gov)
-        if host.endswith('.gov'):
-            return (1, 0.90, 'government source')
-
-        # TIER 1: Peer-reviewed content (detected in text)
-        text_lower = (text or "").lower()
-        if 'peer-reviewed' in text_lower or 'peer reviewed' in text_lower:
-            return (1, 0.85, 'peer-reviewed')
-
-        # TIER 2: Educational domains (.edu)
-        if host.endswith('.edu'):
-            # Check for personal pages (lower tier)
-            if '~' in url or '/~' in url or '/people/' in url:
-                return (3, 0.50, 'educational personal page')
-            return (2, 0.70, 'educational institution')
-
-        # TIER 3: Has author credentials
-        if any(re.search(p, text_lower) for p in [
-            r'\bdr\.\s+\w+',
-            r'\bprof\.\s+\w+',
-            r',\s*phd',
-            r',\s*md'
-        ]):
-            return (3, 0.50, 'credentialed author')
-
-        # TIER 3: Has methodology disclosure
-        if 'methodology' in text_lower or 'methods:' in text_lower:
-            # Check for citations too
-            has_citations = bool(re.search(
-                r'\[\d+\]|\(\w+\s+et\s+al\.?,?\s+\d{4}\)',
-                text_lower
-            ))
-            if has_citations:
-                return (3, 0.55, 'methodology with citations')
-            return (3, 0.50, 'methodology disclosed')
-
-        # TIER 4: No credibility signals detected
-        return (4, 0.30, 'no credibility signals')
+        return base_domain.lower()
 
     except Exception as e:
-        # Fallback on error
-        return (4, 0.30, f'error: {str(e)}')
+        LOG.warning(f"Failed to extract base domain from {url}: {e}")
+
+        # Fallback: simple parsing
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            host = parsed.netloc.lower()
+
+            # Remove port if present
+            if ':' in host:
+                host = host.split(':')[0]
+
+            # Simple subdomain removal (www. only)
+            if host.startswith('www.'):
+                host = host[4:]
+
+            return host
+
+        except Exception:
+            return ""
+
+def _credibility_from(url: str, text: str) -> Tuple[int, float, str]:
+    """Calculate credibility tier and score from URL/content."""
+
+    # Extract base domain for whitelist matching
+    base_domain = _extract_base_domain(url)
+
+    if not base_domain:
+        LOG.warning(f"Could not extract domain from URL: {url}")
+        return (4, 0.30, 'unknown')
+
+    # Check whitelist using BASE DOMAIN
+    if base_domain in _ESTABLISHED_REFERENCES:
+        tier, score, category = _ESTABLISHED_REFERENCES[base_domain]
+        LOG.debug(f"Whitelist match: {url} → {base_domain} → Tier {tier} ({category})")
+        return (tier, score, category)
+
+    # .gov domains
+    if base_domain.endswith('.gov'):
+        return (1, 0.85, 'government')
+
+    # .edu domains
+    if base_domain.endswith('.edu'):
+        return (2, 0.65, 'education')
+
+    # Peer-reviewed patterns in URL
+    if 'journal' in url.lower() or 'peer' in url.lower() or 'doi.org' in base_domain:
+        return (1, 0.85, 'peer-reviewed')
+
+    # Default
+    return (4, 0.30, 'unknown')
 
 
 def _credibility_score_only(url: str, text: str) -> float:

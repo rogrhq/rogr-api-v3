@@ -12,3 +12,4 @@ asyncpg>=0.29
 aiosqlite>=0.20
 selenium==4.15.2
 webdriver-manager==4.0.1
+tldextract==3.4.4  # For compound TLD handling (.co.uk, .com.au, etc.)
