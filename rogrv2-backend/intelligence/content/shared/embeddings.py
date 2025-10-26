@@ -5,6 +5,11 @@ Provides semantic similarity and entailment detection using pre-trained models.
 Designed to replace dictionary-based paraphrase matching with unlimited vocabulary.
 """
 
+# Fix tokenizer fork deadlock (Task 2.4)
+# CRITICAL: Must be set BEFORE importing transformers/sentence_transformers
+import os
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 from sentence_transformers import SentenceTransformer, CrossEncoder
 import numpy as np
 from functools import lru_cache
@@ -172,14 +177,16 @@ class SemanticEmbeddings:
         self.embedding_cache.clear()
 
 
-# Global singleton instance (loaded once at startup)
-_embeddings_instance = None
+# Global singleton instance (pre-loaded at import time to avoid fork issues)
+# CRITICAL: Models must be loaded BEFORE any parallel execution or process forking
+# This prevents deadlock when parallel R1/R2 researchers load models simultaneously
+print("Pre-loading semantic models at module import...")
+_embeddings_instance = SemanticEmbeddings()
+print("✓ Semantic models pre-loaded successfully")
 
 def get_embeddings() -> SemanticEmbeddings:
-    """Get or create the global embeddings instance."""
+    """Get the global embeddings instance (pre-loaded at import time)."""
     global _embeddings_instance
-    if _embeddings_instance is None:
-        _embeddings_instance = SemanticEmbeddings()
     return _embeddings_instance
 
 
