@@ -74,6 +74,7 @@ async def run_dual_researchers(
     researchers = [
         {
             "id": "R1",
+            "lane_id": "R1",
             "verdict": r1_result.get("verdict", {}),
             "evidence": r1_result.get("evidence", {}),
             "lane_config": r1_config,
@@ -81,6 +82,7 @@ async def run_dual_researchers(
         },
         {
             "id": "R2",
+            "lane_id": "R2",
             "verdict": r2_result.get("verdict", {}),
             "evidence": r2_result.get("evidence", {}),
             "lane_config": r2_config,

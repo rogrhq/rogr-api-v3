@@ -2,6 +2,7 @@ from __future__ import annotations
 import sys
 from typing import Any, Dict, List, Tuple
 import math
+from intelligence.content.fullread import _extract_base_domain
 
 def _item_strength(it: Dict[str, Any]) -> float:
     """
@@ -164,23 +165,17 @@ def calculate_diversity_score(items: list) -> float:
     Returns:
         Diversity score 0-1
     """
-    from urllib.parse import urlparse
-
     if not items or len(items) == 0:
         return 0.0
 
-    # Extract domains
+    # Extract domains using base domain extraction
     domains = []
     for item in items:
         url = item.get('url', '')
-        try:
-            parsed = urlparse(url)
-            domain = parsed.netloc.lower()
-            if domain.startswith('www.'):
-                domain = domain[4:]
-            domains.append(domain)
-        except:
-            continue
+        if url:
+            domain = _extract_base_domain(url)
+            if domain:  # Only add if extraction succeeded
+                domains.append(domain)
 
     if not domains:
         return 0.0

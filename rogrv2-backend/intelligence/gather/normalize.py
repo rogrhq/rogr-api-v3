@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import List, Dict, Any, Tuple
 from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 import re
+from intelligence.content.fullread import _extract_base_domain
 
 __all__ = ["dedupe", "normalize_candidates"]
 
@@ -20,14 +21,8 @@ _WORD_RE = re.compile(r"[A-Za-z0-9%]+")
 
 
 def _extract_domain(u: str) -> str:
-    try:
-        p = urlparse(u or "")
-        host = (p.netloc or "").lower()
-        if host.startswith("www."):
-            host = host[4:]
-        return host
-    except Exception:
-        return ""
+    """Extract base domain from URL using tldextract."""
+    return _extract_base_domain(u or "")
 
 
 def _canonical_url(u: str) -> str:

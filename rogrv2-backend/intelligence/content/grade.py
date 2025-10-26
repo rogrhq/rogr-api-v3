@@ -269,6 +269,23 @@ def attach_finding_to_item(claim_text: str, arm: str, item: Dict[str, Any]) -> D
     item["credibility"] = finding.get("features", {}).get("p21", {}).get("credibility", 0.5)
     item["credibility_tier"] = finding.get("features", {}).get("p21", {}).get("credibility_tier", 4)
     item["credibility_category"] = finding.get("features", {}).get("p21", {}).get("credibility_category", "unknown")
+
+    # Extract quote from P23 matched_text
+    matched_text = finding.get("features", {}).get("p23", {}).get("matched_text", "")
+    if matched_text:
+        # Limit quote length to 200 characters for display
+        if len(matched_text) > 200:
+            item["quote"] = matched_text[:197] + "..."
+        else:
+            item["quote"] = matched_text
+    else:
+        # Fallback to snippet if no matched_text
+        snippet = item.get("snippet", "")
+        if snippet:
+            item["quote"] = snippet[:200] if len(snippet) > 200 else snippet
+        else:
+            item["quote"] = ""
+
     item["finding"] = finding
     return item
 

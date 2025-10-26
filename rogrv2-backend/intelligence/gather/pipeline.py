@@ -11,6 +11,7 @@ from intelligence.consensus.metrics import compute_overlap_conflict
 from intelligence.score.labeling import score_from_evidence, map_score_to_label
 from intelligence.util import diag
 from intelligence.gather.counter_frames import generate_counter_frame_queries, compute_coverage_metrics
+from intelligence.content.fullread import _extract_base_domain
 
 
 def _canonical_arm_label(arm_def: Dict[str, Any], idx: int) -> str:
@@ -433,16 +434,8 @@ def quality_gate(candidates: list) -> tuple:
     }
 
     def extract_domain(url):
-        """Extract domain from URL"""
-        try:
-            parsed = urlparse(url)
-            domain = parsed.netloc.lower()
-            # Remove www. prefix
-            if domain.startswith('www.'):
-                domain = domain[4:]
-            return domain
-        except:
-            return ''
+        """Extract base domain from URL using tldextract."""
+        return _extract_base_domain(url)
 
     def is_english(text):
         """Simple English detection - filters out obviously non-English content"""
