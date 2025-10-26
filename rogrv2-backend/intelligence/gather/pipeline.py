@@ -56,7 +56,9 @@ async def _exec_plan_for_arm(full_plan: Dict[str, Any], arm_def: Dict[str, Any],
         # Validate first query (most important)
         first_query = queries[0]
         refined_query, validated_results, refinement_count = await validate_query_results(
-            claim_text, claim_entities, claim_numbers, first_query, raw, max_retries=2  # Full retry mode
+            claim_text, claim_entities, claim_numbers, first_query, raw, max_retries=2,
+            arm_label=arm_label,  # Pass actual arm label
+            arm_intent=arm_def.get("intent", "support")  # Pass actual intent
         )
 
         if diag.enabled() and refinement_count > 0:
@@ -512,7 +514,8 @@ def quality_gate(candidates: list) -> tuple:
 # ============================================================================
 
 async def validate_query_results(claim_text: str, claim_entities: list, claim_numbers: list,
-                          query: str, results: list, max_retries: int = 2) -> tuple:
+                          query: str, results: list, max_retries: int = 2,
+                          arm_label: str = "A", arm_intent: str = "support") -> tuple:
     """
     Check if query returned on-topic results; refine if not.
 
@@ -587,8 +590,8 @@ async def validate_query_results(claim_text: str, claim_entities: list, claim_nu
         refined_plan = {
             "version": "v2",
             "arms": [{
-                "name": "refined",
-                "intent": "support",
+                "name": arm_label,      # Use actual arm label (A or B)
+                "intent": arm_intent,   # Use actual intent (support or challenge)
                 "queries": [refined_query]
             }]
         }
@@ -606,7 +609,8 @@ async def validate_query_results(claim_text: str, claim_entities: list, claim_nu
             # Recursive call with refined query and new results
             final_query, final_results, child_count = await validate_query_results(
                 claim_text, claim_entities, claim_numbers,
-                refined_query, new_results, max_retries - 1
+                refined_query, new_results, max_retries - 1,
+                arm_label=arm_label, arm_intent=arm_intent  # Preserve arm info in recursion
             )
             return (final_query, final_results, child_count + 1)
         else:
