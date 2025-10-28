@@ -335,81 +335,164 @@ def _generate_semantic_queries_internal(
 
     if arm == "A":
         # ========================================================================
-        # ARM A: SUPPORT QUERIES - seeking confirmation and evidence
+        # ARM A: SUPPORT QUERIES - seeking confirmation and authoritative evidence
+        # Strategy: Target textbooks, standards, peer-reviewed sources with precise values
         # ========================================================================
         logger.debug(f"Generating ARM A (support) queries for: {text}")
 
-        # 1. Restate claim as exact phrase (seeking confirmation)
+        # Always include the full claim text
         candidates.append(text)
 
-        # 2. Factual queries (neutral fact-seeking)
-        if concept and dimension:
-            candidates.append(f"{concept} {dimension}")
-        elif concept:
-            candidates.append(concept)
-
-        # 3. Evidence-seeking queries (explicitly support-oriented)
-        if concept:
-            candidates.append(f"{concept} evidence scientific")
-            candidates.append(f"{concept} confirmed established")
-            candidates.append(f"official {concept} standard")
-            candidates.append(f"{concept} data research")
-
-        # 4. Entity + value queries (factual references)
-        if entities and values:
+        # TIER 1: Exact Value + Authority Source Queries
+        # Target academic and reference materials with specific values
+        if values and entities:
             entity = entities[0] if isinstance(entities[0], str) else entities[0].get('name', '')
             if entity:
-                candidates.append(f"{entity} {values[0]}")
+                # Educational sources with exact values
+                candidates.append(f'"{values[0]}" {entity} textbook')
+                candidates.append(f'"{values[0]}" {entity} chemistry handbook')
+                candidates.append(f'{entity} {values[0]} scientific reference')
 
-        # 5. Study/authority queries
+                # Standards organizations
+                candidates.append(f'{entity} {values[0]} standard definition')
+                candidates.append(f'official {entity} {values[0]} specification')
+
+        # TIER 2: Concept + Dimension with Domain Expertise
+        # Target domain experts and educational materials
         if concept and dimension:
-            candidates.append(f"studies {concept} {dimension}")
+            candidates.append(f'{concept} {dimension} peer reviewed')
+            candidates.append(f'{concept} {dimension} established science')
+            candidates.append(f'{concept} {dimension} university')
+            candidates.append(f'{concept} {dimension} handbook')
+        elif concept:
+            candidates.append(f'{concept} peer reviewed')
+
+        # TIER 3: Quantitative Precision Queries
+        # Include alternative unit representations for scientific precision
+        if values and concept:
+            candidates.append(f'{concept} exactly {values[0]}')
+            candidates.append(f'{concept} measured {values[0]}')
+
+            # Temperature conversion for celsius/fahrenheit
+            if values[0] and any(unit in str(values[0]).lower() for unit in ['celsius', 'fahrenheit']):
+                try:
+                    num_str = ''.join(c for c in str(values[0]) if c.isdigit() or c == '.')
+                    if num_str:
+                        value_num = float(num_str)
+                        if 'celsius' in str(values[0]).lower():
+                            kelvin = value_num + 273.15
+                            candidates.append(f'{concept} {kelvin} kelvin')
+                except (ValueError, AttributeError):
+                    pass
+
+        # TIER 4: Research Evidence Queries
+        # Target primary research and experimental data
+        if concept:
+            candidates.append(f'{concept} experimental measurement')
+            candidates.append(f'{concept} published study')
+            candidates.append(f'{concept} research findings')
+
+        # TIER 5: Authority Domain Queries
+        # Explicitly target high-credibility domains
+        if concept and dimension:
+            candidates.append(f'{concept} {dimension} .edu')
+            candidates.append(f'{concept} {dimension} .gov')
+            candidates.append(f'{concept} {dimension} scientific consensus')
 
     elif arm == "B":
         # ========================================================================
-        # ARM B: CHALLENGE QUERIES - seeking exceptions and counterevidence
+        # ARM B: CHALLENGE QUERIES - seeking context, limitations, and exceptions
+        # Strategy: Target conditions, edge cases, variability factors, contextual dependencies
         # ========================================================================
         logger.debug(f"Generating ARM B (challenge) queries for: {text}")
 
-        # 1. Direct negation queries
+        # Always include the full claim text
+        candidates.append(text)
+
+        # TIER 1: Context-Dependency Queries
+        # Explicitly seek conditional and contextual information (AVOID exact value mentions)
         if concept and dimension:
-            candidates.append(f"{concept} NOT {dimension}")
-        elif concept:
-            candidates.append(f"{concept} not always true")
+            candidates.append(f'{concept} pressure altitude effects')
+            candidates.append(f'{dimension} varies environmental conditions')
+            candidates.append(f'{concept} different elevations')
+            candidates.append(f'{dimension} atmospheric pressure relationship')
+            if entities:
+                entity = entities[0] if isinstance(entities[0], str) else entities[0].get('name', '')
+                candidates.append(f'{entity} {concept} varying pressures')
 
-        # 2. Exception-seeking queries
+        # TIER 2: Exception-Seeking Queries
+        # Target specific counter-examples and edge cases (focus on variations, not values)
         if concept:
-            candidates.append(f"{concept} exceptions variations")
-            candidates.append(f"when {concept} different")
-            candidates.append(f"{concept} depends on conditions")
-            candidates.append(f"{concept} varies circumstances")
-            candidates.append(f"{concept} not always {dimension}" if dimension else f"{concept} not always")
+            candidates.append(f'non-standard conditions {concept}')
+            candidates.append(f'{concept} exceptional cases')
+            candidates.append(f'{concept} real world variations')
+            candidates.append(f'factors affecting {concept}')
 
-        # 3. Context-specific challenge queries
-        # Try to identify domain-specific factors
+            if dimension:
+                candidates.append(f'{dimension} variability')
+
+        # TIER 3: Variability Factor Queries
+        # Seek factors that cause deviation from claimed value
+        if concept and dimension:
+            candidates.append(f'{concept} {dimension} factors affecting')
+            candidates.append(f'{concept} {dimension} environmental effects')
+            candidates.append(f'{concept} {dimension} measurement conditions')
+            candidates.append(f'{concept} {dimension} depends on purity')
+
+        # TIER 4: Comparative/Nuance Queries
+        # Find discussions of complexity and context-dependency (avoid exact value)
+        if concept:
+            candidates.append(f'{concept} complexity contextual factors')
+            candidates.append(f'{concept} simplified vs actual')
+            candidates.append(f'{concept} depends on multiple variables')
+
+        # TIER 5: Scientific Nuance Queries
+        # Target advanced discussions of factors and variables
+        if concept:
+            candidates.append(f'{concept} variables influence')
+            candidates.append(f'{concept} factors determine')
+            candidates.append(f'{concept} conditions required')
+
+        # TIER 6: Domain-Specific Challenge Patterns
+        # Specialized patterns based on claim type
         if concept:
             concept_lower = concept.lower()
 
-            # Physical properties: check for environmental factors
-            if any(x in concept_lower for x in ["boiling", "melting", "freezing", "temperature"]):
-                candidates.append(f"{concept} altitude pressure affect")
-                candidates.append(f"{concept} atmospheric conditions")
+            # Physical phase transitions (pressure/purity dependent)
+            if any(x in concept_lower for x in ["boiling", "melting", "freezing", "phase"]):
+                candidates.append(f'{concept} pressure dependence')
+                candidates.append(f'{concept} altitude effect')
+                candidates.append(f'{concept} phase diagram')
+                candidates.append(f'{concept} impurities effect')
+                if dimension:
+                    candidates.append(f'{concept} {dimension} atmospheric pressure')
 
-            # Biological/chemical: check for variability
-            elif any(x in concept_lower for x in ["dosage", "effect", "reaction"]):
-                candidates.append(f"{concept} individual differences")
-                candidates.append(f"{concept} varies by person")
+            # Medical/biological (individual variability)
+            elif any(x in concept_lower for x in ["dosage", "drug", "medicine", "treatment"]):
+                candidates.append(f'{concept} individual variation')
+                candidates.append(f'{concept} patient factors')
+                candidates.append(f'{concept} contraindications')
+                candidates.append(f'{concept} side effects')
 
-            # Geographic/demographic: check for regional differences
-            elif any(x in concept_lower for x in ["population", "rate", "percentage"]):
-                candidates.append(f"{concept} regional differences")
-                candidates.append(f"{concept} varies by location")
+            # Statistical claims (methodology dependent)
+            elif any(x in concept_lower for x in ["rate", "percentage", "statistics", "population"]):
+                candidates.append(f'{concept} methodology differences')
+                candidates.append(f'{concept} sampling bias')
+                candidates.append(f'{concept} demographic factors')
+                candidates.append(f'{concept} regional variation')
 
-        # 4. Entity + challenge queries
-        if entities:
+            # Chemical reactions (conditions matter)
+            elif any(x in concept_lower for x in ["reaction", "chemical", "catalyst"]):
+                candidates.append(f'{concept} reaction conditions')
+                candidates.append(f'{concept} temperature dependence')
+                candidates.append(f'{concept} catalyst effects')
+
+        # TIER 7: Entity + Contextual Queries
+        if entities and concept:
             entity = entities[0] if isinstance(entities[0], str) else entities[0].get('name', '')
-            if entity and concept:
-                candidates.append(f"{entity} {concept} exceptions")
+            if entity:
+                candidates.append(f'{entity} {concept} context dependent')
+                candidates.append(f'{entity} {concept} varying conditions')
 
     else:
         # Fallback for unknown arm (should not happen, but handle gracefully)
