@@ -95,6 +95,40 @@ async def run_single_lane_enrichment(
                 import traceback
                 traceback.print_exc()
 
+    # FIX-5: Filter items by stance to preserve adversarial design
+    # Each arm should only contain evidence that aligns with its mission
+    # This happens AFTER P23 assigns stances, BEFORE aggregation
+
+    pre_filter_arm_a_count = len(evidence.get("arm_A", []))
+    pre_filter_arm_b_count = len(evidence.get("arm_B", []))
+
+    # Arm A mission: Find support evidence
+    evidence["arm_A"] = [
+        item for item in evidence.get("arm_A", [])
+        if item.get("stance", "unrelated").lower() in ["support", "neutral"]
+    ]
+
+    # Arm B mission: Find challenge evidence
+    evidence["arm_B"] = [
+        item for item in evidence.get("arm_B", [])
+        if item.get("stance", "unrelated").lower() in ["challenge", "refute", "neutral"]
+    ]
+
+    # Log filtering results
+    post_filter_arm_a_count = len(evidence["arm_A"])
+    post_filter_arm_b_count = len(evidence["arm_B"])
+
+    if pre_filter_arm_a_count > post_filter_arm_a_count:
+        filtered_a = pre_filter_arm_a_count - post_filter_arm_a_count
+        print(f"[Stance Filter] Arm A: Removed {filtered_a} misaligned items ({pre_filter_arm_a_count} → {post_filter_arm_a_count})", file=sys.stderr)
+
+    if pre_filter_arm_b_count > post_filter_arm_b_count:
+        filtered_b = pre_filter_arm_b_count - post_filter_arm_b_count
+        print(f"[Stance Filter] Arm B: Removed {filtered_b} misaligned items ({pre_filter_arm_b_count} → {post_filter_arm_b_count})", file=sys.stderr)
+
+    # Note: If an arm ends up with <5 items, that's valid information
+    # It means weak evidence for that position, which should affect the verdict
+
     # P25: Aggregate
     try:
         verdict = aggregate_verdict(
@@ -209,6 +243,96 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
 
     # Extract researchers
     researchers = dual_result.get("researchers", [])
+
+    # Build aggregation metadata from researchers' verdicts (FIX-4)
+    # Note: Design spec describes compute_aggregation() function which doesn't exist.
+    # Actual implementation uses aggregate_verdict() which computes same data.
+    # This extracts and reformats for diagnostic transparency.
+    aggregation_metadata = {}
+    if len(researchers) >= 2:
+        r1_verdict = researchers[0].get("verdict", {})
+        r2_verdict = researchers[1].get("verdict", {})
+        r1_evidence = researchers[0].get("evidence", {})
+        r2_evidence = researchers[1].get("evidence", {})
+
+        # Extract arm strengths from verdicts (averaged across R1 and R2)
+        r1_arm_strength = r1_verdict.get("arm_strength", {})
+        r2_arm_strength = r2_verdict.get("arm_strength", {})
+
+        arm_a_strength = (r1_arm_strength.get("support", 0) + r2_arm_strength.get("support", 0)) / 2
+        arm_b_strength = (r1_arm_strength.get("challenge", 0) + r2_arm_strength.get("challenge", 0)) / 2
+        arm_a_base = (r1_arm_strength.get("support_base", 0) + r2_arm_strength.get("support_base", 0)) / 2
+        arm_b_base = (r1_arm_strength.get("challenge_base", 0) + r2_arm_strength.get("challenge_base", 0)) / 2
+
+        # Extract quality multipliers (averaged across R1 and R2)
+        r1_multipliers = r1_verdict.get("quality_multipliers", {})
+        r2_multipliers = r2_verdict.get("quality_multipliers", {})
+
+        avg_diversity = (r1_multipliers.get("diversity", 1.0) + r2_multipliers.get("diversity", 1.0)) / 2
+        avg_consistency = (r1_multipliers.get("consistency", 1.0) + r2_multipliers.get("consistency", 1.0)) / 2
+        avg_breadth = (r1_multipliers.get("breadth", 1.0) + r2_multipliers.get("breadth", 1.0)) / 2
+
+        # Compute per-arm average item grades
+        arm_a_items = r1_evidence.get("arm_A", []) + r2_evidence.get("arm_A", [])
+        arm_b_items = r1_evidence.get("arm_B", []) + r2_evidence.get("arm_B", [])
+
+        arm_a_grades = [item.get("item_grade", 0) for item in arm_a_items if item.get("item_grade", 0) > 0]
+        arm_b_grades = [item.get("item_grade", 0) for item in arm_b_items if item.get("item_grade", 0) > 0]
+
+        avg_grade_a = sum(arm_a_grades) / len(arm_a_grades) if arm_a_grades else 0.0
+        avg_grade_b = sum(arm_b_grades) / len(arm_b_grades) if arm_b_grades else 0.0
+
+        # Compute per-arm domain diversity
+        from intelligence.content.fullread import _extract_base_domain
+
+        def compute_domain_diversity(items):
+            """Calculate unique domains / total items for one arm"""
+            domains = []
+            for item in items:
+                url = item.get('url', '')
+                if url:
+                    domain = _extract_base_domain(url)
+                    if domain:
+                        domains.append(domain)
+            if not domains:
+                return 0.0
+            unique = len(set(domains))
+            total = len(domains)
+            return unique / total
+
+        arm_a_domain_diversity = compute_domain_diversity(arm_a_items)
+        arm_b_domain_diversity = compute_domain_diversity(arm_b_items)
+
+        # Build aggregation structures matching diagnostic expectations
+        # Enhancement: Include individual R1/R2 values for full transparency
+        aggregation_metadata = {
+            "arm_A_aggregation": {
+                "arm_strength": float(arm_a_strength),              # AVERAGED (consensus uses this)
+                "r1_arm_strength": float(r1_arm_strength.get("support", 0)),  # R1's individual value
+                "r2_arm_strength": float(r2_arm_strength.get("support", 0)),  # R2's individual value
+                "base_strength": float(arm_a_base),
+                "r1_base_strength": float(r1_arm_strength.get("support_base", 0)),
+                "r2_base_strength": float(r2_arm_strength.get("support_base", 0)),
+                "avg_grade": float(avg_grade_a),
+                "domain_diversity": float(arm_a_domain_diversity),
+                "consistency": float(avg_consistency),     # Global multiplier
+                "breadth": float(avg_breadth),            # Global multiplier
+                "diversity": float(avg_diversity)          # Global multiplier (for transparency)
+            },
+            "arm_B_aggregation": {
+                "arm_strength": float(arm_b_strength),              # AVERAGED (consensus uses this)
+                "r1_arm_strength": float(r1_arm_strength.get("challenge", 0)),  # R1's individual value
+                "r2_arm_strength": float(r2_arm_strength.get("challenge", 0)),  # R2's individual value
+                "base_strength": float(arm_b_base),
+                "r1_base_strength": float(r1_arm_strength.get("challenge_base", 0)),
+                "r2_base_strength": float(r2_arm_strength.get("challenge_base", 0)),
+                "avg_grade": float(avg_grade_b),
+                "domain_diversity": float(arm_b_domain_diversity),
+                "consistency": float(avg_consistency),     # Global multiplier
+                "breadth": float(avg_breadth),            # Global multiplier
+                "diversity": float(avg_diversity)          # Global multiplier (for transparency)
+            }
+        }
 
     # Compute consensus (P27)
     if len(researchers) >= 2:
@@ -358,7 +482,8 @@ async def run_preview(text: str, test_mode: bool = False) -> Dict[str, Any]:
         "evidence": dual_result.get("evidence", {}),
         "researchers": researchers,
         "consensus": consensus,  # NEW
-        "summary": summary
+        "summary": summary,
+        **aggregation_metadata  # FIX-4: Unpack arm_A_aggregation and arm_B_aggregation
     }
 
     # Compute overall verdict from consensus
