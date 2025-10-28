@@ -95,24 +95,49 @@ async def run_single_lane_enrichment(
                 import traceback
                 traceback.print_exc()
 
-    # FIX-5: Filter items by stance to preserve adversarial design
-    # Each arm should only contain evidence that aligns with its mission
+    # FIX-5: Intelligent stance filtering to preserve adversarial design
+    # Each arm should prioritize aligned evidence but maintain minimum threshold
     # This happens AFTER P23 assigns stances, BEFORE aggregation
 
     pre_filter_arm_a_count = len(evidence.get("arm_A", []))
     pre_filter_arm_b_count = len(evidence.get("arm_B", []))
 
     # Arm A mission: Find support evidence
-    evidence["arm_A"] = [
+    # Keep support and neutral, filter only strong contradictions
+    arm_a_filtered = [
         item for item in evidence.get("arm_A", [])
         if item.get("stance", "unrelated").lower() in ["support", "neutral"]
     ]
 
+    # Safety check: Keep minimum 3 items per arm
+    # If filtering is too aggressive, keep highest-graded items
+    if len(arm_a_filtered) < 3 and len(evidence.get("arm_A", [])) >= 3:
+        # Keep original set sorted by item_grade
+        arm_a_sorted = sorted(evidence.get("arm_A", []),
+                             key=lambda x: x.get("item_grade", 0),
+                             reverse=True)
+        evidence["arm_A"] = arm_a_sorted[:max(3, len(arm_a_filtered))]
+        print(f"[Stance Filter] Arm A: Filtering too aggressive, keeping top {len(evidence['arm_A'])} by grade", file=sys.stderr)
+    else:
+        evidence["arm_A"] = arm_a_filtered
+
     # Arm B mission: Find challenge evidence
-    evidence["arm_B"] = [
+    # Keep challenge/refute and neutral, filter only strong support
+    arm_b_filtered = [
         item for item in evidence.get("arm_B", [])
         if item.get("stance", "unrelated").lower() in ["challenge", "refute", "neutral"]
     ]
+
+    # Safety check: Keep minimum 3 items per arm
+    if len(arm_b_filtered) < 3 and len(evidence.get("arm_B", [])) >= 3:
+        # Keep original set sorted by item_grade
+        arm_b_sorted = sorted(evidence.get("arm_B", []),
+                             key=lambda x: x.get("item_grade", 0),
+                             reverse=True)
+        evidence["arm_B"] = arm_b_sorted[:max(3, len(arm_b_filtered))]
+        print(f"[Stance Filter] Arm B: Filtering too aggressive, keeping top {len(evidence['arm_B'])} by grade", file=sys.stderr)
+    else:
+        evidence["arm_B"] = arm_b_filtered
 
     # Log filtering results
     post_filter_arm_a_count = len(evidence["arm_A"])
@@ -126,8 +151,8 @@ async def run_single_lane_enrichment(
         filtered_b = pre_filter_arm_b_count - post_filter_arm_b_count
         print(f"[Stance Filter] Arm B: Removed {filtered_b} misaligned items ({pre_filter_arm_b_count} → {post_filter_arm_b_count})", file=sys.stderr)
 
-    # Note: If an arm ends up with <5 items, that's valid information
-    # It means weak evidence for that position, which should affect the verdict
+    # Note: Minimum 3 items per arm ensures sufficient evidence for verdict
+    # If an arm has <3 after filtering, we keep highest-quality original items
 
     # P25: Aggregate
     try:
