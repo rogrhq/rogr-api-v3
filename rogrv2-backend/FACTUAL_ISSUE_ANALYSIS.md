@@ -2022,3 +2022,140 @@ if stance_value == 'refute':
 **Overall Assessment:**
 Fix 5 successfully improved query intelligence and evidence gathering. The stance negation issue was always present but is now more visible because we're finding better sources that explicitly refute false claims. This is actually a sign of success - the system is now sophisticated enough to find authoritative refutations, it just needs to recognize them as such.
 
+
+---
+
+## ISSUE 6: DETAILED FIX SPECIFICATION
+
+### Exact Implementation Steps
+
+#### Step 1: Integrate intelligent stance detector into P23
+
+**File:** `intelligence/content/semantic_read.py`
+**Location:** Lines 200-210 (inside the `analyze_item` function)
+
+**Current Code:**
+```python
+# Line 206-210 (approximately)
+stance_value = entailment_result.get("stance", "unrelated")
+
+if stance_value == "contextual_support":
+    stance_value = "support"
+finding["stance"] = stance_value
+```
+
+**Replace with:**
+```python
+# Get NLI model stance
+nli_stance = entailment_result.get("stance", "unrelated")
+
+# Use intelligent heuristic stance detector (handles negation)
+from intelligence.analyze.stance import assess_stance
+heuristic_result = assess_stance(claim_text, item)
+heuristic_stance = heuristic_result['stance']
+
+# Map heuristic output to NLI vocabulary
+# heuristic uses: 'support', 'refute', 'neutral'
+# NLI uses: 'support', 'challenge', 'unrelated'
+if heuristic_stance == 'refute':
+    heuristic_stance = 'challenge'
+elif heuristic_stance == 'neutral':
+    heuristic_stance = 'unrelated'
+
+# Decision logic: Heuristic overrides NLI for negation cases
+if heuristic_stance == 'challenge' and nli_stance in ['support', 'contextual_support']:
+    # Heuristic detected negation/refutation that NLI missed
+    stance_value = 'challenge'
+    finding['stance_method'] = 'heuristic_override'
+    finding['stance_reason'] = heuristic_result.get('notes', '')
+elif nli_stance == 'contextual_support':
+    stance_value = 'support'
+    finding['stance_method'] = 'nli'
+else:
+    # Use NLI for other cases (it's good at entailment/semantic overlap)
+    stance_value = nli_stance
+    finding['stance_method'] = 'nli'
+
+finding["stance"] = stance_value
+```
+
+#### Step 2: Add import at top of file
+
+**File:** `intelligence/content/semantic_read.py`
+**Location:** Top of file with other imports
+
+**Add:**
+```python
+from intelligence.analyze.stance import assess_stance
+```
+
+#### Step 3: Test the fix
+
+**Test Command:**
+```bash
+python3 diagnostic_comprehensive.py --claim "COVID vaccines cause autism"
+```
+
+**Expected Results:**
+- CDC "Vaccines do not cause autism" → stance: "challenge" ✅
+- PMC "The myth of vaccination" → stance: "challenge" ✅
+- Verdict: "refutes" or "false" ✅ (not "mixed")
+
+#### Step 4: Validation checklist
+
+- [ ] CDC source correctly labeled as "challenge"
+- [ ] PMC source correctly labeled as "challenge"  
+- [ ] Arm A finds 0-1 sources (no support for false claim)
+- [ ] Arm B finds 5+ sources (many refutations)
+- [ ] Final verdict: "refutes" (not "mixed")
+- [ ] Test with "Water boils at 100°C" still works correctly
+
+### Alternative: Simpler Override Approach
+
+If the above is too complex, use this simpler version:
+
+**File:** `intelligence/content/semantic_read.py`
+**Location:** Lines 200-210
+
+**Replace with:**
+```python
+# Line 206-210
+stance_value = entailment_result.get("stance", "unrelated")
+
+# Apply intelligent negation detection override
+from intelligence.analyze.stance import assess_stance
+heuristic = assess_stance(claim_text, item)
+
+# If heuristic detects refutation but NLI says support, trust heuristic
+if heuristic['stance'] == 'refute' and stance_value in ['support', 'contextual_support']:
+    stance_value = 'challenge'
+
+# Normalize contextual_support
+if stance_value == "contextual_support":
+    stance_value = "support"
+    
+finding["stance"] = stance_value
+```
+
+This simpler version:
+- Uses heuristic ONLY to override obvious mistakes (negation detection)
+- Preserves NLI for all other cases
+- Minimal change, lower risk
+- Solves the immediate problem
+
+### Why This Fix Works
+
+1. **Heuristic detector is proven:** Already tested, correctly detects negation
+2. **NLI is preserved:** Still used for non-negation cases (good at entailment)
+3. **Override only when needed:** Heuristic overrides NLI only for negation conflicts
+4. **Low risk:** Existing function, just needs to be called
+5. **Targeted fix:** Solves COVID vaccine case without breaking water boiling case
+
+### Implementation Priority
+
+**IMMEDIATE** - This is a one-file, ~10 line change that fixes critical medical misinformation handling.
+
+**Estimated Time:** 15 minutes to implement + 10 minutes to test = 25 minutes total
+
+**Risk Level:** LOW (using existing, tested function)
+
