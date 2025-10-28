@@ -14,6 +14,47 @@ from intelligence.gather.counter_frames import generate_counter_frame_queries, c
 from intelligence.content.fullread import _extract_base_domain
 
 
+def _deduplicate_across_arms(all_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Remove duplicate URLs across arms, keeping the instance with highest quality score.
+
+    This is a simple filter operation that:
+    1. Groups items by URL
+    2. For duplicates, keeps the one with highest 'score' field
+    3. Returns filtered list (preserves all item fields including 'arm' label)
+
+    Uses the fast-ranking score from normalize_candidates() which measures
+    title/snippet quality (numbers, percentages, text density).
+    """
+    from collections import defaultdict
+    import sys
+
+    url_to_items = defaultdict(list)
+    for item in all_items:
+        url = item.get('url', '')
+        if url:
+            url_to_items[url].append(item)
+
+    deduplicated = []
+    for url, items in url_to_items.items():
+        if len(items) == 1:
+            # No duplicate - keep it
+            deduplicated.append(items[0])
+        else:
+            # Duplicate found - keep the one with highest quality score
+            best_item = max(items, key=lambda x: x.get('score', 0.0))
+            deduplicated.append(best_item)
+
+            # Log deduplication decision for transparency
+            for item in items:
+                status = "KEPT" if item == best_item else "REMOVED"
+                print(f"⚠️  Deduplication [{status}]: {url[:60]}... "
+                      f"Arm {item.get('arm')}, Score: {item.get('score', 0.0):.3f}",
+                      file=sys.stderr)
+
+    return deduplicated
+
+
 def _canonical_arm_label(arm_def: Dict[str, Any], idx: int) -> str:
     """
     Map arbitrary arm names/intents to canonical labels 'A' or 'B'.
@@ -194,6 +235,11 @@ async def build_evidence_for_claim(claim_text: str, plan: Dict[str, Any], claim_
     armA_raw, armB_raw = _group_by_arm(labeled_cands)
     armA_norm = normalize_candidates(armA_raw)
     armB_norm = normalize_candidates(armB_raw)
+
+    # 2.5) Cross-arm deduplication (items now have 'score' field from normalize_candidates)
+    all_items = armA_norm + armB_norm
+    all_items_deduped = _deduplicate_across_arms(all_items)
+    armA_norm, armB_norm = _group_by_arm(all_items_deduped)
 
     # Phase 2.1: Fast filter - remove obviously unrelated (ADDED)
     if claim_entities is None:
