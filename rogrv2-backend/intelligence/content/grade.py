@@ -266,9 +266,14 @@ def attach_finding_to_item(claim_text: str, arm: str, item: Dict[str, Any]) -> D
     item["item_grade"] = finding["item_grade"]
     item["authority"] = finding.get("features", {}).get("authority", {}).get("score", 0.5)
     item["stance"] = finding.get("features", {}).get("p23", {}).get("stance", "unrelated")
+    item["semantic_score"] = finding.get("features", {}).get("p23", {}).get("item_grade", 0.0)
     item["credibility"] = finding.get("features", {}).get("p21", {}).get("credibility", 0.5)
     item["credibility_tier"] = finding.get("features", {}).get("p21", {}).get("credibility_tier", 4)
     item["credibility_category"] = finding.get("features", {}).get("p21", {}).get("credibility_category", "unknown")
+    # Extract P24 frame analysis results
+    p24_features = finding.get("features", {}).get("p24", {})
+    item["frame_score"] = p24_features.get("frame_confidence", 0.0)
+    item["frame_matches"] = p24_features.get("frame_matches", [])
 
     # Extract quote from P23 matched_text
     matched_text = finding.get("features", {}).get("p23", {}).get("matched_text", "")
