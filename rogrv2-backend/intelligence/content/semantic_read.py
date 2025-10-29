@@ -15,6 +15,8 @@ from intelligence.content.shared.paraphrases import paraphrase_match_score, find
 from intelligence.content.shared.semantic_depth import check_negation_agreement, detect_hedging
 from intelligence.content.shared.numeric_precision import extract_and_match_numbers
 from intelligence.content.shared.embeddings import get_entailment_stance
+# Issue 6 Fix: Intelligent stance detector for negation handling
+from intelligence.analyze.stance import assess_stance
 
 _APOS = re.compile(r"['׳`´]")
 _PUNCT = re.compile(r"[^a-z0-9\s]")
@@ -198,16 +200,34 @@ def analyze_item(claim_text: str, item: Dict[str,Any], *, window: int = 3, stanc
     findings.sort(key=lambda f: f.get("score", 0.0), reverse=True)
     findings = findings[:5]
 
-    # Re-compute stance on top findings using cross-encoder entailment
+    # Re-compute stance on top findings using intelligent stance detector
+    # (handles negation, numeric conflicts, refutation markers, support cues, adversative language)
     for finding in findings:
         quote = finding.get("quote", "")
         if quote and quote.strip():
-            entailment_result = get_entailment_stance(claim_text, quote)
-            stance_value = entailment_result.get("stance", "unrelated")
-            # Map contextual_support to support for downstream compatibility
-            if stance_value == "contextual_support":
-                stance_value = "support"
+            # Use intelligent stance detector - this was built for this purpose
+            # Create minimal item structure from the quote
+            temp_item = {
+                "title": item.get("title", ""),
+                "snippet": quote
+            }
+            stance_result = assess_stance(claim_text, temp_item)
+
+            # Map intelligent detector output to downstream vocabulary
+            # assess_stance returns: 'support' | 'refute' | 'neutral'
+            # Downstream expects: 'support' | 'challenge' | 'unrelated'
+            stance_mapping = {
+                'support': 'support',
+                'refute': 'challenge',
+                'neutral': 'unrelated'
+            }
+            stance_value = stance_mapping.get(stance_result['stance'], 'unrelated')
+
+            # Store stance with transparency metadata
             finding["stance"] = stance_value
+            finding["stance_score"] = stance_result['stance_score']
+            finding["stance_flags"] = stance_result['contradiction_flags']
+            finding["stance_reasoning"] = stance_result['notes']
 
     item["findings"] = findings
 
@@ -233,15 +253,37 @@ def analyze_item(claim_text: str, item: Dict[str,Any], *, window: int = 3, stanc
                 item["numeric_mismatch"] = True
                 item["numeric_precision"] = number_match
 
-        # Phase 9.2: Negation agreement check
-        negation_check = check_negation_agreement(claim_text, evidence_window)
-        if negation_check.get('semantic_flip'):
-            # Flip stance of best finding if negation mismatch
-            if best_finding.get('stance') == 'support':
-                best_finding['stance'] = 'challenge'
-            elif best_finding.get('stance') == 'challenge':
-                best_finding['stance'] = 'support'
-            item["negation_flip"] = True
+        # Phase 9.2: Negation agreement check (DISABLED FOR ISSUE 6 FIX TESTING)
+        #
+        # REASON FOR DISABLING:
+        # Phase 9.2 was a POST-HOC correction for NLI stance detection failures.
+        # With Issue 6 fix (intelligent stance detector), stances are ALREADY CORRECT
+        # from the start (line 203-230), so Phase 9.2 would flip them BACK to wrong values.
+        #
+        # EXAMPLE OF DOUBLE-FLIP PROBLEM:
+        #   Claim: "COVID vaccines cause autism"
+        #   Evidence: "Vaccines do NOT cause autism"
+        #
+        #   Line 214: assess_stance() → stance = "challenge" (CORRECT)
+        #   Line 254: Phase 9.2 detects flip → flips "challenge" to "support" (WRONG!)
+        #
+        # TESTING PLAN:
+        #   1. Test with Phase 9.2 disabled (this code)
+        #   2. Verify negation cases work correctly
+        #   3. If tests pass, permanently remove Phase 9.2 in next commit
+        #   4. If tests fail, investigate and add guard condition
+        #
+        # STATUS: Disabled for testing (2025-10-28)
+        # TODO: Remove permanently after successful test battery
+        #
+        # negation_check = check_negation_agreement(claim_text, evidence_window)
+        # if negation_check.get('semantic_flip'):
+        #     # Flip stance of best finding if negation mismatch
+        #     if best_finding.get('stance') == 'support':
+        #         best_finding['stance'] = 'challenge'
+        #     elif best_finding.get('stance') == 'challenge':
+        #         best_finding['stance'] = 'support'
+        #     item["negation_flip"] = True
 
         # Phase 9.3: Hedging penalty
         evidence_hedging = detect_hedging(evidence_window)
