@@ -1,0 +1,234 @@
+[10:48:24.324] ================================================================================
+[10:48:24.324] COMPREHENSIVE PRODUCTION PIPELINE DIAGNOSTIC
+[10:48:24.324] ================================================================================
+[10:48:24.324] Test Claim: Water boils at 100 degrees Celsius
+[10:48:24.324] 
+[10:48:24.324] >>> PIPELINE EXECUTION START
+[10:48:24.324] 
+[10:48:24.324] --------------------------------------------------------------------------------
+[10:48:24.324] Phase 0: Importing Pipeline Components
+[10:48:24.324] --------------------------------------------------------------------------------
+[10:48:34.674]   Imports completed in 10.350s
+[10:48:34.677] 
+[10:48:34.677] --------------------------------------------------------------------------------
+[10:48:34.677] Phase 1: Claim Enrichment
+[10:48:34.677] --------------------------------------------------------------------------------
+[10:48:34.677]   Enrichment completed in 0.000s
+[10:48:34.677] 
+[10:48:34.677]   Enrichment Results:
+[10:48:34.677]     • Concept: 'water boiling point'
+[10:48:34.677]     • Dimension: 'temperature'
+[10:48:34.677]     • Entities: ['Water', 'Celsius']
+[10:48:34.677]     • Numbers: {'percents': [], 'years': [], 'number_units': []}
+[10:48:34.677]     • Cues: {'has_negation': False, 'has_comparison': False, 'has_attribution': False}
+[10:48:34.677]     • Kind: statement
+[10:48:34.677] 
+[10:48:34.677]   Enrichment Quality Assessment:
+[10:48:34.677]     • Concept populated: ✓
+[10:48:34.677]     • Dimension detected: ✓
+[10:48:34.677]     • Entities extracted: ✓
+[10:48:34.677] 
+[10:48:34.677] --------------------------------------------------------------------------------
+[10:48:34.677] Phase 2: Full Pipeline Execution
+[10:48:34.677] --------------------------------------------------------------------------------
+[10:48:34.677]   Executing run_preview()...
+[10:50:33.315]   Pipeline execution completed in 118.637s
+[10:50:33.316] 
+[10:50:33.316] --------------------------------------------------------------------------------
+[10:50:33.316] Phase 3: Result Structure Analysis
+[10:50:33.316] --------------------------------------------------------------------------------
+[10:50:33.316]   Top-level keys:
+[10:50:33.316]     • claims
+[10:50:33.316]     • run_manifest
+[10:50:33.316]     • diversified
+[10:50:33.316]     • overall
+[10:50:33.316] 
+[10:50:33.316]   Claim result keys:
+[10:50:33.316]     • id
+[10:50:33.316]     • text
+[10:50:33.316]     • tier
+[10:50:33.316]     • verdict
+[10:50:33.316]     • evidence
+[10:50:33.316]     • researchers
+[10:50:33.316]     • consensus
+[10:50:33.316]     • summary
+[10:50:33.316]     • arm_A_aggregation
+[10:50:33.316]     • arm_B_aggregation
+[10:50:33.316] 
+[10:50:33.316] --------------------------------------------------------------------------------
+[10:50:33.316] Phase 4: Verdict Information
+[10:50:33.316] --------------------------------------------------------------------------------
+[10:50:33.316]   Label: mixed
+[10:50:33.316]   Confidence: 0.588
+[10:50:33.316] 
+[10:50:33.316] --------------------------------------------------------------------------------
+[10:50:33.316] Phase 5: Evidence Analysis
+[10:50:33.316] --------------------------------------------------------------------------------
+[10:50:33.316]   Arm A (Support-Seeking): 3 items
+[10:50:33.316]   Arm B (Challenge-Seeking): 3 items
+[10:50:33.316]   Total evidence items: 6
+[10:50:33.316] 
+[10:50:33.316]   Arm A Evidence Details:
+[10:50:33.316]     Item 1:
+[10:50:33.316]       • URL: https://usgs.gov/observatories/yvo/news/how-hot-are-yellowstones-boiling-waters-some-are-hotter-others
+[10:50:33.316]       • Domain: usgs.gov
+[10:50:33.316]       • Authority: 0.920
+[10:50:33.316]       • Semantic Score: 0.639
+[10:50:33.316]       • Frame Score: 0.534
+[10:50:33.316]       • Item Grade: 0.700
+[10:50:33.316]       • Stance: challenge
+[10:50:33.316]       • Credibility: 0.850 (Tier 1)
+[10:50:33.316] 
+[10:50:33.316]     Item 2:
+[10:50:33.316]       • URL: https://pmc.ncbi.nlm.nih.gov/articles/PMC10361150/
+[10:50:33.316]       • Domain: nih.gov
+[10:50:33.316]       • Authority: 0.870
+[10:50:33.316]       • Semantic Score: 0.629
+[10:50:33.316]       • Frame Score: 0.558
+[10:50:33.316]       • Item Grade: 0.693
+[10:50:33.316]       • Stance: unrelated
+[10:50:33.316]       • Credibility: 0.680 (Tier 1)
+[10:50:33.316] 
+[10:50:33.316]     Item 3:
+[10:50:33.316]       • URL: https://en.wikipedia.org/wiki/Boiling_point
+[10:50:33.316]       • Domain: wikipedia.org
+[10:50:33.316]       • Authority: 0.640
+[10:50:33.316]       • Semantic Score: 0.642
+[10:50:33.316]       • Frame Score: 0.611
+[10:50:33.316]       • Item Grade: 0.668
+[10:50:33.316]       • Stance: unrelated
+[10:50:33.316]       • Credibility: 0.550 (Tier 3)
+[10:50:33.316] 
+[10:50:33.316] 
+[10:50:33.316]   Arm B Evidence Details:
+[10:50:33.317]     Item 1:
+[10:50:33.317]       • URL: https://pubmed.ncbi.nlm.nih.gov/18853575/
+[10:50:33.317]       • Domain: nih.gov
+[10:50:33.317]       • Authority: 0.870
+[10:50:33.317]       • Semantic Score: 0.631
+[10:50:33.317]       • Frame Score: 0.529
+[10:50:33.317]       • Item Grade: 0.685
+[10:50:33.317]       • Stance: challenge
+[10:50:33.317]       • Credibility: 0.680 (Tier 1)
+[10:50:33.317] 
+[10:50:33.317]     Item 2:
+[10:50:33.317]       • URL: https://physics.stackexchange.com/questions/313186/is-the-boiling-point-of-water-really-100c-if-so-how-come-water-evaporates-at
+[10:50:33.317]       • Domain: stackexchange.com
+[10:50:33.317]       • Authority: 0.420
+[10:50:33.317]       • Semantic Score: 0.643
+[10:50:33.317]       • Frame Score: 0.641
+[10:50:33.317]       • Item Grade: 0.633
+[10:50:33.317]       • Stance: unrelated
+[10:50:33.317]       • Credibility: 0.300 (Tier 4)
+[10:50:33.317] 
+[10:50:33.317]     Item 3:
+[10:50:33.317]       • URL: https://mountainhouse.com/blogs/backpacking-hiking/effects-of-altitude-on-water-boiling-time
+[10:50:33.317]       • Domain: mountainhouse.com
+[10:50:33.317]       • Authority: 0.420
+[10:50:33.317]       • Semantic Score: 0.638
+[10:50:33.317]       • Frame Score: 0.609
+[10:50:33.317]       • Item Grade: 0.622
+[10:50:33.317]       • Stance: unrelated
+[10:50:33.317]       • Credibility: 0.300 (Tier 4)
+[10:50:33.317] 
+[10:50:33.317] 
+[10:50:33.317] --------------------------------------------------------------------------------
+[10:50:33.317] Phase 6: Aggregation Metrics
+[10:50:33.317] --------------------------------------------------------------------------------
+[10:50:33.317]   Arm A Aggregation:
+[10:50:33.317]     • Base Strength: 0.622
+[10:50:33.317]     • Final Strength: 0.000
+[10:50:33.317]     • Item Count: 0
+[10:50:33.317] 
+[10:50:33.317]   Arm B Aggregation:
+[10:50:33.317]     • Base Strength: 0.622
+[10:50:33.317]     • Final Strength: 0.000
+[10:50:33.317]     • Item Count: 0
+[10:50:33.317] 
+[10:50:33.317] --------------------------------------------------------------------------------
+[10:50:33.317] Phase 7: Consensus Logic
+[10:50:33.317] --------------------------------------------------------------------------------
+[10:50:33.317]   Consensus Label: insufficient
+[10:50:33.317]   Consensus Confidence: 0.763
+[10:50:33.317] 
+[10:50:33.317] --------------------------------------------------------------------------------
+[10:50:33.317] Phase 8: Dual Researcher System
+[10:50:33.317] --------------------------------------------------------------------------------
+[10:50:33.317]   Number of researchers: 2
+[10:50:33.317]   Researcher 1 (unknown):
+[10:50:33.317]     • Verdict: {'label': 'mixed', 'confidence': 0.5875217065813548, 'arm_strength': {'support': 0.5670554776029568, 'challenge': 0.5642662916998787, 'support_base': 0.6246273835442283, 'challenge_base': 0.6215550176793879, 'balance': 0.002789185903078084}, 'quality_multipliers': {'diversity': 0.917, 'consistency': 1.0, 'breadth': 0.99}}
+[10:50:33.317]     • Confidence: 0.000
+[10:50:33.317]     • Evidence Count: 0
+[10:50:33.317]   Researcher 2 (unknown):
+[10:50:33.317]     • Verdict: {'label': 'mixed', 'confidence': 0.5730800275166348, 'arm_strength': {'support': 0.5640787123024612, 'challenge': 0.5665461555047268, 'support_base': 0.6188479978041216, 'challenge_base': 0.6215550176793879, 'balance': -0.0024674432022655512}, 'quality_multipliers': {'diversity': 0.917, 'consistency': 1.0, 'breadth': 0.994}}
+[10:50:33.317]     • Confidence: 0.000
+[10:50:33.317]     • Evidence Count: 0
+[10:50:33.317] 
+[10:50:33.317] <<< PIPELINE EXECUTION END (duration: 128.994s)
+[10:50:33.317] 
+[10:50:33.322] 
+[10:50:33.322] ╔══════════════════════════════════════════════════════════════════════════════╗
+[10:50:33.322] ║                                                                              ║
+[10:50:33.322] ║                    END USER OUTPUT - ROGR VERDICT                           ║
+[10:50:33.322] ║                                                                              ║
+[10:50:33.322] ╚══════════════════════════════════════════════════════════════════════════════╝
+[10:50:33.322] 
+[10:50:33.322] Verdict: MIXED
+[10:50:33.322] Confidence: 59%
+[10:50:33.322] 
+[10:50:33.322] Claim: "Water boils at 100 degrees Celsius"
+[10:50:33.322] 
+[10:50:33.322] Summary:
+[10:50:33.322] Claim: Water boils at 100 degrees Celsius Evidence summary — support:0,
+[10:50:33.322] refute:0, neutral:4. Top sources considered: How hot are Yellowstone's
+[10:50:33.322] boiling waters? Some are hotter than ... — usgs.gov; The Myth of the
+[10:50:33.322] Boiling Point - PMC — nih.gov; The myth of the boiling point - PubMed —
+[10:50:33.322] nih.gov. Method: A/B search arms, deduplication, lexical ranking, stance
+[10:50:33.322] and quality scoring, consensus aggregation.
+[10:50:33.322] 
+[10:50:33.322] ✓ SUPPORTING EVIDENCE (3 sources)
+[10:50:33.322] 
+[10:50:33.322] 1. How hot are Yellowstone's boiling waters? Some are hotter than ... (usgs.gov)
+[10:50:33.322]    Grade: 70/100 | Authority: Government (⭐⭐⭐⭐)
+[10:50:33.322]    "Jul 11, 2022 ... ... gov website. Share sensitive information only on official ... As the temperature of the water approaches the boiling point of pure water ..."
+[10:50:33.322]    [Read full article: https://usgs.gov/observatories/yvo/news/how-hot-are-yellowstones-boiling-waters-some-are-hotter-others]
+[10:50:33.322] 
+[10:50:33.322] 2. The Myth of the Boiling Point - PMC (nih.gov)
+[10:50:33.322]    Grade: 69/100 | Authority: Government (⭐⭐⭐⭐)
+[10:50:33.322]    "Around 1800, many reputable scientists reported significant variations in the temperature of pure water boiling under normal atmospheric pressure. The reported variations included a difference of <str"
+[10:50:33.322]    [Read full article: https://pmc.ncbi.nlm.nih.gov/articles/PMC10361150/]
+[10:50:33.322] 
+[10:50:33.322] 3. Boiling point - Wikipedia (wikipedia.org)
+[10:50:33.322]    Grade: 66/100 | Authority: Collaborative Reference (⭐⭐⭐)
+[10:50:33.322]    "There are two conventions regarding the standard boiling point of water: The normal boiling point is commonly given as <strong>100 °C (212 °F)</strong> (actually 99.97 °C (211.9 °F) following the ther"
+[10:50:33.322]    [Read full article: https://en.wikipedia.org/wiki/Boiling_point]
+[10:50:33.322] 
+[10:50:33.322] ⚠️  IMPORTANT CONTEXT (3 sources)
+[10:50:33.322] 
+[10:50:33.322] 1. The myth of the boiling point - PubMed (nih.gov)
+[10:50:33.322]    Grade: 68/100 | Authority: Government (⭐⭐⭐⭐)
+[10:50:33.322]    "The reported variations included <strong>a difference of over 1 degree C between boiling in metallic and glass vessels (Gay-Lussac), and &quot;superheating&quot; up to 112 degrees C on extracting diss"
+[10:50:33.322]    [Read full article: https://pubmed.ncbi.nlm.nih.gov/18853575/]
+[10:50:33.322] 
+[10:50:33.322] 2. thermodynamics - Is the boiling point of water really 100°C? If so, how come water evaporates at lower temperatures? - Physics Stack Exchange (stackexchange.com)
+[10:50:33.322]    Grade: 63/100 | Authority: Unknown (⭐⭐)
+[10:50:33.322]    "This boiling we do in the kitchen kettle is the bubble that forms at the bottom and rises to the surface and breaks. <strong>If the temperature is below 100⁰ C, any attempt to form gas bubble would fa"
+[10:50:33.322]    [Read full article: https://physics.stackexchange.com/questions/313186/is-the-boiling-point-of-water-really-100c-if-so-how-come-water-evaporates-at]
+[10:50:33.322] 
+[10:50:33.322] 3. How Does High Altitude Affect the Boiling Point of Water? (mountainhouse.com)
+[10:50:33.322]    Grade: 62/100 | Authority: Unknown (⭐⭐)
+[10:50:33.322]    "<strong>At a higher elevation, the lower atmospheric pressure means heated water reaches its boiling point more quickly</strong>—i.e., at a lower temperature. Water at sea level boils at 212 degrees F"
+[10:50:33.322]    [Read full article: https://mountainhouse.com/blogs/backpacking-hiking/effects-of-altitude-on-water-boiling-time]
+[10:50:33.322] 
+[10:50:33.322] Research Quality:
+[10:50:33.322]   • Source Diversity: 5 unique authoritative domains
+[10:50:33.322]   • Source Authority: 69% average
+[10:50:33.322]   • Researchers had differing conclusions
+[10:50:33.322] 
+[10:50:33.322] Processing Time: 129.0 seconds
+[10:50:33.322] Evidence Items Analyzed: 0 candidates → 6 selected
+[10:50:33.322] 
+[10:50:33.322] ────────────────────────────────────────────────────────────────────────────────
+[10:50:33.322] 
+[10:50:33.322] Test completed successfully!
+[10:50:33.322] Output saved to: /Users/txtk/Documents/ROGR/github/rogrv2-backend/Refactor 5/PIPELINE COMPLETE TEST RUNS/pipeline_diag_full_run_20251029_104824.txt

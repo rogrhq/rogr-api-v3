@@ -79,6 +79,12 @@ def diversify_plan_for_lane(
 
     # Phase 5: Generate lane-specific queries (CHANGED)
     from intelligence.strategy.plan_v2 import generate_queries_r1, generate_queries_r2
+    import sys
+
+    # DEBUG
+    print(f"\n[DEBUG diversify] Lane {lane_id} before query generation:", file=sys.stderr)
+    for arm in diversified.get("arms", []):
+        print(f"  {arm.get('name')}: {arm.get('queries', [])[:2]}", file=sys.stderr)
 
     # Extract claim data from plan (added by Part A above)
     claim_data = diversified.get("claim", {})
@@ -125,17 +131,24 @@ def diversify_plan_for_lane(
             "dimension": diversified.get("meta", {}).get("dimension", "")
         }
 
+        print(f"  [DEBUG] claim_dict: concept='{claim_dict['concept']}', dimension='{claim_dict['dimension']}', entities={len(claim_entities)}", file=sys.stderr)
+
         # Generate queries based on lane strategy
         if lane_id == "R1":
             # R1: Precision - semantic queries, high similarity
             new_queries = generate_queries_r1(claim_dict, arm_label, diversified)
+            print(f"  [DEBUG] generate_queries_r1 returned {len(new_queries)} queries for {arm_name}", file=sys.stderr)
         else:  # R2
             # R2: Recall - semantic queries, broader exploration
             new_queries = generate_queries_r2(claim_dict, arm_label, diversified)
+            print(f"  [DEBUG] generate_queries_r2 returned {len(new_queries)} queries for {arm_name}", file=sys.stderr)
 
         # Replace queries (not shuffle)
         arm["queries"] = new_queries
         queries_preview[arm_name] = new_queries[:3]
+
+        # DEBUG
+        print(f"  [DEBUG diversify] {arm_name} NEW queries: {new_queries[:2]}", file=sys.stderr)
 
     # Prefer Brave for R1 (precision), Google for R2 (recall)
     preferred_providers = ["brave", "google"] if lane_id == "R1" else ["google", "brave"]

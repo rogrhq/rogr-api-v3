@@ -1,0 +1,138 @@
+[11:24:58.322] ================================================================================
+[11:24:58.322] COMPREHENSIVE PRODUCTION PIPELINE DIAGNOSTIC
+[11:24:58.322] ================================================================================
+[11:24:58.322] Test Claim: COVID vaccines cause autism
+[11:24:58.322] 
+[11:24:58.322] >>> PIPELINE EXECUTION START
+[11:24:58.322] 
+[11:24:58.322] --------------------------------------------------------------------------------
+[11:24:58.322] Phase 0: Importing Pipeline Components
+[11:24:58.322] --------------------------------------------------------------------------------
+[11:25:07.356]   Imports completed in 9.034s
+[11:25:07.357] 
+[11:25:07.357] --------------------------------------------------------------------------------
+[11:25:07.357] Phase 1: Claim Enrichment
+[11:25:07.357] --------------------------------------------------------------------------------
+[11:25:07.357]   Enrichment completed in 0.000s
+[11:25:07.357] 
+[11:25:07.357]   Enrichment Results:
+[11:25:07.357]     • Concept: ''
+[11:25:07.357]     • Dimension: 'unknown'
+[11:25:07.357]     • Entities: []
+[11:25:07.357]     • Numbers: {'percents': [], 'years': [], 'number_units': []}
+[11:25:07.357]     • Cues: {'has_negation': False, 'has_comparison': False, 'has_attribution': False}
+[11:25:07.357]     • Kind: statement
+[11:25:07.357] 
+[11:25:07.357]   Enrichment Quality Assessment:
+[11:25:07.357]     • Concept populated: ✗
+[11:25:07.357]     • Dimension detected: ✗
+[11:25:07.357]     • Entities extracted: ✗
+[11:25:07.357] 
+[11:25:07.357]   ⚠️  WARNING: Enrichment may be insufficient for query differentiation
+[11:25:07.357]      Query generation may fall back to base claim text only
+[11:25:07.357] 
+[11:25:07.357] --------------------------------------------------------------------------------
+[11:25:07.357] Phase 2: Full Pipeline Execution
+[11:25:07.357] --------------------------------------------------------------------------------
+[11:25:07.357]   Executing run_preview()...
+[11:25:42.779]   Pipeline execution completed in 35.422s
+[11:25:42.780] 
+[11:25:42.780] --------------------------------------------------------------------------------
+[11:25:42.780] Phase 3: Result Structure Analysis
+[11:25:42.780] --------------------------------------------------------------------------------
+[11:25:42.780]   Top-level keys:
+[11:25:42.780]     • claims
+[11:25:42.780]     • run_manifest
+[11:25:42.780]     • diversified
+[11:25:42.780]     • overall
+[11:25:42.780] 
+[11:25:42.780]   Claim result keys:
+[11:25:42.780]     • id
+[11:25:42.780]     • text
+[11:25:42.780]     • tier
+[11:25:42.780]     • verdict
+[11:25:42.780]     • evidence
+[11:25:42.780]     • researchers
+[11:25:42.780]     • consensus
+[11:25:42.780]     • summary
+[11:25:42.780]     • arm_A_aggregation
+[11:25:42.780]     • arm_B_aggregation
+[11:25:42.780] 
+[11:25:42.780] --------------------------------------------------------------------------------
+[11:25:42.780] Phase 4: Verdict Information
+[11:25:42.780] --------------------------------------------------------------------------------
+[11:25:42.780]   Label: insufficient
+[11:25:42.780]   Confidence: 0.175
+[11:25:42.780] 
+[11:25:42.780] --------------------------------------------------------------------------------
+[11:25:42.780] Phase 5: Evidence Analysis
+[11:25:42.780] --------------------------------------------------------------------------------
+[11:25:42.780]   Arm A (Support-Seeking): 0 items
+[11:25:42.780]   Arm B (Challenge-Seeking): 0 items
+[11:25:42.780]   Total evidence items: 0
+[11:25:42.780] 
+[11:25:42.780] 
+[11:25:42.780] 
+[11:25:42.780] --------------------------------------------------------------------------------
+[11:25:42.780] Phase 6: Aggregation Metrics
+[11:25:42.780] --------------------------------------------------------------------------------
+[11:25:42.780]   Arm A Aggregation:
+[11:25:42.780]     • Base Strength: 0.000
+[11:25:42.780]     • Final Strength: 0.000
+[11:25:42.780]     • Item Count: 0
+[11:25:42.780] 
+[11:25:42.780]   Arm B Aggregation:
+[11:25:42.780]     • Base Strength: 0.000
+[11:25:42.780]     • Final Strength: 0.000
+[11:25:42.780]     • Item Count: 0
+[11:25:42.780] 
+[11:25:42.780] --------------------------------------------------------------------------------
+[11:25:42.780] Phase 7: Consensus Logic
+[11:25:42.780] --------------------------------------------------------------------------------
+[11:25:42.780]   Consensus Label: insufficient
+[11:25:42.780]   Consensus Confidence: 0.275
+[11:25:42.780] 
+[11:25:42.780] --------------------------------------------------------------------------------
+[11:25:42.780] Phase 8: Dual Researcher System
+[11:25:42.780] --------------------------------------------------------------------------------
+[11:25:42.780]   Number of researchers: 2
+[11:25:42.780]   Researcher 1 (unknown):
+[11:25:42.780]     • Verdict: {'label': 'insufficient', 'confidence': 0.175, 'arm_strength': {'support': 0.0, 'challenge': 0.0, 'support_base': 0.0, 'challenge_base': 0.0, 'balance': 0.0}, 'quality_multipliers': {'diversity': 0.0, 'consistency': 1.0, 'breadth': 1.0}}
+[11:25:42.780]     • Confidence: 0.000
+[11:25:42.780]     • Evidence Count: 0
+[11:25:42.780]   Researcher 2 (unknown):
+[11:25:42.780]     • Verdict: {'label': 'insufficient', 'confidence': 0.175, 'arm_strength': {'support': 0.0, 'challenge': 0.0, 'support_base': 0.0, 'challenge_base': 0.0, 'balance': 0.0}, 'quality_multipliers': {'diversity': 0.0, 'consistency': 1.0, 'breadth': 1.0}}
+[11:25:42.780]     • Confidence: 0.000
+[11:25:42.780]     • Evidence Count: 0
+[11:25:42.780] 
+[11:25:42.780] <<< PIPELINE EXECUTION END (duration: 44.458s)
+[11:25:42.780] 
+[11:25:42.784] 
+[11:25:42.784] ╔══════════════════════════════════════════════════════════════════════════════╗
+[11:25:42.784] ║                                                                              ║
+[11:25:42.784] ║                    END USER OUTPUT - ROGR VERDICT                           ║
+[11:25:42.784] ║                                                                              ║
+[11:25:42.784] ╚══════════════════════════════════════════════════════════════════════════════╝
+[11:25:42.784] 
+[11:25:42.784] Verdict: INSUFFICIENT
+[11:25:42.784] Confidence: 18%
+[11:25:42.784] 
+[11:25:42.784] Claim: "COVID vaccines cause autism"
+[11:25:42.784] 
+[11:25:42.784] Summary:
+[11:25:42.784] Claim: COVID vaccines cause autism Evidence summary — support:0, refute:0,
+[11:25:42.784] neutral:0. Method: A/B search arms, deduplication, lexical ranking, stance
+[11:25:42.784] and quality scoring, consensus aggregation.
+[11:25:42.784] 
+[11:25:42.784] Research Quality:
+[11:25:42.784]   • Source Diversity: 0 unique authoritative domains
+[11:25:42.784]   • Source Authority: 0% average
+[11:25:42.784]   • Two independent researchers agreed
+[11:25:42.784] 
+[11:25:42.784] Processing Time: 44.5 seconds
+[11:25:42.784] Evidence Items Analyzed: 0 candidates → 0 selected
+[11:25:42.784] 
+[11:25:42.784] ────────────────────────────────────────────────────────────────────────────────
+[11:25:42.784] 
+[11:25:42.784] Test completed successfully!
+[11:25:42.784] Output saved to: /Users/txtk/Documents/ROGR/github/rogrv2-backend/Refactor 5/PIPELINE COMPLETE TEST RUNS/pipeline_diag_full_run_20251029_112458.txt

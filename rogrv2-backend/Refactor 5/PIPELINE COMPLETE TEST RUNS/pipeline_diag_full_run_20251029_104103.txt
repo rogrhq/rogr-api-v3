@@ -1,0 +1,36 @@
+[10:41:03.245] ================================================================================
+[10:41:03.245] COMPREHENSIVE PRODUCTION PIPELINE DIAGNOSTIC
+[10:41:03.245] ================================================================================
+[10:41:03.245] Test Claim: Water boils at 100 degrees Celsius
+[10:41:03.245] 
+[10:41:03.245] >>> PIPELINE EXECUTION START
+[10:41:03.245] 
+[10:41:03.245] --------------------------------------------------------------------------------
+[10:41:03.245] Phase 0: Importing Pipeline Components
+[10:41:03.245] --------------------------------------------------------------------------------
+[10:41:03.301] 
+[10:41:03.301] ERROR: Test failed with exception:
+[10:41:03.301] ModuleNotFoundError: No module named 'tldextract'
+[10:41:03.301] 
+[10:41:03.301] Traceback:
+[10:41:03.306] Traceback (most recent call last):
+[10:41:03.306]   File "/Users/txtk/Documents/ROGR/github/rogrv2-backend/tests/pipeline_diagnostic_complete.py", line 492, in main
+[10:41:03.306]     result = asyncio.run(run_diagnostic(claim_text, logger))
+[10:41:03.306]   File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/asyncio/runners.py", line 44, in run
+[10:41:03.306]     return loop.run_until_complete(main)
+[10:41:03.306]   File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/asyncio/base_events.py", line 642, in run_until_complete
+[10:41:03.306]     return future.result()
+[10:41:03.306]   File "/Users/txtk/Documents/ROGR/github/rogrv2-backend/tests/pipeline_diagnostic_complete.py", line 82, in run_diagnostic
+[10:41:03.306]     from intelligence.pipeline.run import run_preview
+[10:41:03.306]   File "/Users/txtk/Documents/ROGR/github/rogrv2-backend/intelligence/pipeline/run.py", line 7, in <module>
+[10:41:03.306]     from intelligence.gather.pipeline import build_evidence_for_claim
+[10:41:03.306]   File "/Users/txtk/Documents/ROGR/github/rogrv2-backend/intelligence/gather/pipeline.py", line 5, in <module>
+[10:41:03.306]     from intelligence.gather import online
+[10:41:03.306]   File "/Users/txtk/Documents/ROGR/github/rogrv2-backend/intelligence/gather/online.py", line 9, in <module>
+[10:41:03.306]     from intelligence.gather.normalize import dedupe  # preserved
+[10:41:03.306]   File "/Users/txtk/Documents/ROGR/github/rogrv2-backend/intelligence/gather/normalize.py", line 5, in <module>
+[10:41:03.306]     from intelligence.content.fullread import _extract_base_domain
+[10:41:03.306]   File "/Users/txtk/Documents/ROGR/github/rogrv2-backend/intelligence/content/fullread.py", line 19, in <module>
+[10:41:03.306]     import tldextract
+[10:41:03.306] ModuleNotFoundError: No module named 'tldextract'
+[10:41:03.306] 

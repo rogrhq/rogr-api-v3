@@ -84,30 +84,40 @@ async def _exec_plan_for_arm(full_plan: Dict[str, Any], arm_def: Dict[str, Any],
     sub_plan: Dict[str, Any] = {**full_plan}
     sub_plan["arms"] = [arm_def]
 
+    # DEBUG: Log queries being used
+    import sys
+    print(f"\n[DEBUG] Arm {arm_label} queries:", file=sys.stderr)
+    for q in arm_def.get("queries", [])[:3]:
+        print(f"  {q}", file=sys.stderr)
+
     res = await online.run_plan(sub_plan, max_per_query=max_per_query)
     raw = (res or {}).get("candidates") or []
 
-    # Phase 7: Query validation (ADDED - full retry mode)
-    # NOTE: Part D1 implements re-search, so max_retries=2 now works correctly
-    claim_text = full_plan.get("claim_text", "")
-    claim_entities = full_plan.get("claim_entities", [])
-    claim_numbers = full_plan.get("claim_numbers", [])
+    print(f"[DEBUG] Arm {arm_label} got {len(raw)} results", file=sys.stderr)
 
-    queries = arm_def.get("queries", [])
-    if queries and raw and claim_text:
-        # Validate first query (most important)
-        first_query = queries[0]
-        refined_query, validated_results, refinement_count = await validate_query_results(
-            claim_text, claim_entities, claim_numbers, first_query, raw, max_retries=2,
-            arm_label=arm_label,  # Pass actual arm label
-            arm_intent=arm_def.get("intent", "support")  # Pass actual intent
-        )
-
-        if diag.enabled() and refinement_count > 0:
-            diag.log("query_validation", query=first_query, refined=refined_query, needed_refinement=True, refinement_count=refinement_count)
-
-        # Use validated results
-        raw = validated_results
+    # Phase 7: Query validation (TEMPORARILY DISABLED - Testing 2025-10-28)
+    # Testing if semantic query generation (Fix 5b) makes this validation redundant
+    # Original code preserved below - uncomment if needed
+    #
+    # claim_text = full_plan.get("claim_text", "")
+    # claim_entities = full_plan.get("claim_entities", [])
+    # claim_numbers = full_plan.get("claim_numbers", [])
+    #
+    # queries = arm_def.get("queries", [])
+    # if queries and raw and claim_text:
+    #     # Validate first query (most important)
+    #     first_query = queries[0]
+    #     refined_query, validated_results, refinement_count = await validate_query_results(
+    #         claim_text, claim_entities, claim_numbers, first_query, raw, max_retries=2,
+    #         arm_label=arm_label,  # Pass actual arm label
+    #         arm_intent=arm_def.get("intent", "support")  # Pass actual intent
+    #     )
+    #
+    #     if diag.enabled() and refinement_count > 0:
+    #         diag.log("query_validation", query=first_query, refined=refined_query, needed_refinement=True, refinement_count=refinement_count)
+    #
+    #     # Use validated results
+    #     raw = validated_results
 
     # Continue with original flow
     out: List[Dict[str, Any]] = []
