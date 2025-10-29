@@ -110,10 +110,19 @@ def extract_entities_smart(text: str) -> List[str]:
         nlp = get_nlp_model()
         doc = nlp(text)
 
-        # Extract named entities from spaCy
+        # Extract named entities from spaCy (broader set)
         for ent in doc.ents:
-            if ent.label_ in ["PERSON", "ORG", "GPE", "PRODUCT", "EVENT", "LAW"]:
+            # Include more entity types, especially medical/scientific
+            if ent.label_ in ["PERSON", "ORG", "GPE", "PRODUCT", "EVENT", "LAW", "NORP", "FAC", "LOC"]:
                 entities.append(ent.text)
+
+        # FALLBACK: If no named entities found, extract key noun phrases
+        if len(entities) == 0:
+            for chunk in doc.noun_chunks:
+                # Extract meaningful noun phrases (skip single articles/pronouns)
+                chunk_text = chunk.text.strip()
+                if len(chunk_text) > 3 and chunk.root.pos_ in ["NOUN", "PROPN"]:
+                    entities.append(chunk_text)
 
         # Also try BERT NER for additional entities
         try:
