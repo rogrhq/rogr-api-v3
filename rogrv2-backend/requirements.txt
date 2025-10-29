@@ -13,3 +13,9 @@ aiosqlite>=0.20
 selenium==4.15.2
 webdriver-manager==4.0.1
 tldextract==3.4.4  # For compound TLD handling (.co.uk, .com.au, etc.)
+
+# ML/NLP dependencies (used by semantic analysis and embeddings)
+sentence-transformers>=2.2.2
+numpy>=1.24.0
+pytz>=2023.3
+python-dotenv>=1.0.0
