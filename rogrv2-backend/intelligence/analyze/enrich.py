@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Dict, Any
 
-from intelligence.claims.interpret import parse_claim
+from intelligence.claims.interpret import parse_claim_hybrid as parse_claim
 # Phase 9: Precision handling enhancements (ADDED)
 from intelligence.content.shared.semantic_depth import detect_negation, detect_hedging
 

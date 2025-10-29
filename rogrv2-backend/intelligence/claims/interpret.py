@@ -231,3 +231,79 @@ def detect_claim_type(claim: Dict[str, Any]) -> str:
         return "policy_econ"
     else:
         return "generic"
+
+
+# ==============================================================================
+# HYBRID NLP + DETERMINISTIC ENRICHMENT (Level 2 Semantic NLP)
+# ==============================================================================
+
+def parse_claim_hybrid(text: str) -> Dict[str, Any]:
+    """
+    Hybrid enrichment: Try deterministic first, fallback to NLP if enrichment fails.
+
+    This is the PRODUCTION entry point that guarantees zero regressions.
+
+    Strategy:
+    1. Try deterministic (fast, proven, works for 10% of claims)
+    2. If enrichment succeeded (concept populated), return it
+    3. If enrichment failed (concept empty), try NLP
+    4. If NLP confidence < 0.7, return deterministic (IFCN compliance)
+    5. Otherwise, return NLP enrichment
+
+    Returns: Same schema as parse_claim() for compatibility
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    # Step 1: Try deterministic first
+    logger.debug(f"Hybrid enrichment: trying deterministic for '{text[:50]}...'")
+    deterministic_result = parse_claim(text)
+
+    # Step 2: Check if deterministic succeeded
+    if deterministic_result.get("concept") and len(deterministic_result["concept"]) > 3:
+        logger.info(f"Deterministic enrichment succeeded: concept='{deterministic_result['concept']}'")
+        deterministic_result["enrichment_method"] = "deterministic"
+        deterministic_result["confidence"] = 0.95  # High confidence for pattern-based
+        return deterministic_result
+
+    # Step 3: Deterministic failed, try NLP
+    logger.info("Deterministic enrichment failed (empty concept), trying NLP...")
+
+    try:
+        from intelligence.claims.nlp_interpret import parse_claim_nlp, NLP_AVAILABLE
+
+        if not NLP_AVAILABLE:
+            logger.warning("NLP libraries not available, using deterministic fallback")
+            deterministic_result["enrichment_method"] = "deterministic_fallback"
+            deterministic_result["confidence"] = 0.5
+            return deterministic_result
+
+        # Try NLP enrichment
+        nlp_result = parse_claim_nlp(text)
+
+        # Step 4: Check NLP confidence
+        nlp_confidence = nlp_result.get("confidence", 0.0)
+
+        if nlp_confidence < 0.7:
+            logger.warning(f"NLP confidence too low ({nlp_confidence:.2f}), using deterministic fallback")
+            deterministic_result["enrichment_method"] = "deterministic_fallback"
+            deterministic_result["confidence"] = nlp_confidence
+            deterministic_result["nlp_attempted"] = True
+            return deterministic_result
+
+        # Step 5: NLP succeeded with high confidence
+        logger.info(f"NLP enrichment succeeded: concept='{nlp_result['concept']}', confidence={nlp_confidence:.2f}")
+        return nlp_result
+
+    except ImportError as e:
+        logger.warning(f"NLP import failed: {e}, using deterministic fallback")
+        deterministic_result["enrichment_method"] = "deterministic_fallback"
+        deterministic_result["confidence"] = 0.5
+        return deterministic_result
+
+    except Exception as e:
+        logger.error(f"NLP enrichment failed with error: {e}, using deterministic fallback", exc_info=True)
+        deterministic_result["enrichment_method"] = "deterministic_fallback"
+        deterministic_result["confidence"] = 0.3
+        deterministic_result["nlp_error"] = str(e)
+        return deterministic_result

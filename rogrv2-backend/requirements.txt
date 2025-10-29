@@ -19,3 +19,8 @@ sentence-transformers>=2.2.2
 numpy>=1.24.0
 pytz>=2023.3
 python-dotenv>=1.0.0
+
+# Level 2 Semantic NLP enrichment dependencies
+transformers>=4.30.0
+torch>=2.0.0
+spacy>=3.5.0
