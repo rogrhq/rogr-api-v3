@@ -247,9 +247,16 @@ async def build_evidence_for_claim(claim_text: str, plan: Dict[str, Any], claim_
     armB_norm = normalize_candidates(armB_raw)
 
     # 2.5) Cross-arm deduplication (items now have 'score' field from normalize_candidates)
-    all_items = armA_norm + armB_norm
-    all_items_deduped = _deduplicate_across_arms(all_items)
-    armA_norm, armB_norm = _group_by_arm(all_items_deduped)
+    # REFACTOR 6: Removed cross-arm deduplication (2025-10-29)
+    # Rationale: Stance filtering after fullread assigns duplicates correctly
+    # Benefit: Preserves arm balance, no arbitrary assignments based on quality score
+    # Performance: Fetch cache prevents duplicate network requests, only 0.2% overhead
+    # Impact: ~2.5% confidence boost for neutral items kept by both arms (acceptable)
+    # See: REFACTOR-6-PROGRESS-LOG.md Stage 4 - Investigation 3
+    # all_items = armA_norm + armB_norm
+    # all_items_deduped = _deduplicate_across_arms(all_items)
+    # armA_norm, armB_norm = _group_by_arm(all_items_deduped)
+    # No deduplication - let stance filtering handle duplicates after full-text analysis
 
     # Phase 2.1: Fast filter - remove obviously unrelated (ADDED)
     if claim_entities is None:

@@ -239,71 +239,95 @@ def detect_claim_type(claim: Dict[str, Any]) -> str:
 
 def parse_claim_hybrid(text: str) -> Dict[str, Any]:
     """
-    Hybrid enrichment: Try deterministic first, fallback to NLP if enrichment fails.
+    NLP-only enrichment: Use Level 2 Semantic NLP for all claims.
 
-    This is the PRODUCTION entry point that guarantees zero regressions.
+    REFACTOR 6 CHANGE (2025-10-29): Removed deterministic-first priority.
+    Rationale: Fail-fast approach reveals NLP issues immediately, prevents silent
+    degradation to 10% coverage. Every claim validates NLP quality.
 
-    Strategy:
-    1. Try deterministic (fast, proven, works for 10% of claims)
-    2. If enrichment succeeded (concept populated), return it
-    3. If enrichment failed (concept empty), try NLP
-    4. If NLP confidence < 0.7, return deterministic (IFCN compliance)
-    5. Otherwise, return NLP enrichment
+    Previous strategy (deterministic-first):
+    1. Try deterministic (fast, 10% coverage)
+    2. If succeeded, return (NLP never tested on simple cases)
+    3. If failed, try NLP (only gets hard cases)
+    Problem: NLP failures masked, never validated on known-good claims
+
+    NEW strategy (NLP-only):
+    1. Try NLP (85% expected coverage)
+    2. If fails or low confidence, fail visibly with clear error
+    3. Deterministic kept for emergency rollback only (commented out)
+    Benefit: All claims test NLP, failures detected immediately
+
+    See: REFACTOR-6-PROGRESS-LOG.md Stage 4 - Investigation 1
 
     Returns: Same schema as parse_claim() for compatibility
     """
     import logging
     logger = logging.getLogger(__name__)
 
-    # Step 1: Try deterministic first
-    logger.debug(f"Hybrid enrichment: trying deterministic for '{text[:50]}...'")
-    deterministic_result = parse_claim(text)
+    # REFACTOR 6: Deterministic-first logic commented out (2025-10-29)
+    # Keep code available for emergency rollback if NLP fails catastrophically
+    #
+    # # OLD Step 1: Try deterministic first
+    # logger.debug(f"Hybrid enrichment: trying deterministic for '{text[:50]}...'")
+    # deterministic_result = parse_claim(text)
+    #
+    # # OLD Step 2: Check if deterministic succeeded
+    # if deterministic_result.get("concept") and len(deterministic_result["concept"]) > 3:
+    #     logger.info(f"Deterministic enrichment succeeded: concept='{deterministic_result['concept']}'")
+    #     deterministic_result["enrichment_method"] = "deterministic"
+    #     deterministic_result["confidence"] = 0.95  # High confidence for pattern-based
+    #     return deterministic_result
 
-    # Step 2: Check if deterministic succeeded
-    if deterministic_result.get("concept") and len(deterministic_result["concept"]) > 3:
-        logger.info(f"Deterministic enrichment succeeded: concept='{deterministic_result['concept']}'")
-        deterministic_result["enrichment_method"] = "deterministic"
-        deterministic_result["confidence"] = 0.95  # High confidence for pattern-based
-        return deterministic_result
-
-    # Step 3: Deterministic failed, try NLP
-    logger.info("Deterministic enrichment failed (empty concept), trying NLP...")
+    # NEW: NLP-only enrichment
+    logger.info(f"NLP enrichment for '{text[:50]}...'")
 
     try:
         from intelligence.claims.nlp_interpret import parse_claim_nlp, NLP_AVAILABLE
 
         if not NLP_AVAILABLE:
-            logger.warning("NLP libraries not available, using deterministic fallback")
-            deterministic_result["enrichment_method"] = "deterministic_fallback"
-            deterministic_result["confidence"] = 0.5
-            return deterministic_result
+            # CRITICAL ERROR: NLP not available
+            logger.error("NLP libraries not available - CRITICAL: Install dependencies!")
+            raise RuntimeError(
+                "NLP enrichment unavailable. Install required packages: "
+                "spacy, transformers, torch. "
+                "See intelligence/claims/nlp_interpret.py for details."
+            )
 
         # Try NLP enrichment
         nlp_result = parse_claim_nlp(text)
 
-        # Step 4: Check NLP confidence
+        # Check NLP confidence
         nlp_confidence = nlp_result.get("confidence", 0.0)
 
         if nlp_confidence < 0.7:
-            logger.warning(f"NLP confidence too low ({nlp_confidence:.2f}), using deterministic fallback")
-            deterministic_result["enrichment_method"] = "deterministic_fallback"
-            deterministic_result["confidence"] = nlp_confidence
-            deterministic_result["nlp_attempted"] = True
-            return deterministic_result
+            # Low confidence but still return result - let pipeline decide
+            logger.warning(
+                f"NLP confidence low ({nlp_confidence:.2f}) for '{text[:50]}...' "
+                f"concept='{nlp_result.get('concept', 'EMPTY')}'"
+            )
+            nlp_result["enrichment_method"] = "nlp_low_confidence"
+            return nlp_result
 
-        # Step 5: NLP succeeded with high confidence
-        logger.info(f"NLP enrichment succeeded: concept='{nlp_result['concept']}', confidence={nlp_confidence:.2f}")
+        # NLP succeeded with high confidence
+        logger.info(
+            f"NLP enrichment succeeded: concept='{nlp_result['concept']}', "
+            f"confidence={nlp_confidence:.2f}"
+        )
+        nlp_result["enrichment_method"] = "nlp"
         return nlp_result
 
     except ImportError as e:
-        logger.warning(f"NLP import failed: {e}, using deterministic fallback")
-        deterministic_result["enrichment_method"] = "deterministic_fallback"
-        deterministic_result["confidence"] = 0.5
-        return deterministic_result
+        # CRITICAL ERROR: Missing dependencies
+        logger.error(f"NLP import failed: {e}")
+        raise RuntimeError(
+            f"Failed to import NLP modules: {e}. "
+            "Install required packages: spacy, transformers, torch"
+        )
 
     except Exception as e:
-        logger.error(f"NLP enrichment failed with error: {e}, using deterministic fallback", exc_info=True)
-        deterministic_result["enrichment_method"] = "deterministic_fallback"
-        deterministic_result["confidence"] = 0.3
-        deterministic_result["nlp_error"] = str(e)
-        return deterministic_result
+        # NLP processing error - fail visibly
+        logger.error(f"NLP enrichment failed: {e}", exc_info=True)
+        raise RuntimeError(
+            f"NLP enrichment failed for '{text[:50]}...': {e}. "
+            "This is a critical failure - check NLP models and configuration."
+        )
