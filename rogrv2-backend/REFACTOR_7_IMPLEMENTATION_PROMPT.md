@@ -50,7 +50,7 @@ Based on CURRENT STATUS in the spec, identify:
 - Search for "## FILE-BY-FILE SPECIFICATIONS" (around line 1038) for code examples
 
 **Summary of weeks:**
-- Week 0: Create baseline infrastructure (capture_baseline.py, validate_nlp_extraction.py)
+- Week 0: Create NLP validation script and capture baseline using existing pipeline
 - Week 1: Create 3 new files (contextual_variation.py, contextual_mapping.py, stance_contextual.py)
 - Week 2: Modify p25_aggregate.py (add optional claim_text parameter to calculate_consistency_score)
 - Week 3: Modify intelligence/run.py (integrate context detection with feature flag OFF)
@@ -72,20 +72,21 @@ Run the tests specified for the current step:
 
 **Week 0:**
 ```bash
-# Test 1: NLP validation
+# Test 1: NLP validation script
 python scripts/validate_nlp_extraction.py
 # Expected: "Detection Rate: 85%+" and "✅ NLP baseline validated"
 # Success: Exit code 0, detection rate >= 85%
 
-# Test 2: Baseline capture
-python scripts/capture_baseline.py --claims "Water boils at 100 degrees Celsius" --output baselines/refactor7_week0.json
-# Expected: JSON file created with verdict and confidence
-# Success: File exists at baselines/refactor7_week0.json
+# Test 2: Capture baseline using existing tested pipeline
+mkdir -p baselines
+python scripts/dev_preview.py "Water boils at 100 degrees Celsius" > baselines/refactor7_week0.txt
+# Expected: Output with verdict and confidence
+# Success: File created with pipeline output
 
-# Test 3: Verify baseline contents
-python -c "import json; data=json.load(open('baselines/refactor7_week0.json')); print(f'Baseline: {len(data)} claims'); assert len(data) > 0"
-# Expected: "Baseline: 1 claims" (or more if multiple claims captured)
-# Success: File is valid JSON with claim data
+# Test 3: Verify baseline captured correctly
+grep -q "Verdict:" baselines/refactor7_week0.txt && grep -q "Confidence:" baselines/refactor7_week0.txt && echo "✓ Baseline captured"
+# Expected: "✓ Baseline captured"
+# Success: Baseline file contains verdict and confidence
 ```
 
 **Week 1:**
@@ -170,11 +171,11 @@ python -c "from intelligence.run import ENABLE_CONTEXTUAL_ANALYSIS; assert ENABL
 Check the spec's exit criteria for current step:
 
 **Week 0 Exit Criteria:**
-- [ ] Scripts created: validate_nlp_extraction.py, capture_baseline.py
+- [ ] Script created: validate_nlp_extraction.py
 - [ ] NLP baseline validation passes (85%+ detection rate)
-- [ ] Baseline captured for target claim (Water boils at 100°C)
-- [ ] All scripts executable with no errors
+- [ ] Baseline captured for target claim using existing pipeline (Water boils at 100°C)
 - [ ] Baseline directory created (baselines/)
+- [ ] Baseline file contains verdict and confidence data
 
 **Week 1 Exit Criteria:**
 - [ ] All 3 files created with complete implementations
@@ -237,20 +238,18 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 
 Week 0:
 ```
-[Refactor 7 - Week 0] Create baseline infrastructure
+[Refactor 7 - Week 0] Create NLP validation and capture baseline
 
-Created baseline capture and NLP validation scripts.
-Captured baseline for target claim "Water boils at 100°C".
+Created NLP validation script and captured baseline using existing pipeline.
 
 Files changed:
-- scripts/capture_baseline.py: Created baseline capture utility
 - scripts/validate_nlp_extraction.py: Created NLP validation with 18 test cases
-- baselines/refactor7_week0.json: Baseline results captured
+- baselines/refactor7_week0.txt: Baseline captured using dev_preview.py
 
 Testing:
 - NLP validation: 93% detection rate (exceeds 85% target)
-- Baseline captured: 1 claim with verdict and confidence
-- Scripts executable and error-free
+- Baseline captured: "Water boils at 100°C" using existing tested pipeline
+- Baseline contains verdict and confidence data
 
 Exit criteria: All met ✅
 
@@ -389,15 +388,15 @@ To continue, run this prompt again. Claude Code will read the updated CURRENT ST
 1. ✅ Read REFACTOR_7_IMPLEMENTATION_SPEC.md
    - CURRENT STATUS: Week 0 (not started)
    - SESSION LOG: Planning complete, implementation not started
-2. ✅ Identified: Week 0 tasks (create baseline infrastructure)
+2. ✅ Identified: Week 0 tasks (create NLP validation, capture baseline)
 3. ✅ Implemented:
-   - Created scripts/capture_baseline.py
    - Created scripts/validate_nlp_extraction.py
+   - Captured baseline using existing pipeline (scripts/dev_preview.py)
    - Created baselines/ directory
 4. ✅ Tested:
    - NLP validation: 93% (✅ exceeds 85%)
-   - Baseline captured: "Water boils at 100°C"
-   - All scripts executable
+   - Baseline captured: "Water boils at 100°C" using trusted pipeline
+   - Baseline file verified with verdict and confidence
 5. ✅ Exit criteria: All met
 6. ✅ Committed: [Refactor 7 - Week 0] Create baseline infrastructure
 7. ✅ Updated CURRENT STATUS: Week 0 Complete, Week 1 Ready
