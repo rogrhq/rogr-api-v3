@@ -77,16 +77,16 @@ python scripts/validate_nlp_extraction.py
 # Expected: "Detection Rate: 85%+" and "✅ NLP baseline validated"
 # Success: Exit code 0, detection rate >= 85%
 
-# Test 2: Capture baseline using existing tested pipeline
+# Test 2: Capture baseline
 mkdir -p baselines
-python scripts/dev_preview.py "Water boils at 100 degrees Celsius" > baselines/refactor7_week0.txt
-# Expected: Output with verdict and confidence
-# Success: File created with pipeline output
+python scripts/capture_baseline.py --claims "Water boils at 100 degrees Celsius" --output baselines/refactor7_week0.json
+# Expected: "✅ Baseline saved to: baselines/refactor7_week0.json"
+# Success: Exit code 0, JSON file created
 
 # Test 3: Verify baseline captured correctly
-grep -q "Verdict:" baselines/refactor7_week0.txt && grep -q "Confidence:" baselines/refactor7_week0.txt && echo "✓ Baseline captured"
-# Expected: "✓ Baseline captured"
-# Success: Baseline file contains verdict and confidence
+python -c "import json; data=json.load(open('baselines/refactor7_week0.json')); print(f\"✓ Baseline: {data['claim_count']} claims captured\")"
+# Expected: "✓ Baseline: 1 claims captured"
+# Success: JSON file is valid and contains claim data
 ```
 
 **Week 1:**
@@ -135,9 +135,9 @@ python -c "from intelligence.run import ENABLE_CONTEXTUAL_ANALYSIS; print(f'Flag
 # Success: Flag is False
 
 # Test 3: Protected claims unchanged (flag OFF)
-python scripts/dev_preview.py "COVID vaccines cause autism"
-# Expected: Same verdict/confidence as baseline (within ±5%)
-# Success: No regression detected
+python scripts/regression_check.py --baseline baselines/refactor7_week0.json --claim "COVID vaccines cause autism"
+# Expected: "✅ REGRESSION CHECK PASSED"
+# Success: Exit code 0, no regressions detected
 ```
 
 **Week 4:**
@@ -146,9 +146,9 @@ python scripts/dev_preview.py "COVID vaccines cause autism"
 # Edit intelligence/run.py: Change ENABLE_CONTEXTUAL_ANALYSIS = False to True
 
 # Test 1: Target claim improvement
-python scripts/dev_preview.py "Water boils at 100 degrees Celsius"
-# Expected: Confidence 80-85%, verdict "MOSTLY TRUE", contextual_status present
-# Success: Shows context detection, improved confidence
+python scripts/regression_check.py --baseline baselines/refactor7_week0.json --claim "Water boils at 100 degrees Celsius"
+# Expected: Shows improved confidence (80-85%), verdict "MOSTLY TRUE"
+# Success: Context detection working, confidence improved from baseline
 
 # Test 2: Full regression suite
 python scripts/regression_check.py --baseline baselines/refactor7_week0.json --tolerance-verdict 0.0 --tolerance-confidence 0.05
@@ -244,7 +244,7 @@ Created NLP validation script and captured baseline using existing pipeline.
 
 Files changed:
 - scripts/validate_nlp_extraction.py: Created NLP validation with 18 test cases
-- baselines/refactor7_week0.txt: Baseline captured using dev_preview.py
+- baselines/refactor7_week0.json: Baseline captured using capture_baseline.py
 
 Testing:
 - NLP validation: 93% detection rate (exceeds 85% target)
@@ -391,7 +391,7 @@ To continue, run this prompt again. Claude Code will read the updated CURRENT ST
 2. ✅ Identified: Week 0 tasks (create NLP validation, capture baseline)
 3. ✅ Implemented:
    - Created scripts/validate_nlp_extraction.py
-   - Captured baseline using existing pipeline (scripts/dev_preview.py)
+   - Captured baseline using scripts/capture_baseline.py
    - Created baselines/ directory
 4. ✅ Tested:
    - NLP validation: 93% (✅ exceeds 85%)
