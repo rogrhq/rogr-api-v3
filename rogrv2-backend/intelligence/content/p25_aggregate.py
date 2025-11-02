@@ -130,7 +130,9 @@ def aggregate_verdict(claim_text: str, arm_a_items: List[Dict[str,Any]], arm_b_i
 
     conf = _confidence_from_arms(sa_enhanced, sb_enhanced, len(arm_a_items), len(arm_b_items),
                                 arm_a_items, arm_b_items, claim_numbers)
-    return {
+
+    # Build base result (UNCHANGED - existing fields)
+    result = {
         "label": label,
         "confidence": float(conf),
         "arm_strength": {
@@ -146,6 +148,21 @@ def aggregate_verdict(claim_text: str, arm_a_items: List[Dict[str,Any]], arm_b_i
             "breadth": float(breadth)
         }
     }
+
+    # Week 3: Check for contextual variation (ADDITIVE FIELDS ONLY)
+    # Edge case: Need at least 2 items to detect variation patterns
+    if len(all_items) >= 2:
+        from intelligence.content.contextual_variation import detect_context_dependency_from_evidence
+
+        context_check = detect_context_dependency_from_evidence(all_items, claim_text)
+
+        # Add optional fields ONLY if context detected
+        if context_check['is_context_dependent']:
+            result['context_dependent'] = True
+            result['contextual_findings'] = context_check
+            result['suggested_conditions'] = context_check.get('contextual_factors', [])
+
+    return result
 
 
 # ============================================================================
