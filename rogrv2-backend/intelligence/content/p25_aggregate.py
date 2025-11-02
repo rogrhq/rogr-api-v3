@@ -199,16 +199,22 @@ def calculate_diversity_score(items: list) -> float:
 # PHASE 4.2: INTERNAL CONSISTENCY CHECKING (ADDED)
 # ============================================================================
 
-def calculate_consistency_score(items: list, claim_numbers: list = None) -> float:
+def calculate_consistency_score(items: list, claim_numbers: list = None, claim_text: str = None) -> float:
     """
     Check if arm items agree on numbers (0-1).
 
     Higher score = items agree
     Lower score = items contradict each other
 
+    REFACTOR 7 ENHANCEMENT: When claim_text provided, detects if numeric
+    variation is EXPLAINED by contextual conditions (e.g., "varies with altitude").
+    Explained variation = HIGH consistency (0.95) because sources AGREE on
+    context-dependency, not contradicting each other.
+
     Args:
         items: List of evidence items
         claim_numbers: List of numbers from claim to check
+        claim_text: Optional claim text for context detection (Refactor 7)
 
     Returns:
         Consistency score 0-1 (1.0 = fully consistent)
@@ -273,6 +279,25 @@ def calculate_consistency_score(items: list, claim_numbers: list = None) -> floa
             else:
                 # Linear interpolation between 0.10 and 0.50
                 consistency = 1.0 - ((coef_var - 0.10) / 0.40)
+
+            # REFACTOR 7: Check if variation is EXPLAINED by context
+            # If claim_text provided and context detected, high variance
+            # means sources AGREE on context-dependency (not contradiction)
+            if claim_text and coef_var > 0.10:
+                try:
+                    from intelligence.content.contextual_variation import detect_context_dependency_from_evidence
+
+                    context_status = detect_context_dependency_from_evidence(items, claim_text)
+
+                    # If context-dependent and sources agree on variation
+                    # ADR-003: Explained variation = HIGH consistency (0.95)
+                    if context_status.get('is_context_dependent', False):
+                        logger.debug(f"Context-dependent variation detected - returning high consistency (0.95)")
+                        return 0.95  # Sources agree on context-dependency
+
+                except Exception as e:
+                    logger.error(f"Context detection failed in consistency check: {e}")
+                    # Fall through to return base consistency score
 
             return round(max(0.0, min(1.0, consistency)), 3)
 
