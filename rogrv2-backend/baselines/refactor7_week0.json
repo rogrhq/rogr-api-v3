@@ -1,0 +1,33 @@
+{
+  "captured_at": "2025-11-02T11:31:06.654816",
+  "claim_count": 1,
+  "success_count": 1,
+  "fail_count": 0,
+  "results": [
+    {
+      "claim": "Water boils at 100 degrees Celsius",
+      "verdict": {
+        "label": "challenges",
+        "confidence": 0.5656323931069808,
+        "arm_strength": {
+          "support": 0.0,
+          "challenge": 0.4091830957932906,
+          "support_base": 0.0,
+          "challenge_base": 0.4091830957932906,
+          "balance": -0.4091830957932906
+        },
+        "quality_multipliers": {
+          "diversity": 1.0,
+          "consistency": 1.0,
+          "breadth": 1.0
+        }
+      },
+      "evidence_counts": {
+        "arm_a": 0,
+        "arm_b": 3
+      },
+      "timestamp": "2025-11-02T11:31:06.636868",
+      "success": true
+    }
+  ]
+}
