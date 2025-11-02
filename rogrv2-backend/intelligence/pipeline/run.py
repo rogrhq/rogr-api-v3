@@ -22,6 +22,10 @@ from intelligence.calibration.edge_cases import (
     handle_conflicting_experts
 )
 
+# REFACTOR 7: Contextual Analysis Feature Flag (Week 4)
+# Set to False initially for safe rollout. Set to True to enable contextual enhancements.
+ENABLE_CONTEXTUAL_ANALYSIS = False
+
 def _to_json_primitive(x: Any) -> Any:
     """
     Deeply coerce nested structures into JSON-safe primitives.
@@ -165,6 +169,17 @@ async def run_single_lane_enrichment(
         )
     except:
         verdict = {"label": "insufficient", "confidence": 0.0}
+
+    # REFACTOR 7: Contextual enhancement (Week 4) - feature-flagged
+    if ENABLE_CONTEXTUAL_ANALYSIS:
+        try:
+            from intelligence.content.contextual_mapping import map_verdict_to_ifcn_contextual
+            all_items = evidence.get("arm_A", []) + evidence.get("arm_B", [])
+            verdict = map_verdict_to_ifcn_contextual(verdict, claim_text, all_items)
+        except Exception as e:
+            # If contextual mapping fails, continue with base verdict (graceful degradation)
+            print(f"⚠️ Contextual mapping failed: {e}", file=sys.stderr)
+            # verdict unchanged - base verdict preserved
 
     return {"verdict": verdict, "evidence": evidence}
 
